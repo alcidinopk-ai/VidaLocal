@@ -36,6 +36,130 @@ async function startServer() {
     { id: 13, state_id: 5, name: "Brasília", slug: "brasilia", active: true, latitude: -15.7801, longitude: -47.9292, population: 3015268 },
     { id: 4, state_id: 2, name: "Goiânia", slug: "goiania", active: true, latitude: -16.6869, longitude: -49.2648, population: 1536097 },
     { id: 5, state_id: 3, name: "São Paulo", slug: "sao-paulo", active: true, latitude: -23.5505, longitude: -46.6333, population: 12330000 },
+    { id: 4, state_id: 2, name: "Goiânia", slug: "goiania", active: true, latitude: -16.6869, longitude: -49.2648, population: 1536097 },
+  ];
+
+  const establishments = [
+    { 
+      id: "e1", 
+      name: "Espetinho do Adão B13", 
+      category_id: 1, 
+      sub_category: "Espetinho", 
+      address: "Av. Goiás, 1234, Centro", 
+      city_id: 1, 
+      latitude: -11.7300, 
+      longitude: -49.0680,
+      rating: 4.8,
+      whatsapp: "63999991234"
+    },
+    { 
+      id: "e2", 
+      name: "Delicias da Polly", 
+      category_id: 1, 
+      sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", 
+      address: "Rua 7, 456, Setor Central", 
+      city_id: 1, 
+      latitude: -11.7285, 
+      longitude: -49.0665,
+      rating: 4.9,
+      whatsapp: "63999995678"
+    },
+    { 
+      id: "e3", 
+      name: "Mecânica do João", 
+      category_id: 6, 
+      sub_category: "Oficina / Centro Automotivo", 
+      address: "Av. Maranhão, 789", 
+      city_id: 1, 
+      latitude: -11.7315, 
+      longitude: -49.0695,
+      rating: 4.5,
+      whatsapp: "63999990000"
+    },
+    { 
+      id: "e4", 
+      name: "Pet Shop AuAu", 
+      category_id: 5, 
+      sub_category: "Pet Shop (varejo)", 
+      address: "Rua 10, 101", 
+      city_id: 1, 
+      latitude: -11.7270, 
+      longitude: -49.0650,
+      rating: 4.7,
+      whatsapp: "63999991111"
+    },
+    { 
+      id: "e5", 
+      name: "Farmácia Vida", 
+      category_id: 1, 
+      sub_category: "Farmácia", 
+      address: "Av. Pará, 202", 
+      city_id: 1, 
+      latitude: -11.7320, 
+      longitude: -49.0700,
+      rating: 4.6,
+      whatsapp: "63999992222"
+    },
+    { 
+      id: "e6", 
+      name: "Academia FitLife", 
+      category_id: 9, 
+      sub_category: "Clube / Academia / Quadra", 
+      address: "Rua 5, 303", 
+      city_id: 1, 
+      latitude: -11.7260, 
+      longitude: -49.0640,
+      rating: 4.4,
+      whatsapp: "63999993333"
+    },
+    { 
+      id: "e7", 
+      name: "Escola Aprender", 
+      category_id: 10, 
+      sub_category: "Escola (infantil ao médio)", 
+      address: "Av. Tocantins, 404", 
+      city_id: 1, 
+      latitude: -11.7330, 
+      longitude: -49.0710,
+      rating: 4.9,
+      whatsapp: "63999994444"
+    },
+    { 
+      id: "e8", 
+      name: "Loja de Variedades", 
+      category_id: 12, 
+      sub_category: "Shopping / Loja de Departamento / Outlet", 
+      address: "Rua do Comércio, 505", 
+      city_id: 1, 
+      latitude: -11.7290, 
+      longitude: -49.0670,
+      rating: 4.2,
+      whatsapp: "63999995555"
+    },
+    { 
+      id: "e9", 
+      name: "Barbearia do Zé", 
+      category_id: 4, 
+      sub_category: "Salão de Beleza / Barbearia", 
+      address: "Rua 8, 606", 
+      city_id: 1, 
+      latitude: -11.7280, 
+      longitude: -49.0660,
+      rating: 4.8,
+      whatsapp: "63999996666"
+    },
+    { 
+      id: "e10", 
+      name: "Clínica Vet Amigo", 
+      category_id: 5, 
+      sub_category: "Clínica Veterinária", 
+      address: "Av. Ceará, 707", 
+      city_id: 1, 
+      latitude: -11.7340, 
+      longitude: -49.0720,
+      rating: 4.7,
+      whatsapp: "63999997777"
+    }
   ];
 
   // API Routes
@@ -236,18 +360,34 @@ async function startServer() {
 
   app.get("/api/search", (req, res) => {
     const q = normalize(String(req.query.q || ""));
-    const { city_id, lat, lng } = req.query;
+    const { city_id } = req.query;
 
-    // Baseline ranking logic
-    let results = cities.filter(c => {
-      const state = states.find(s => s.id === c.state_id);
-      const fullName = normalize(`${c.name} ${state?.uf}`);
-      return fullName.includes(q) || normalize(c.name).includes(q);
+    let results = establishments.filter(e => {
+      const matchName = normalize(e.name).includes(q);
+      const matchSub = normalize(e.sub_category).includes(q);
+      const matchCity = city_id ? e.city_id === Number(city_id) : true;
+      return (matchName || matchSub) && matchCity;
     });
 
-    // In a real app, we'd search establishments table here
-    // For now, we return cities as "places" for demo purposes
+    // If no establishments found, fallback to city search for demo
+    if (results.length === 0) {
+      const cityResults = cities.filter(c => {
+        const state = states.find(s => s.id === c.state_id);
+        const fullName = normalize(`${c.name} ${state?.uf}`);
+        return fullName.includes(q) || normalize(c.name).includes(q);
+      });
+      return res.json(cityResults);
+    }
+
     res.json(results);
+  });
+
+  app.get("/api/establishments/featured", (req, res) => {
+    const { city_id } = req.query;
+    if (city_id) {
+      return res.json(establishments.filter(e => e.city_id === Number(city_id)));
+    }
+    res.json(establishments.slice(0, 4));
   });
 
   app.post("/api/search/log", (req, res) => {
@@ -278,6 +418,7 @@ async function startServer() {
             longitude: registration.longitude,
             maps_link: registration.mapsLink,
             city_id: registration.cityId,
+            user_id: registration.userId,
             status: 'pending'
           }]);
 

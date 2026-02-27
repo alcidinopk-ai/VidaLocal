@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS establishments (
   longitude DOUBLE PRECISION,
   maps_link TEXT,
   city_id BIGINT REFERENCES cities(id),
+  user_id UUID,
   status TEXT DEFAULT 'pending', -- pending, approved, rejected
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

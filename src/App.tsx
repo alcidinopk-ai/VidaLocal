@@ -24,15 +24,19 @@ import {
   ChevronDown,
   CheckCircle2,
   Store,
-  Plus
+  Plus,
+  User as UserIcon
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { chatWithMaps, ChatMessage, GroundingChunk } from './services/geminiService';
 import { MapDisplay } from './components/MapDisplay';
 import { useCity } from './contexts/CityContext';
+import { useAuth } from './contexts/AuthContext';
 import { CitySelectorButton } from './components/CitySelector';
 import { RegisterEstablishmentModal } from './components/RegisterEstablishmentModal';
+import { AuthModal } from './components/AuthModal';
+import { FeaturedEstablishments } from './components/FeaturedEstablishments';
 
 import { CATEGORIES, SUB_CATEGORIES } from './constants/taxonomy';
 
@@ -62,6 +66,7 @@ const IconRenderer = ({ name, color, className }: { name: string; color?: string
 
 export default function App() {
   const { currentCity, isLoading: isCityLoading } = useCity();
+  const { user, signOut } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'model',
@@ -79,6 +84,7 @@ export default function App() {
   
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<{ intents: any[], types: string[] }>({ intents: [], types: [] });
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [view, setView] = useState<'home' | 'subcategories' | 'chat'>('home');
@@ -199,19 +205,51 @@ export default function App() {
       setAllGroundingChunks([]);
     }
 
-    const response = await chatWithMaps(query, currentCity, location);
-    setMessages(prev => [...prev, response]);
-    
-    if (response.groundingChunks && response.groundingChunks.length > 0) {
-      setAllGroundingChunks(prev => {
-        const newChunks = response.groundingChunks!.filter(
-          nc => !prev.some(pc => pc.maps?.uri === nc.maps?.uri && pc.web?.uri === nc.web?.uri)
-        );
-        return [...newChunks, ...prev].slice(0, 20); // Keep last 20 unique
-      });
+    // Parallel search: Local Database + Gemini (Maps Grounding)
+    try {
+      const localResults = await fetch(`/api/search?q=${encodeURIComponent(query)}&city_id=${currentCity.id}`)
+        .then(res => res.json())
+        .catch(() => []);
+
+      // Create context string for Gemini
+      const localContext = localResults
+        .filter((item: any) => item.id && item.name && item.latitude)
+        .map((est: any) => `- ${est.name}: ${est.address} (${est.sub_category})`)
+        .join("\n");
+
+      const response = await chatWithMaps(query, currentCity, location, localContext);
+
+      // Convert local results to GroundingChunks
+      const localChunks: GroundingChunk[] = localResults
+        .filter((item: any) => item.id && item.name && item.latitude)
+        .map((est: any) => ({
+          maps: {
+            title: est.name,
+            uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
+            location: {
+              latitude: est.latitude,
+              longitude: est.longitude
+            }
+          }
+        }));
+
+      setMessages(prev => [...prev, response]);
+      
+      const allNewChunks = [...localChunks, ...(response.groundingChunks || [])];
+      
+      if (allNewChunks.length > 0) {
+        setAllGroundingChunks(prev => {
+          const newChunks = allNewChunks.filter(
+            nc => !prev.some(pc => pc.maps?.uri === nc.maps?.uri)
+          );
+          return [...newChunks, ...prev].slice(0, 20);
+        });
+      }
+    } catch (err) {
+      console.error("Search error:", err);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -250,6 +288,39 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsRegisterModalOpen(true)}
+              className="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-50 text-[#00897b] text-xs font-bold rounded-xl hover:bg-emerald-100 transition-all border border-emerald-100"
+            >
+              <Plus className="w-4 h-4" />
+              Sugira um Local
+            </button>
+
+            {user ? (
+              <div className="flex items-center gap-3">
+                <div className="hidden sm:block text-right">
+                  <p className="text-xs font-bold text-zinc-900 truncate max-w-[120px]">{user.email}</p>
+                  <button 
+                    onClick={() => signOut()}
+                    className="text-[10px] font-bold text-zinc-400 hover:text-red-500 transition-colors uppercase tracking-widest"
+                  >
+                    Sair
+                  </button>
+                </div>
+                <div className="w-9 h-9 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-600 border border-zinc-200">
+                  <UserIcon className="w-5 h-5" />
+                </div>
+              </div>
+            ) : (
+              <button 
+                onClick={() => setIsAuthModalOpen(true)}
+                className="px-4 py-2 bg-zinc-900 text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-all flex items-center gap-2"
+              >
+                <UserIcon className="w-4 h-4" />
+                Entrar
+              </button>
+            )}
+            
             <button 
               onClick={() => setIsMapOpen(!isMapOpen)}
               className="lg:hidden p-2 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
@@ -391,6 +462,9 @@ export default function App() {
                     ))}
                   </div>
                 </div>
+
+                {/* Featured Section */}
+                <FeaturedEstablishments />
               </motion.div>
             ) : view === 'subcategories' ? (
               /* Subcategories Screen */
@@ -591,10 +665,22 @@ export default function App() {
         )}
         <MapDisplay chunks={allGroundingChunks} userLocation={location} isRealLocation={isRealLocation} isLoading={isLoading} />
       </div>
+      {/* Floating Action Button for Mobile - Suggest Local */}
+      <button 
+        onClick={() => setIsRegisterModalOpen(true)}
+        className="md:hidden fixed bottom-24 right-6 z-40 w-14 h-14 bg-[#00897b] text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+
       {/* Modals */}
       <RegisterEstablishmentModal 
         isOpen={isRegisterModalOpen} 
         onClose={() => setIsRegisterModalOpen(false)} 
+      />
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => setIsAuthModalOpen(false)} 
       />
     </div>
   );

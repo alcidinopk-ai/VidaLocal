@@ -64,9 +64,10 @@ async function callWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T
 export async function chatWithMaps(
   message: string,
   city: { name: string; uf: string; latitude: number; longitude: number },
-  userLocation?: { latitude: number; longitude: number }
+  userLocation?: { latitude: number; longitude: number },
+  localContext?: string
 ): Promise<ChatMessage> {
-  const cacheKey = `${city.name}-${city.uf}:${message.trim().toLowerCase()}:${userLocation ? 'geo' : 'city'}`;
+  const cacheKey = `${city.name}-${city.uf}:${message.trim().toLowerCase()}:${userLocation ? 'geo' : 'city'}:${localContext ? 'ctx' : 'no-ctx'}`;
   if (responseCache.has(cacheKey)) {
     console.log("Returning cached response for:", cacheKey);
     return responseCache.get(cacheKey)!;
@@ -83,6 +84,9 @@ export async function chatWithMaps(
         Use listas Markdown para clareza. Sempre priorize a precisão e os dados em tempo real do Google Maps.
         
         ${TAXONOMY_CONTEXT}
+        
+        ${localContext ? `IMPORTANTE: Os seguintes estabelecimentos foram encontrados em nossa base de dados local e DEVEM ser mencionados com destaque se forem relevantes para a pergunta:
+        ${localContext}` : ""}
         
         Sempre tente enquadrar os estabelecimentos encontrados nas categorias e tipos acima.`,
         tools: [{ googleMaps: {} }, { googleSearch: {} }],

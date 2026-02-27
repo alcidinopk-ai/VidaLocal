@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
+import { useAuth } from '../contexts/AuthContext';
 import { CATEGORIES, SUB_CATEGORIES } from '../constants/taxonomy';
 
 interface RegisterEstablishmentModalProps {
@@ -24,6 +25,7 @@ interface RegisterEstablishmentModalProps {
 
 export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProps> = ({ isOpen, onClose }) => {
   const { currentCity } = useCity();
+  const { user } = useAuth();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -80,7 +82,9 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
           ...formData,
           cityId: currentCity.id,
           cityName: currentCity.name,
-          cityUf: currentCity.uf
+          cityUf: currentCity.uf,
+          userId: user?.id,
+          userEmail: user?.email
         })
       });
 
@@ -122,23 +126,23 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         className="bg-white w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
       >
         {/* Header */}
-        <div className="p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+        <div className="p-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#00897b] flex items-center justify-center text-white">
-              <Plus className="w-6 h-6" />
+            <div className="w-8 h-8 rounded-lg bg-[#00897b] flex items-center justify-center text-white">
+              <Plus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-zinc-900">Cadastrar Estabelecimento</h2>
-              <p className="text-xs text-zinc-500">Sugerir novo local em {currentCity.name} - {currentCity.uf}</p>
+              <h2 className="text-lg font-bold text-zinc-900">Cadastrar Estabelecimento</h2>
+              <p className="text-[10px] text-zinc-500">Sugerir novo local em {currentCity.name} - {currentCity.uf}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
-            <X className="w-5 h-5 text-zinc-400" />
+            <X className="w-4 h-4 text-zinc-400" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-6">
           {isSubmitted ? (
             <div className="py-12 flex flex-col items-center justify-center text-center">
               <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-6">
@@ -173,7 +177,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         value={formData.name}
                         onChange={e => setFormData({...formData, name: e.target.value})}
                         placeholder="Ex: Pizzaria Bella Italia"
-                        className="w-full pl-11 pr-4 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                        className="w-full pl-11 pr-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
                       />
                     </div>
                   </div>
@@ -185,7 +189,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         required
                         value={formData.categoryId}
                         onChange={e => setFormData({...formData, categoryId: e.target.value, subCategory: ''})}
-                        className="w-full px-4 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm appearance-none"
+                        className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm appearance-none"
                       >
                         <option value="">Selecione...</option>
                         {CATEGORIES.map(cat => (
@@ -200,7 +204,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         disabled={!formData.categoryId}
                         value={formData.subCategory}
                         onChange={e => setFormData({...formData, subCategory: e.target.value})}
-                        className="w-full px-4 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm appearance-none disabled:opacity-50"
+                        className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm appearance-none disabled:opacity-50"
                       >
                         <option value="">Selecione...</option>
                         {filteredSubCategories.map(sc => (
@@ -216,16 +220,15 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                   <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Contato e Localização</h4>
                   
                   <div>
-                    <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">Endereço Completo *</label>
+                    <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">Endereço Completo</label>
                     <div className="relative">
                       <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                       <input 
-                        required
                         type="text"
                         value={formData.address}
                         onChange={e => setFormData({...formData, address: e.target.value})}
                         placeholder="Rua, Número, Bairro"
-                        className="w-full pl-11 pr-4 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                        className="w-full pl-11 pr-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
                       />
                     </div>
                   </div>
@@ -240,21 +243,20 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                           value={formData.phone}
                           onChange={e => setFormData({...formData, phone: e.target.value})}
                           placeholder="(00) 00000-0000"
-                          className="w-full pl-11 pr-4 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          className="w-full pl-11 pr-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">WhatsApp *</label>
+                      <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">WhatsApp</label>
                       <div className="relative">
                         <MessageCircle className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                         <input 
-                          required
                           type="tel"
                           value={formData.whatsapp}
                           onChange={e => setFormData({...formData, whatsapp: e.target.value})}
                           placeholder="(00) 00000-0000"
-                          className="w-full pl-11 pr-4 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          className="w-full pl-11 pr-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
                         />
                       </div>
                     </div>
@@ -269,7 +271,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         value={formData.website}
                         onChange={e => setFormData({...formData, website: e.target.value})}
                         placeholder="https://..."
-                        className="w-full pl-11 pr-4 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                        className="w-full pl-11 pr-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
                       />
                     </div>
                   </div>
@@ -283,7 +285,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                     type="button"
                     onClick={handleGetCurrentLocation}
                     disabled={isLocating}
-                    className="w-full flex items-center justify-center gap-3 p-3 bg-white border border-zinc-200 rounded-xl text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-all disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-3 p-2.5 bg-white border border-zinc-200 rounded-xl text-xs font-bold text-zinc-700 hover:bg-zinc-50 transition-all disabled:opacity-50"
                   >
                     {isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
                     Obter Localização Atual
@@ -296,7 +298,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                       value={formData.mapsLink}
                       onChange={e => setFormData({...formData, mapsLink: e.target.value})}
                       placeholder="Inserir Link do Google Maps"
-                      className="w-full pl-11 pr-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                      className="w-full pl-11 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
                     />
                   </div>
                   
@@ -341,20 +343,20 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                   <ImageIcon className="w-4 h-4" />
                   <span className="text-[10px] font-medium uppercase">Fotos poderão ser adicionadas após validação</span>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                   <button 
                     type="button"
                     onClick={onClose}
-                    className="px-6 py-3 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors"
+                    className="px-4 py-2 text-xs font-bold text-zinc-500 hover:text-zinc-900 transition-colors"
                   >
                     Cancelar
                   </button>
                   <button 
                     type="submit"
                     disabled={isLoading}
-                    className="px-8 py-3 bg-[#00897b] text-white rounded-2xl font-bold hover:bg-[#00796b] transition-all shadow-lg shadow-[#00897b]/20 disabled:opacity-50 flex items-center gap-2"
+                    className="px-5 py-2 bg-[#00897b] text-white rounded-xl text-xs font-bold hover:bg-[#00796b] transition-all shadow-md shadow-[#00897b]/10 disabled:opacity-50 flex items-center gap-2"
                   >
-                    {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {isLoading && <Loader2 className="w-3 h-3 animate-spin" />}
                     Enviar para Validação
                   </button>
                 </div>

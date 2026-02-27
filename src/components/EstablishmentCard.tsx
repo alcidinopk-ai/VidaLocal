@@ -9,7 +9,8 @@ import {
   ThumbsUp, 
   ExternalLink,
   X,
-  CheckCircle2
+  CheckCircle2,
+  Share2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GroundingChunk } from '../services/geminiService';
@@ -41,10 +42,29 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
   const routeUrl = location 
     ? `https://www.google.com/maps/dir/?api=1&destination=${location.latitude},${location.longitude}`
     : uri;
+  const shareText = `Confira ${title} no VidaLocal: ${uri}`;
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: title,
+          text: `Encontrei este lugar no VidaLocal: ${title}`,
+          url: uri,
+        });
+      } catch (err) {
+        console.error('Erro ao compartilhar:', err);
+      }
+    } else {
+      // Fallback to WhatsApp
+      const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+      window.open(whatsappShareUrl, '_blank');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log(`Feedback for ${title} by ${user?.name}:`, { type: activeModal, text: feedbackText, rating });
+    console.log(`Feedback for ${title} by ${user?.email}:`, { type: activeModal, text: feedbackText, rating });
     setIsSubmitted(true);
     setTimeout(() => {
       setIsSubmitted(false);
@@ -102,14 +122,24 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
               </p>
             </div>
           </div>
-          <a 
-            href={uri} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="p-2.5 rounded-xl bg-white border border-zinc-100 text-zinc-400 hover:text-emerald-600 hover:border-emerald-200 transition-all shadow-sm"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </a>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleShare}
+              className="p-2.5 rounded-xl bg-white border border-zinc-100 text-zinc-400 hover:text-[#f57c00] hover:border-orange-200 transition-all shadow-sm"
+              title="Compartilhar"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+            <a 
+              href={uri} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="p-2.5 rounded-xl bg-white border border-zinc-100 text-zinc-400 hover:text-emerald-600 hover:border-emerald-200 transition-all shadow-sm"
+              title="Ver no Google Maps"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
         </div>
 
         {/* Feedback Buttons */}
