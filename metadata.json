@@ -1,0 +1,5 @@
+{
+  "name": "VidaLocal",
+  "description": "Conectando você ao melhor da sua cidade, todos os dias.",
+  "requestFramePermissions": ["geolocation"]
+}
