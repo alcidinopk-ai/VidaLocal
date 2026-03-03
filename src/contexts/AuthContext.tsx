@@ -15,6 +15,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    const isPlaceholder = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
+    
+    if (isPlaceholder) {
+      setIsLoading(false);
+      return;
+    }
+
     // Check active sessions and sets the user
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);

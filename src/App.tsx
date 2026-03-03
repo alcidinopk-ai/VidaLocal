@@ -35,6 +35,7 @@ import { useCity } from './contexts/CityContext';
 import { useAuth } from './contexts/AuthContext';
 import { CitySelectorButton } from './components/CitySelector';
 import { RegisterEstablishmentModal } from './components/RegisterEstablishmentModal';
+import { UserEstablishmentsModal } from './components/UserEstablishmentsModal';
 import { AuthModal } from './components/AuthModal';
 import { FeaturedEstablishments } from './components/FeaturedEstablishments';
 
@@ -84,6 +85,7 @@ export default function App() {
   
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [isUserEstModalOpen, setIsUserEstModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<{ intents: any[], types: string[] }>({ intents: [], types: [] });
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -300,16 +302,27 @@ export default function App() {
               <div className="flex items-center gap-3">
                 <div className="hidden sm:block text-right">
                   <p className="text-xs font-bold text-zinc-900 truncate max-w-[120px]">{user.email}</p>
-                  <button 
-                    onClick={() => signOut()}
-                    className="text-[10px] font-bold text-zinc-400 hover:text-red-500 transition-colors uppercase tracking-widest"
-                  >
-                    Sair
-                  </button>
+                  <div className="flex items-center justify-end gap-3">
+                    <button 
+                      onClick={() => setIsUserEstModalOpen(true)}
+                      className="text-[10px] font-bold text-[#00897b] hover:underline transition-colors uppercase tracking-widest"
+                    >
+                      Meus Cadastros
+                    </button>
+                    <button 
+                      onClick={() => signOut()}
+                      className="text-[10px] font-bold text-zinc-400 hover:text-red-500 transition-colors uppercase tracking-widest"
+                    >
+                      Sair
+                    </button>
+                  </div>
                 </div>
-                <div className="w-9 h-9 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-600 border border-zinc-200">
+                <button 
+                  onClick={() => setIsUserEstModalOpen(true)}
+                  className="w-9 h-9 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-600 border border-zinc-200 hover:bg-zinc-200 transition-all"
+                >
                   <UserIcon className="w-5 h-5" />
-                </div>
+                </button>
               </div>
             ) : (
               <button 
@@ -677,6 +690,10 @@ export default function App() {
       <RegisterEstablishmentModal 
         isOpen={isRegisterModalOpen} 
         onClose={() => setIsRegisterModalOpen(false)} 
+      />
+      <UserEstablishmentsModal 
+        isOpen={isUserEstModalOpen} 
+        onClose={() => setIsUserEstModalOpen(false)} 
       />
       <AuthModal 
         isOpen={isAuthModalOpen} 

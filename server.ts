@@ -2,7 +2,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import { supabaseAdmin } from "./src/lib/supabase-server.js";
+import { supabaseAdmin } from "./src/lib/supabase-server";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +12,11 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+  });
 
   // Mock Data
   const states = [
@@ -163,6 +168,10 @@ async function startServer() {
   ];
 
   // API Routes
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   app.get("/api/states", (req, res) => {
     res.json(states);
   });
@@ -395,13 +404,44 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
+  app.get("/api/establishments/user/:userId", async (req, res) => {
+    const { userId } = req.params;
+    
+    if (!userId || userId === 'undefined' || userId === 'null') {
+      return res.json([]);
+    }
+    
+    try {
+      if (process.env.VITE_SUPABASE_URL && 
+          process.env.SUPABASE_SERVICE_ROLE_KEY && 
+          !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+        const { data, error } = await supabaseAdmin
+          .from('establishments')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return res.json(data || []);
+      }
+      
+      // Fallback for demo
+      res.json([]);
+    } catch (error) {
+      console.error("Error fetching user establishments:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.post("/api/establishments/register", async (req, res) => {
     const registration = req.body;
     console.log("New Establishment Registration Request (Pending Validation):", registration);
     
     try {
       // Try to save to Supabase if configured
-      if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      if (process.env.VITE_SUPABASE_URL && 
+          process.env.SUPABASE_SERVICE_ROLE_KEY && 
+          !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
         const { error } = await supabaseAdmin
           .from('establishments')
           .insert([{
