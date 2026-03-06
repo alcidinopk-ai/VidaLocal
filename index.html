@@ -8,6 +8,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      window.onerror = function(msg, url, line) {
+        document.body.innerHTML = '<div style="padding:20px;color:red;font-family:sans-serif;"><h1>Erro de Carregamento</h1><p>' + msg + '</p><p>URL: ' + url + '</p></div>';
+      };
+      console.log("VidaLocal: HTML carregado, iniciando scripts...");
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
