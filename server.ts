@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
+import { GoogleGenAI } from "@google/genai";
 import { supabaseAdmin } from "./src/lib/supabase-server";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -8,6 +9,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
+
+// Initialize Gemini on the server
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 // Request logging
 app.use((req, res, next) => {
@@ -87,6 +91,82 @@ app.post("/api/cities/resolve-by-geo", (req, res) => {
 });
 
 const normalize = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+app.post("/api/chat", async (req, res) => {
+  const { message, city, userLocation, localContext, taxonomyContext } = req.body;
+  
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ 
+      error: "GEMINI_API_KEY não configurada no servidor.",
+      role: "model",
+      text: "Erro de configuração: A chave da API Gemini não foi encontrada no servidor. Por favor, configure-a nas variáveis de ambiente da Vercel."
+    });
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: message,
+      config: {
+        systemInstruction: `Você é VidaLocal, um assistente de guia urbano premium para a cidade de ${city.name}-${city.uf}. 
+        Quando os usuários perguntarem sobre lugares, serviços ou empresas, você DEVE fornecer uma lista estruturada de opções relevantes.
+        Para cada empresa, inclua: 1. Nome, 2. Endereço Completo, 3. Número de Telefone (se disponível), e 4. Uma breve descrição.
+        Use listas Markdown para clareza. Sempre priorize a precisão e os dados em tempo real do Google Maps.
+        
+        ${taxonomyContext}
+        
+        ${localContext ? `IMPORTANTE: Os seguintes estabelecimentos foram encontrados em nossa base de dados local e DEVEM ser mencionados com destaque se forem relevantes para a pergunta:
+        ${localContext}` : ""}
+        
+        Sempre tente enquadrar os estabelecimentos encontrados nas categorias e tipos acima.`,
+        tools: [{ googleMaps: {} }, { googleSearch: {} }],
+        toolConfig: {
+          retrievalConfig: {
+            latLng: {
+              latitude: userLocation?.latitude || city.latitude,
+              longitude: userLocation?.longitude || city.longitude,
+            },
+          },
+        },
+      },
+    });
+
+    const text = response.text || "Não consegui encontrar uma resposta para isso.";
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks as any[];
+    
+    const groundingChunks = chunks?.map(chunk => ({
+      maps: chunk.maps ? { 
+        uri: chunk.maps.uri, 
+        title: chunk.maps.title,
+        location: chunk.maps.location ? {
+          latitude: chunk.maps.location.latitude,
+          longitude: chunk.maps.location.longitude
+        } : undefined
+      } : undefined,
+      web: chunk.web ? { uri: chunk.web.uri, title: chunk.web.title } : undefined,
+    })).filter(c => c.maps || c.web) || [];
+
+    res.json({
+      role: "model",
+      text,
+      groundingChunks,
+    });
+  } catch (error: any) {
+    console.error("Gemini API Error:", error);
+    const errorString = JSON.stringify(error).toLowerCase();
+    const isRateLimit = 
+      errorString.includes("429") || 
+      errorString.includes("resource_exhausted") ||
+      errorString.includes("quota exceeded");
+
+    res.json({
+      role: "model",
+      text: isRateLimit 
+        ? "Desculpe, o serviço está temporariamente sobrecarregado devido ao alto volume de buscas. Por favor, tente novamente em alguns instantes."
+        : "Desculpe, encontrei um erro ao processar sua solicitação. Por favor, tente novamente.",
+    });
+  }
+});
 
 app.get("/api/search", (req, res) => {
   const q = normalize(String(req.query.q || ""));
