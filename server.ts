@@ -159,13 +159,6 @@ app.post("/api/establishments/register", async (req, res) => {
 if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
   const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
   app.use(vite.middlewares);
-} else if (!process.env.VERCEL) {
-  // Static serving for local production only
-  // On Vercel, static files are handled by Vercel's edge network
-  app.use(express.static(path.join(__dirname, "dist")));
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(__dirname, "dist", "index.html"));
-  });
 }
 
 // Only listen if not on Vercel
