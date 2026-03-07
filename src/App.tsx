@@ -128,6 +128,26 @@ export default function App() {
 
   useEffect(() => {
     detectLocation();
+    
+    // Pre-populate map with featured establishments
+    fetch(`/api/establishments/featured?city_id=${currentCity.id}`)
+      .then(res => res.json())
+      .then(data => {
+        const initialChunks: GroundingChunk[] = data.map((est: any) => ({
+          maps: {
+            title: est.name,
+            uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
+            phone: est.phone,
+            whatsapp: est.whatsapp,
+            location: {
+              latitude: est.latitude,
+              longitude: est.longitude
+            }
+          }
+        }));
+        setAllGroundingChunks(initialChunks);
+      })
+      .catch(err => console.error("Error fetching initial establishments:", err));
   }, [currentCity]);
 
   useEffect(() => {
@@ -228,6 +248,8 @@ export default function App() {
           maps: {
             title: est.name,
             uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
+            phone: est.phone,
+            whatsapp: est.whatsapp,
             location: {
               latitude: est.latitude,
               longitude: est.longitude

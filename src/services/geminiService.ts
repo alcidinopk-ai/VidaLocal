@@ -10,6 +10,8 @@ export interface GroundingChunk {
   maps?: {
     uri: string;
     title: string;
+    phone?: string;
+    whatsapp?: string;
     location?: {
       latitude: number;
       longitude: number;

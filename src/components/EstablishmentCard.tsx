@@ -35,9 +35,10 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
   const uri = chunk.maps?.uri || '#';
   const location = chunk.maps?.location;
   
-  // Mock phone for demo if not provided (Gemini grounding usually doesn't provide phone directly in the chunk)
-  const phone = "(63) 99999-9999"; 
-  const whatsappUrl = `https://wa.me/55${phone.replace(/\D/g, '')}`;
+  // Use phone from chunk if available, otherwise fallback
+  const phone = chunk.maps?.phone || chunk.maps?.whatsapp || "(63) 99999-9999"; 
+  const whatsappNumber = chunk.maps?.whatsapp || chunk.maps?.phone || "63999999999";
+  const whatsappUrl = `https://wa.me/55${whatsappNumber.replace(/\D/g, '')}`;
   const telUrl = `tel:${phone.replace(/\D/g, '')}`;
   const routeUrl = location 
     ? `https://www.google.com/maps/dir/?api=1&destination=${location.latitude},${location.longitude}`

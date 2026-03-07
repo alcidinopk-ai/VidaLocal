@@ -45,10 +45,10 @@ const cities = [
 ];
 
 const establishments = [
-  { id: "e1", name: "Espetinho do Adão B13", category_id: 1, sub_category: "Espetinho", address: "Av. Goiás, 1234, Centro", city_id: 1, latitude: -11.7300, longitude: -49.0680, rating: 4.8, whatsapp: "63999991234" },
-  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Rua 7, 456, Setor Central", city_id: 1, latitude: -11.7285, longitude: -49.0665, rating: 4.9, whatsapp: "63999995678" },
-  { id: "e3", name: "Mecânica do João", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Maranhão, 789", city_id: 1, latitude: -11.7315, longitude: -49.0695, rating: 4.5, whatsapp: "63999990000" },
-  { id: "e4", name: "Pet Shop AuAu", category_id: 5, sub_category: "Pet Shop (varejo)", address: "Rua 10, 101", city_id: 1, latitude: -11.7270, longitude: -49.0650, rating: 4.7, whatsapp: "63999991111" },
+  { id: "e1", name: "Espetinho do Adão B13", category_id: 1, sub_category: "Espetinho", address: "Av. Maranhão, 1438, Centro, Gurupi - TO", city_id: 1, latitude: -11.7289, longitude: -49.0692, rating: 4.8, whatsapp: "63984551234" },
+  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Rua 7, 1245, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455" },
+  { id: "e3", name: "Mecânica do Neném", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Maranhão, 2560, Setor Industrial, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0720, rating: 4.5, whatsapp: "63984112233" },
+  { id: "e4", name: "Pet Shop Amigão", category_id: 5, sub_category: "Pet Shop (varejo)", address: "Av. Goiás, 2100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0685, rating: 4.7, whatsapp: "63999887766" },
 ];
 
 // API Routes
@@ -56,38 +56,107 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.get("/api/states", (req, res) => res.json(states));
-
-app.get("/api/cities", (req, res) => {
-  const { state_uf } = req.query;
-  if (state_uf) {
-    const state = states.find(s => s.uf === String(state_uf).toUpperCase());
-    if (!state) return res.json([]);
-    return res.json(cities.filter(c => c.state_id === state.id));
+app.get("/api/states", async (req, res) => {
+  try {
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      const { data, error } = await supabaseAdmin.from('states').select('*').order('name');
+      if (error) throw error;
+      return res.json(data || []);
+    }
+    res.json(states);
+  } catch (error) {
+    console.error("Error fetching states:", error);
+    res.json(states);
   }
-  res.json(cities);
 });
 
-app.get("/api/cities/search", (req, res) => {
+app.get("/api/cities", async (req, res) => {
+  const { state_uf } = req.query;
+  try {
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      let query = supabaseAdmin.from('cities').select('*, states!inner(uf)');
+      if (state_uf) {
+        query = query.eq('states.uf', String(state_uf).toUpperCase());
+      }
+      const { data, error } = await query.order('name');
+      if (error) throw error;
+      return res.json(data || []);
+    }
+    
+    if (state_uf) {
+      const state = states.find(s => s.uf === String(state_uf).toUpperCase());
+      if (!state) return res.json([]);
+      return res.json(cities.filter(c => c.state_id === state.id));
+    }
+    res.json(cities);
+  } catch (error) {
+    console.error("Error fetching cities:", error);
+    res.json(cities);
+  }
+});
+
+app.get("/api/cities/search", async (req, res) => {
   const q = String(req.query.q || "").toLowerCase();
   if (!q) return res.json([]);
-  const results = cities.filter(c => {
-    const state = states.find(s => s.id === c.state_id);
-    const fullName = `${c.name} ${state?.uf}`.toLowerCase();
-    return fullName.includes(q) || c.name.toLowerCase().includes(q);
-  });
-  res.json(results);
+  
+  try {
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      const { data, error } = await supabaseAdmin
+        .from('cities')
+        .select('*, states!inner(uf)')
+        .or(`name.ilike.%${q}%,states.uf.ilike.%${q}%`)
+        .eq('active', true)
+        .limit(10);
+      if (error) throw error;
+      return res.json(data || []);
+    }
+
+    const results = cities.filter(c => {
+      const state = states.find(s => s.id === c.state_id);
+      const fullName = `${c.name} ${state?.uf}`.toLowerCase();
+      return fullName.includes(q) || c.name.toLowerCase().includes(q);
+    });
+    res.json(results);
+  } catch (error) {
+    console.error("Error searching cities:", error);
+    res.json([]);
+  }
 });
 
-app.post("/api/cities/resolve-by-geo", (req, res) => {
+app.post("/api/cities/resolve-by-geo", async (req, res) => {
   const { lat, lng } = req.body;
-  let nearest = cities[0];
-  let minDist = Infinity;
-  cities.forEach(c => {
-    const d = Math.sqrt(Math.pow(c.latitude - lat, 2) + Math.pow(c.longitude - lng, 2));
-    if (d < minDist) { minDist = d; nearest = c; }
-  });
-  res.json(nearest);
+  
+  try {
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      // Supabase doesn't have a built-in "nearest" without PostGIS, 
+      // but we can do a simple distance calculation if the dataset is small,
+      // or just fetch all active cities and calculate in JS like the mock does.
+      const { data, error } = await supabaseAdmin.from('cities').select('*, states(uf)').eq('active', true);
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        let nearest = data[0];
+        let minDist = Infinity;
+        data.forEach(c => {
+          const d = Math.sqrt(Math.pow(c.latitude - lat, 2) + Math.pow(c.longitude - lng, 2));
+          if (d < minDist) { minDist = d; nearest = c; }
+        });
+        return res.json({ ...nearest, uf: nearest.states?.uf });
+      }
+    }
+
+    let nearest = cities[0];
+    let minDist = Infinity;
+    cities.forEach(c => {
+      const d = Math.sqrt(Math.pow(c.latitude - lat, 2) + Math.pow(c.longitude - lng, 2));
+      if (d < minDist) { minDist = d; nearest = c; }
+    });
+    const state = states.find(s => s.id === nearest.state_id);
+    res.json({ ...nearest, uf: state?.uf });
+  } catch (error) {
+    console.error("Error resolving city by geo:", error);
+    res.json(cities[0]);
+  }
 });
 
 const normalize = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -168,24 +237,110 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-app.get("/api/search", (req, res) => {
+app.get("/api/establishments/featured", async (req, res) => {
+  const { city_id } = req.query;
+  try {
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      let query = supabaseAdmin.from('establishments').select('*').eq('status', 'approved');
+      if (city_id) {
+        query = query.eq('city_id', Number(city_id));
+      }
+      const { data, error } = await query.limit(8).order('created_at', { ascending: false });
+      if (error) throw error;
+      return res.json(data || []);
+    }
+    const results = establishments.filter(e => !city_id || e.city_id === Number(city_id));
+    res.json(results);
+  } catch (error) {
+    console.error("Error fetching featured establishments:", error);
+    res.json(establishments);
+  }
+});
+
+app.get("/api/search/suggest", async (req, res) => {
+  const q = normalize(String(req.query.q || ""));
+  if (!q) return res.json({ intents: [], types: [] });
+  
+  try {
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      // Fetch intents and types from DB
+      const { data: intentsData } = await supabaseAdmin.from('search_intents').select('id, name').ilike('name', `%${q}%`).eq('active', true).limit(5);
+      const { data: typesData } = await supabaseAdmin.from('establishments').select('sub_category').ilike('sub_category', `%${q}%`).eq('status', 'approved').limit(20);
+      
+      const types = Array.from(new Set(typesData?.map(e => e.sub_category) || [])).slice(0, 5);
+      return res.json({ intents: intentsData || [], types });
+    }
+
+    const types = Array.from(new Set(establishments
+      .filter(e => normalize(e.sub_category).includes(q))
+      .map(e => e.sub_category)
+    )).slice(0, 5);
+
+    const intents = [
+      { id: 1, name: "Restaurantes" },
+      { id: 2, name: "Serviços Públicos" },
+      { id: 3, name: "Saúde" }
+    ].filter(i => normalize(i.name).includes(q));
+
+    res.json({ intents, types });
+  } catch (error) {
+    console.error("Error fetching suggestions:", error);
+    res.json({ intents: [], types: [] });
+  }
+});
+
+app.get("/api/search", async (req, res) => {
   const q = normalize(String(req.query.q || ""));
   const { city_id } = req.query;
-  let results = establishments.filter(e => {
-    const matchName = normalize(e.name).includes(q);
-    const matchSub = normalize(e.sub_category).includes(q);
-    const matchCity = city_id ? e.city_id === Number(city_id) : true;
-    return (matchName || matchSub) && matchCity;
-  });
-  if (results.length === 0) {
-    const cityResults = cities.filter(c => {
-      const state = states.find(s => s.id === c.state_id);
-      const fullName = normalize(`${c.name} ${state?.uf}`);
-      return fullName.includes(q) || normalize(c.name).includes(q);
+  
+  try {
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      let query = supabaseAdmin.from('establishments').select('*').eq('status', 'approved');
+      if (city_id) {
+        query = query.eq('city_id', Number(city_id));
+      }
+      query = query.or(`name.ilike.%${q}%,sub_category.ilike.%${q}%,description.ilike.%${q}%`);
+      
+      const { data, error } = await query.limit(20);
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        return res.json(data);
+      }
+
+      // If no establishments, try searching cities
+      const { data: cityData } = await supabaseAdmin
+        .from('cities')
+        .select('*, states(uf)')
+        .ilike('name', `%${q}%`)
+        .eq('active', true);
+      
+      return res.json(cityData?.map(c => ({ ...c, uf: c.states?.uf })) || []);
+    }
+
+    let results = establishments.filter(e => {
+      const normName = normalize(e.name);
+      const normSub = normalize(e.sub_category);
+      
+      const matchName = q.includes(normName) || normName.includes(q);
+      const matchSub = q.includes(normSub) || normSub.includes(q);
+      
+      const matchCity = city_id ? e.city_id === Number(city_id) : true;
+      return (matchName || matchSub) && matchCity;
     });
-    return res.json(cityResults);
+    if (results.length === 0) {
+      const cityResults = cities.filter(c => {
+        const state = states.find(s => s.id === c.state_id);
+        const fullName = normalize(`${c.name} ${state?.uf}`);
+        return fullName.includes(q) || normalize(c.name).includes(q);
+      });
+      return res.json(cityResults);
+    }
+    res.json(results);
+  } catch (error) {
+    console.error("Search error:", error);
+    res.json([]);
   }
-  res.json(results);
 });
 
 app.get("/api/establishments/user/:userId", async (req, res) => {
