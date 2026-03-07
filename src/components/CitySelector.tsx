@@ -102,7 +102,7 @@ export const CitySelectorModal = ({ isOpen, onClose }: { isOpen: boolean; onClos
         <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-zinc-900">Selecionar Cidade</h2>
-            <p className="text-xs text-zinc-500 mt-1">Cidade atual: {currentCity.name} - {currentCity.uf}</p>
+            <p className="text-xs text-zinc-500 mt-1">Cidade atual: {currentCity.name}{currentCity.uf ? ` - ${currentCity.uf}` : ''}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
             <X className="w-5 h-5 text-zinc-400" />
@@ -236,7 +236,7 @@ export const CitySelectorButton = () => {
         className="mb-4 px-3 py-1.5 bg-black/10 backdrop-blur-md rounded-full text-white/90 text-xs font-medium flex items-center gap-2 mx-auto hover:bg-black/20 transition-all"
       >
         <MapPin className="w-3.5 h-3.5" />
-        {currentCity.name} – {currentCity.uf}
+        {currentCity.name}{currentCity.uf ? ` – ${currentCity.uf}` : ''}
         <ChevronDown className="w-3.5 h-3.5" />
       </button>
       <CitySelectorModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />

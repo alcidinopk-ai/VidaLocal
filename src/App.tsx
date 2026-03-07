@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   Store,
   Plus,
+  Printer,
   User as UserIcon
 } from 'lucide-react';
 import Markdown from 'react-markdown';
@@ -198,7 +199,7 @@ export default function App() {
   const handleSubCategoryClick = (subCategoryName: string) => {
     setSelectedSubCategory(subCategoryName);
     const categoryName = CATEGORIES.find(c => c.id === activeCategoryId)?.name;
-    const query = `Quero ver estabelecimentos do tipo ${subCategoryName} (Categoria: ${categoryName}) em ${currentCity.name} - ${currentCity.uf}`;
+    const query = `Quero ver estabelecimentos do tipo ${subCategoryName} (Categoria: ${categoryName}) em ${currentCity.name}${currentCity.uf ? ` - ${currentCity.uf}` : ''}`;
     
     // Open map panel to show establishments
     setIsMapOpen(true);
@@ -256,6 +257,17 @@ export default function App() {
             }
           }
         }));
+
+      // If AI failed but we have local results, add a helpful message
+      if (response.text.includes("chave da API Gemini") || response.text.includes("API_KEY")) {
+        if (localChunks.length > 0) {
+          response.text = `Encontrei **${localChunks.length} estabelecimentos** em nossa base de dados local para sua busca. \n\nEmbora o assistente de IA esteja temporariamente indisponível (chave API não configurada), você pode ver os locais encontrados no mapa ao lado ou na lista abaixo:\n\n` + 
+            localResults.map((est: any) => `* **${est.name}**: ${est.address}`).join("\n") +
+            `\n\n*(Dica: Para habilitar o assistente de IA completo, configure sua GEMINI_API_KEY nas configurações do projeto)*`;
+        } else {
+          response.text = `O assistente de IA está temporariamente indisponível (chave API não configurada) e não encontrei estabelecimentos correspondentes em nossa base de dados local para: "${query}".\n\nPor favor, tente uma busca mais simples ou verifique as categorias acima.\n\n*(Dica: Para habilitar o assistente de IA completo, configure sua GEMINI_API_KEY nas configurações do projeto)*`;
+        }
+      }
 
       setMessages(prev => [...prev, response]);
       
@@ -582,11 +594,21 @@ export default function App() {
                     </button>
                     <div>
                       <span className="text-[10px] uppercase tracking-widest font-bold text-zinc-400">Exibindo</span>
-                      <h3 className="text-sm font-bold text-zinc-900">{selectedSubCategory}</h3>
+                      <h3 className="text-sm font-bold text-zinc-900">
+                        {selectedSubCategory} {currentCity ? `em ${currentCity.name}${currentCity.uf ? ` - ${currentCity.uf}` : ''}` : ''}
+                      </h3>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => window.print()}
+                      className="p-2 rounded-xl bg-white border border-zinc-200 text-zinc-500 hover:text-[#00897b] transition-colors flex items-center gap-2"
+                      title="Imprimir resultados"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span className="hidden sm:inline text-xs font-bold">Imprimir</span>
+                    </button>
                     {CATEGORIES.find(c => c.id === activeCategoryId) && (
                       <div 
                         className="px-3 py-1 rounded-full text-[10px] font-bold text-white shadow-sm"

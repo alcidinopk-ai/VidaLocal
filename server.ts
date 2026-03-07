@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 import { supabaseAdmin } from "./src/lib/supabase-server";
@@ -45,10 +46,28 @@ const cities = [
 ];
 
 const establishments = [
-  { id: "e1", name: "Espetinho do Adão B13", category_id: 1, sub_category: "Espetinho", address: "Av. Maranhão, 1438, Centro, Gurupi - TO", city_id: 1, latitude: -11.7289, longitude: -49.0692, rating: 4.8, whatsapp: "63984551234" },
-  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Rua 7, 1245, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455" },
-  { id: "e3", name: "Mecânica do Neném", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Maranhão, 2560, Setor Industrial, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0720, rating: 4.5, whatsapp: "63984112233" },
-  { id: "e4", name: "Pet Shop Amigão", category_id: 5, sub_category: "Pet Shop (varejo)", address: "Av. Goiás, 2100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0685, rating: 4.7, whatsapp: "63999887766" },
+  { id: "e1", name: "Espetinho do Adão B13", category_id: 1, sub_category: "Espetinho", address: "Av. Maranhão, 1438, Centro, Gurupi - TO", city_id: 1, latitude: -11.7289, longitude: -49.0692, rating: 4.8, whatsapp: "63984551234", phone: "6333121234", description: "O melhor espetinho da região com acompanhamentos tradicionais." },
+  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Rua 7, 1245, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455", phone: "6333124455", description: "Comida caseira, lanches e sobremesas feitas com carinho." },
+  { id: "e3", name: "Mecânica do Neném", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Maranhão, 2560, Setor Industrial, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0720, rating: 4.5, whatsapp: "63984112233", phone: "6333121122", description: "Manutenção preventiva e corretiva para seu veículo com confiança." },
+  { id: "e4", name: "Pet Shop Amigão", category_id: 5, sub_category: "Pet Shop (varejo)", address: "Av. Goiás, 2100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0685, rating: 4.7, whatsapp: "63999887766", phone: "6333128877", description: "Tudo para o seu pet: rações, acessórios e banho e tosa." },
+  { id: "e5", name: "Pizzaria Bella Italia", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Av. Pará, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7295, longitude: -49.0670, rating: 4.6, whatsapp: "63992112233", phone: "6333129988", description: "Pizzas artesanais com massa fina e ingredientes selecionados." },
+  { id: "e6", name: "Farmácia Preço Baixo", category_id: 1, sub_category: "Farmácia", address: "Rua 5, 800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7310, longitude: -49.0695, rating: 4.4, whatsapp: "63992445566", phone: "6333127766", description: "Medicamentos e perfumaria com os melhores preços da cidade." },
+  { id: "e7", name: "Supermercado Araguaia", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Goiás, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7260, longitude: -49.0650, rating: 4.3, whatsapp: "63992556677", phone: "6333126655", description: "Variedade em hortifruti, açougue e mercearia para sua família." },
+  { id: "e8", name: "Barbearia do Zé", category_id: 4, sub_category: "Salão de Beleza / Barbearia", address: "Rua 3, 450, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0680, rating: 4.9, whatsapp: "63992667788", phone: "6333125544", description: "Corte de cabelo e barba com estilo e atendimento personalizado." },
+  { id: "e9", name: "Clínica Veterinária Vida", category_id: 5, sub_category: "Clínica Veterinária", address: "Av. Maranhão, 3000, Gurupi - TO", city_id: 1, latitude: -11.7380, longitude: -49.0750, rating: 4.8, whatsapp: "63992778899", phone: "6333124433", description: "Cuidado completo para a saúde do seu animal de estimação." },
+  { id: "e10", name: "Posto Central", category_id: 6, sub_category: "Posto de Combustível", address: "Av. Goiás, 500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7250, longitude: -49.0640, rating: 4.2, whatsapp: "63992889900", phone: "6333123322", description: "Combustível de qualidade e conveniência 24 horas." },
+  { id: "e11", name: "Restaurante Popular", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Av. Maranhão, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0680, rating: 4.5, whatsapp: "63992990011", phone: "6333122211", description: "Almoço self-service com grande variedade e preço justo." },
+  { id: "e12", name: "Lanchonete Central", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Rua 4, 600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0675, rating: 4.7, whatsapp: "63992001122", phone: "6333121100", description: "Salgados frescos, sucos naturais e o melhor café da manhã." },
+  { id: "e13", name: "Pizzaria do Vale", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Av. Pará, 2000, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0700, rating: 4.8, whatsapp: "63992112233", phone: "6333120099", description: "Pizzas no forno a lenha com bordas recheadas e muito sabor." },
+  { id: "e14", name: "Hospital Regional de Gurupi", category_id: 3, sub_category: "Hospital / Clínica / UPA", address: "Av. Pará, S/N, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0750, rating: 4.1, whatsapp: "6333151234", phone: "6333151234", description: "Atendimento hospitalar de urgência e emergência para a região." },
+  { id: "e15", name: "Prefeitura Municipal", category_id: 3, sub_category: "Prefeitura / Câmara / Secretarias", address: "Rua 1, Centro, Gurupi - TO", city_id: 1, latitude: -11.7250, longitude: -49.0650, rating: 4.0, whatsapp: "6333150000", phone: "6333150000", description: "Sede administrativa do poder executivo municipal de Gurupi." },
+  { id: "e16", name: "Escola Municipal de Gurupi", category_id: 10, sub_category: "Escola (infantil ao médio)", address: "Rua 10, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0660, rating: 4.5, whatsapp: "6333151111", phone: "6333151111", description: "Educação de qualidade para crianças e jovens da nossa cidade." },
+  { id: "e17", name: "Igreja Matriz de Gurupi", category_id: 9, sub_category: "Igrejas / Templos / Comunidades Religiosas", address: "Praça da Matriz, Centro, Gurupi - TO", city_id: 1, latitude: -11.7290, longitude: -49.0670, rating: 4.9, whatsapp: "6333152222", phone: "6333152222", description: "Comunidade religiosa acolhedora no coração de Gurupi." },
+  { id: "e18", name: "Academia Fitness", category_id: 9, sub_category: "Clube / Academia / Quadra", address: "Av. Goiás, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7300, longitude: -49.0680, rating: 4.7, whatsapp: "63992113344", phone: "6333123344", description: "Equipamentos modernos e profissionais qualificados para seu treino." },
+  { id: "e19", name: "Móveis Estrela", category_id: 12, sub_category: "Móveis / Eletrodomésticos / Eletrônicos", address: "Av. Maranhão, 1800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7310, longitude: -49.0690, rating: 4.4, whatsapp: "63992224455", phone: "6333124455", description: "Móveis de qualidade para todos os ambientes da sua casa." },
+  { id: "e20", name: "Moda Fashion", category_id: 12, sub_category: "Moda (feminina, masculina, infantil, fitness)", address: "Rua 5, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0700, rating: 4.6, whatsapp: "63992335566", phone: "6333125566", description: "As últimas tendências da moda com os melhores preços." },
+  { id: "e21", name: "Ponto de Táxi Central", category_id: 11, sub_category: "Táxi / Motorista de Aplicativo", address: "Praça do Rato, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0650, rating: 4.8, whatsapp: "63992446677", phone: "6333126677", description: "Transporte rápido e seguro 24 horas por dia." },
+  { id: "e22", name: "Farmácia DrogaMais", category_id: 1, sub_category: "Farmácia", address: "Av. Goiás, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7330, longitude: -49.0690, rating: 4.6, whatsapp: "63992557788", phone: "6333127788", description: "Sua saúde em primeiro lugar com atendimento especializado." },
 ];
 
 // API Routes
@@ -101,10 +120,11 @@ app.get("/api/cities/search", async (req, res) => {
   
   try {
     if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      const sanitizedQ = sanitizeSupabaseQuery(q);
       const { data, error } = await supabaseAdmin
         .from('cities')
         .select('*, states!inner(uf)')
-        .or(`name.ilike.%${q}%,states.uf.ilike.%${q}%`)
+        .or(`name.ilike.%${sanitizedQ}%,states.uf.ilike.%${sanitizedQ}%`)
         .eq('active', true)
         .limit(10);
       if (error) throw error;
@@ -141,7 +161,7 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
           const d = Math.sqrt(Math.pow(c.latitude - lat, 2) + Math.pow(c.longitude - lng, 2));
           if (d < minDist) { minDist = d; nearest = c; }
         });
-        return res.json({ ...nearest, uf: nearest.states?.uf });
+        return res.json({ ...nearest, uf: nearest.states?.uf || nearest.states?.[0]?.uf || "" });
       }
     }
 
@@ -161,14 +181,21 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
 
 const normalize = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+const sanitizeSupabaseQuery = (text: string) => {
+  // Remove special characters that can break Supabase .or() logic tree
+  return text.replace(/[()[\],]/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
 app.post("/api/chat", async (req, res) => {
   const { message, city, userLocation, localContext, taxonomyContext } = req.body;
   
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(500).json({ 
-      error: "GEMINI_API_KEY não configurada no servidor.",
+  const cityName = city?.name || "sua cidade";
+  const cityUf = city?.uf || "Brasil";
+
+  if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "MY_GEMINI_API_KEY") {
+    return res.json({ 
       role: "model",
-      text: "Erro de configuração: A chave da API Gemini não foi encontrada no servidor. Por favor, configure-a nas variáveis de ambiente da Vercel."
+      text: "A chave da API Gemini não está configurada ou é inválida. Por favor, adicione uma chave válida nas configurações do projeto para habilitar o chat inteligente."
     });
   }
 
@@ -177,7 +204,7 @@ app.post("/api/chat", async (req, res) => {
       model: "gemini-2.5-flash",
       contents: message,
       config: {
-        systemInstruction: `Você é VidaLocal, um assistente de guia urbano premium para a cidade de ${city.name}-${city.uf}. 
+        systemInstruction: `Você é VidaLocal, um assistente de guia urbano premium para a cidade de ${cityName}-${cityUf}. 
         Quando os usuários perguntarem sobre lugares, serviços ou empresas, você DEVE fornecer uma lista estruturada de opções relevantes.
         Para cada empresa, inclua: 1. Nome, 2. Endereço Completo, 3. Número de Telefone (se disponível), e 4. Uma breve descrição.
         Use listas Markdown para clareza. Sempre priorize a precisão e os dados em tempo real do Google Maps.
@@ -192,8 +219,8 @@ app.post("/api/chat", async (req, res) => {
         toolConfig: {
           retrievalConfig: {
             latLng: {
-              latitude: userLocation?.latitude || city.latitude,
-              longitude: userLocation?.longitude || city.longitude,
+              latitude: userLocation?.latitude || city?.latitude || -11.7298,
+              longitude: userLocation?.longitude || city?.longitude || -49.0678,
             },
           },
         },
@@ -299,7 +326,8 @@ app.get("/api/search", async (req, res) => {
       if (city_id) {
         query = query.eq('city_id', Number(city_id));
       }
-      query = query.or(`name.ilike.%${q}%,sub_category.ilike.%${q}%,description.ilike.%${q}%`);
+      const sanitizedQ = sanitizeSupabaseQuery(q);
+      query = query.or(`name.ilike.%${sanitizedQ}%,sub_category.ilike.%${sanitizedQ}%,description.ilike.%${sanitizedQ}%`);
       
       const { data, error } = await query.limit(20);
       if (error) throw error;
@@ -318,16 +346,43 @@ app.get("/api/search", async (req, res) => {
       return res.json(cityData?.map(c => ({ ...c, uf: c.states?.uf })) || []);
     }
 
+    const queryWords = q.split(/\s+/)
+      .filter(w => w.length > 2 && w !== "undefined" && w !== "null");
+
     let results = establishments.filter(e => {
       const normName = normalize(e.name);
       const normSub = normalize(e.sub_category);
+      const normDesc = normalize(e.description || "");
       
+      // 1. Direct inclusion
       const matchName = q.includes(normName) || normName.includes(q);
       const matchSub = q.includes(normSub) || normSub.includes(q);
+      const matchDesc = q.includes(normDesc) || normDesc.includes(q);
       
-      const matchCity = city_id ? e.city_id === Number(city_id) : true;
-      return (matchName || matchSub) && matchCity;
+      // 2. Word-based matching (any significant word matches)
+      const wordMatch = queryWords.some(w => 
+        normName.includes(w) || 
+        normSub.includes(w) || 
+        normDesc.includes(w)
+      );
+
+      const matchCity = city_id && !isNaN(Number(city_id)) ? e.city_id === Number(city_id) : true;
+      return (matchName || matchSub || matchDesc || wordMatch) && matchCity;
     });
+
+    // If no results in city, try searching everywhere
+    if (results.length === 0 && city_id) {
+      results = establishments.filter(e => {
+        const normName = normalize(e.name);
+        const normSub = normalize(e.sub_category);
+        const normDesc = normalize(e.description || "");
+        const wordMatch = queryWords.some(w => normName.includes(w) || normSub.includes(w) || normDesc.includes(w));
+        return (q.includes(normName) || normName.includes(q) || q.includes(normSub) || normSub.includes(q) || wordMatch);
+      });
+    }
+
+    console.log(`Search for "${q}" in city ${city_id} found ${results.length} results`);
+
     if (results.length === 0) {
       const cityResults = cities.filter(c => {
         const state = states.find(s => s.id === c.state_id);
@@ -390,10 +445,23 @@ app.post("/api/establishments/register", async (req, res) => {
 });
 
 // Vite middleware for development
-if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL;
+const distExists = fs.existsSync(path.resolve(__dirname, "dist"));
+
+if (!isProd || !distExists) {
   const { createServer: createViteServer } = await import("vite");
-  const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
+  const vite = await createViteServer({ 
+    server: { middlewareMode: true }, 
+    appType: "spa" 
+  });
   app.use(vite.middlewares);
+} else {
+  // Static serving for production
+  const distPath = path.resolve(__dirname, "dist");
+  app.use(express.static(distPath));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
 }
 
 // Only listen if not on Vercel

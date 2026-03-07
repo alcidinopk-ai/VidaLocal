@@ -10,7 +10,8 @@ import {
   ExternalLink,
   X,
   CheckCircle2,
-  Share2
+  Share2,
+  Printer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GroundingChunk } from '../services/geminiService';
@@ -144,26 +145,52 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
         </div>
 
         {/* Feedback Buttons */}
-        <div className="flex items-center gap-2 mt-4">
+        <div className="flex items-center gap-2 mt-4 no-print">
+          <button 
+            onClick={() => window.print()}
+            className="p-2.5 rounded-xl bg-white border border-zinc-100 text-zinc-400 hover:text-zinc-900 transition-all shadow-sm"
+            title="Imprimir"
+          >
+            <Printer className="w-4 h-4" />
+          </button>
+          <a 
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366] text-white text-xs font-bold hover:bg-[#128C7E] transition-all shadow-sm"
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+            WhatsApp
+          </a>
+          <a 
+            href={telUrl}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 transition-all shadow-sm"
+          >
+            <Phone className="w-3.5 h-3.5" />
+            Ligar
+          </a>
+        </div>
+
+        <div className="flex items-center gap-2 mt-2 no-print">
           <button 
             onClick={() => setActiveModal('avaliar')}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 transition-all"
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-white border border-zinc-200 text-zinc-600 text-[10px] font-bold hover:bg-zinc-50 transition-all"
           >
-            <Star className="w-3.5 h-3.5" />
+            <Star className="w-3 h-3" />
             Avaliar
           </button>
           <button 
             onClick={() => setActiveModal('reclamar')}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white border border-zinc-200 text-zinc-600 text-xs font-bold hover:bg-zinc-50 transition-all"
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-white border border-zinc-200 text-zinc-600 text-[10px] font-bold hover:bg-zinc-50 transition-all"
           >
-            <AlertTriangle className="w-3.5 h-3.5" />
+            <AlertTriangle className="w-3 h-3" />
             Reclamar
           </button>
           <button 
             onClick={() => setActiveModal('indicar')}
-            className="p-2.5 rounded-xl bg-white border border-zinc-200 text-zinc-400 hover:text-emerald-600 hover:border-emerald-200 transition-all"
+            className="p-2 rounded-xl bg-white border border-zinc-200 text-zinc-400 hover:text-emerald-600 hover:border-emerald-200 transition-all"
           >
-            <ThumbsUp className="w-4 h-4" />
+            <ThumbsUp className="w-3.5 h-3.5" />
           </button>
         </div>
       </motion.div>

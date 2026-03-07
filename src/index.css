@@ -6,6 +6,51 @@
 }
 
 @layer base {
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    
+    body {
+      background: white !important;
+      color: black !important;
+    }
+
+    .flex-1 {
+      overflow: visible !important;
+      height: auto !important;
+    }
+
+    header, .p-6.border-t, .lg\:w-\[400px\], .fixed.bottom-24, .p-6.border-b.border-zinc-100 {
+      display: none !important;
+    }
+
+    .markdown-body {
+      font-size: 12pt !important;
+    }
+
+    .rounded-2xl {
+      border-radius: 0 !important;
+      border: none !important;
+      background: transparent !important;
+      padding: 0 !important;
+    }
+
+    .bg-zinc-100, .bg-zinc-900 {
+      background: transparent !important;
+      color: black !important;
+    }
+
+    .flex.justify-end, .flex.justify-start {
+      display: block !important;
+      margin-bottom: 2rem !important;
+    }
+
+    .max-w-\[85\%\] {
+      max-width: 100% !important;
+    }
+  }
+
   .markdown-body {
     @apply leading-relaxed;
   }
