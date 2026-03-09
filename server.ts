@@ -519,18 +519,18 @@ app.post("/api/establishments/register", async (req, res) => {
 });
 
 // Vite middleware for development
-const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL;
+const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
 const distExists = fs.existsSync(path.resolve(__dirname, "dist"));
 
-if (!isProd || !distExists) {
+if (!isProd) {
   const { createServer: createViteServer } = await import("vite");
   const vite = await createViteServer({ 
     server: { middlewareMode: true }, 
     appType: "spa" 
   });
   app.use(vite.middlewares);
-} else {
-  // Static serving for production
+} else if (distExists) {
+  // Static serving for production (only if dist exists)
   const distPath = path.resolve(__dirname, "dist");
   app.use(express.static(distPath));
   app.get("*", (req, res) => {
