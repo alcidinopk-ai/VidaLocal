@@ -199,24 +199,29 @@ export default function App() {
   const handleSubCategoryClick = (subCategoryName: string) => {
     setSelectedSubCategory(subCategoryName);
     const categoryName = CATEGORIES.find(c => c.id === activeCategoryId)?.name;
-    const query = `Quero ver estabelecimentos do tipo ${subCategoryName} (Categoria: ${categoryName}) em ${currentCity.name}${currentCity.uf ? ` - ${currentCity.uf}` : ''}`;
+    const query = `${subCategoryName} em ${currentCity.name}${currentCity.uf ? ` - ${currentCity.uf}` : ''}`;
     
     // Open map panel to show establishments
     setIsMapOpen(true);
     setView('chat');
     
-    // Trigger search automatically
-    performSearch(query, true);
+    // Trigger search automatically with strict filters
+    performSearch(query, true, activeCategoryId || undefined, subCategoryName);
   };
 
-  const performSearch = async (query: string, clearPrevious: boolean = false) => {
+  const performSearch = async (
+    query: string, 
+    clearPrevious: boolean = false, 
+    categoryId?: number, 
+    subCategory?: string
+  ) => {
     if (isLoading) return;
 
     // Direct to chat view if not already there
     if (view !== 'chat') {
       setView('chat');
       if (!selectedSubCategory) {
-        setSelectedSubCategory(query);
+        setSelectedSubCategory(subCategory || query);
       }
     }
 
@@ -230,7 +235,14 @@ export default function App() {
 
     // Parallel search: Local Database + Gemini (Maps Grounding)
     try {
-      const localResults = await fetch(`/api/search?q=${encodeURIComponent(query)}&city_id=${currentCity.id}`)
+      const searchParams = new URLSearchParams({
+        q: query,
+        city_id: String(currentCity.id)
+      });
+      if (categoryId) searchParams.append('category_id', String(categoryId));
+      if (subCategory) searchParams.append('sub_category', subCategory);
+
+      const localResults = await fetch(`/api/search?${searchParams.toString()}`)
         .then(res => res.json())
         .catch(() => []);
 
@@ -240,7 +252,15 @@ export default function App() {
         .map((est: any) => `- ${est.name}: ${est.address} (${est.sub_category})`)
         .join("\n");
 
-      const response = await chatWithMaps(query, currentCity, location, localContext);
+      const categoryName = CATEGORIES.find(c => c.id === (categoryId || activeCategoryId))?.name;
+      const response = await chatWithMaps(
+        query, 
+        currentCity, 
+        location, 
+        localContext, 
+        categoryName, 
+        subCategory || selectedSubCategory || undefined
+      );
 
       // Convert local results to GroundingChunks
       const localChunks: GroundingChunk[] = localResults
@@ -576,7 +596,7 @@ export default function App() {
                 className="h-full flex flex-col"
               >
                 {/* Header for Chat View */}
-                <div className="px-6 py-3 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
+                <div className="px-6 py-3 border-b border-zinc-200 bg-white flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={() => {
@@ -595,7 +615,9 @@ export default function App() {
                     <div>
                       <span className="text-[10px] uppercase tracking-widest font-bold text-zinc-400">Exibindo</span>
                       <h3 className="text-sm font-bold text-zinc-900">
-                        {selectedSubCategory} {currentCity ? `em ${currentCity.name}${currentCity.uf ? ` - ${currentCity.uf}` : ''}` : ''}
+                        {selectedSubCategory?.includes(currentCity.name) 
+                          ? selectedSubCategory 
+                          : `${selectedSubCategory} em ${currentCity.name}${currentCity.uf ? ` - ${currentCity.uf}` : ''}`}
                       </h3>
                     </div>
                   </div>
@@ -637,8 +659,8 @@ export default function App() {
                           <div className={`
                             px-5 py-3.5 rounded-2xl text-sm leading-relaxed
                             ${msg.role === 'user' 
-                              ? 'bg-zinc-900 text-white rounded-tr-none' 
-                              : 'bg-zinc-100 text-zinc-800 rounded-tl-none border border-zinc-200'}
+                              ? 'bg-zinc-900 text-white' 
+                              : 'bg-zinc-100 text-zinc-800 border border-zinc-200'}
                           `}>
                             <div className="markdown-body prose prose-sm max-w-none">
                               <Markdown>{msg.text}</Markdown>
@@ -715,7 +737,7 @@ export default function App() {
         {isMapOpen && (
           <button 
             onClick={() => setIsMapOpen(false)}
-            className="lg:hidden absolute top-4 right-4 z-50 p-2 rounded-full bg-white shadow-md border border-zinc-200"
+            className="lg:hidden absolute top-4 right-4 z-50 p-2.5 rounded-full bg-zinc-200/80 text-zinc-900 hover:bg-zinc-300 transition-all backdrop-blur-sm"
           >
             <X className="w-5 h-5" />
           </button>

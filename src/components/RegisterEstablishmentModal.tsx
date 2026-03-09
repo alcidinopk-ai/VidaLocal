@@ -148,16 +148,15 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
               <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-6">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl font-bold text-zinc-900">Solicitação Enviada!</h3>
+              <h3 className="text-2xl font-bold text-zinc-900">Estabelecimento Publicado!</h3>
               <p className="text-zinc-500 mt-3 max-w-md mx-auto">
-                Obrigado por contribuir! Seu cadastro foi enviado para nossa equipe e passará por uma **validação administrativa**. 
-                Assim que aprovado, ele ficará visível para todos os usuários do VidaLocal.
+                Obrigado por contribuir! Seu cadastro foi realizado com sucesso e **já está visível** para todos os usuários do VidaLocal em {currentCity.name}.
               </p>
               <button 
                 onClick={onClose}
                 className="mt-8 px-8 py-3 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all"
               >
-                Entendido
+                Ver no Mapa
               </button>
             </div>
           ) : (
@@ -357,7 +356,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                     className="px-5 py-2 bg-[#00897b] text-white rounded-xl text-xs font-bold hover:bg-[#00796b] transition-all shadow-md shadow-[#00897b]/10 disabled:opacity-50 flex items-center gap-2"
                   >
                     {isLoading && <Loader2 className="w-3 h-3 animate-spin" />}
-                    Enviar para Validação
+                    Publicar Agora
                   </button>
                 </div>
               </div>

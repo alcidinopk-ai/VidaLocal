@@ -54,8 +54,8 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, is
             <Navigation className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="font-bold text-zinc-900 text-sm uppercase tracking-widest">Estabelecimentos</h2>
-            <p className="text-[10px] text-zinc-400 font-medium uppercase tracking-tighter">Exploração Urbana</p>
+            <h2 className="font-bold text-zinc-900 text-sm uppercase tracking-[0.15em]">Estabelecimentos</h2>
+            <p className="text-[10px] text-zinc-400 font-medium uppercase tracking-widest">Exploração Urbana</p>
           </div>
         </div>
         {/* Coordinates hidden as per user request */}
@@ -78,16 +78,19 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, is
               key={idx}
               chunk={chunk}
               distance={getDistanceString(chunk)}
+              userLocation={userLocation}
               isRealLocation={isRealLocation}
             />
           ))
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-center p-10">
-            <div className="w-20 h-20 rounded-3xl bg-zinc-50 flex items-center justify-center text-zinc-200 mb-6 border border-zinc-100">
-              <Compass className="w-10 h-10" />
+            <div className="w-24 h-24 rounded-[32px] bg-zinc-50 flex items-center justify-center text-zinc-200 mb-8 border border-zinc-100/50">
+              <Compass className="w-12 h-12" />
             </div>
-            <h3 className="text-zinc-900 font-bold text-base">Nenhum local encontrado</h3>
-            <p className="text-sm text-zinc-400 mt-2 leading-relaxed max-w-[200px] mx-auto">Pergunte sobre serviços ou lugares em sua cidade para visualizar aqui.</p>
+            <h3 className="text-zinc-900 font-bold text-xl mb-3">Nenhum local encontrado</h3>
+            <p className="text-sm text-zinc-400 leading-relaxed max-w-[240px] mx-auto">
+              Pergunte sobre serviços ou lugares em sua cidade para visualizar aqui.
+            </p>
           </div>
         )}
       </div>

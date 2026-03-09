@@ -20,12 +20,13 @@ import { useAuth } from '../contexts/AuthContext';
 interface EstablishmentCardProps {
   chunk: GroundingChunk;
   distance: string;
+  userLocation?: { latitude: number; longitude: number };
   isRealLocation?: boolean;
 }
 
 type ModalType = 'avaliar' | 'reclamar' | 'indicar' | null;
 
-export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, distance, isRealLocation }) => {
+export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, distance, userLocation, isRealLocation }) => {
   const { user } = useAuth();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [feedbackText, setFeedbackText] = useState('');
@@ -42,7 +43,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
   const whatsappUrl = `https://wa.me/55${whatsappNumber.replace(/\D/g, '')}`;
   const telUrl = `tel:${phone.replace(/\D/g, '')}`;
   const routeUrl = location 
-    ? `https://www.google.com/maps/dir/?api=1&destination=${location.latitude},${location.longitude}`
+    ? `https://www.google.com/maps/dir/?api=1&destination=${location.latitude},${location.longitude}${userLocation ? `&origin=${userLocation.latitude},${userLocation.longitude}` : ''}`
     : uri;
   const shareText = `Confira ${title} no VidaLocal: ${uri}`;
 
@@ -145,30 +146,43 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
         </div>
 
         {/* Feedback Buttons */}
-        <div className="flex items-center gap-2 mt-4 no-print">
-          <button 
-            onClick={() => window.print()}
-            className="p-2.5 rounded-xl bg-white border border-zinc-100 text-zinc-400 hover:text-zinc-900 transition-all shadow-sm"
-            title="Imprimir"
-          >
-            <Printer className="w-4 h-4" />
-          </button>
-          <a 
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366] text-white text-xs font-bold hover:bg-[#128C7E] transition-all shadow-sm"
-          >
-            <MessageCircle className="w-3.5 h-3.5" />
-            WhatsApp
-          </a>
-          <a 
-            href={telUrl}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 transition-all shadow-sm"
-          >
-            <Phone className="w-3.5 h-3.5" />
-            Ligar
-          </a>
+        <div className="flex flex-col gap-2 mt-4 no-print">
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => window.print()}
+              className="p-2.5 rounded-xl bg-white border border-zinc-100 text-zinc-400 hover:text-zinc-900 transition-all shadow-sm"
+              title="Imprimir"
+            >
+              <Printer className="w-4 h-4" />
+            </button>
+            <a 
+              href={routeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#f57c00] text-white text-xs font-bold hover:bg-[#e65100] transition-all shadow-lg shadow-orange-900/10"
+            >
+              <Navigation2 className="w-3.5 h-3.5" />
+              Traçar Rota
+            </a>
+          </div>
+          <div className="flex items-center gap-2">
+            <a 
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366] text-white text-xs font-bold hover:bg-[#128C7E] transition-all shadow-sm"
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              WhatsApp
+            </a>
+            <a 
+              href={telUrl}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 transition-all shadow-sm"
+            >
+              <Phone className="w-3.5 h-3.5" />
+              Ligar
+            </a>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 mt-2 no-print">

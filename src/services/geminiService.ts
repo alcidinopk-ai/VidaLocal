@@ -35,9 +35,11 @@ export async function chatWithMaps(
   message: string,
   city: { name: string; uf: string; latitude: number; longitude: number },
   userLocation?: { latitude: number; longitude: number },
-  localContext?: string
+  localContext?: string,
+  categoryFilter?: string,
+  subCategoryFilter?: string
 ): Promise<ChatMessage> {
-  const cacheKey = `${city.name}-${city.uf}:${message.trim().toLowerCase()}:${userLocation ? 'geo' : 'city'}:${localContext ? 'ctx' : 'no-ctx'}`;
+  const cacheKey = `${city.name}-${city.uf}:${message.trim().toLowerCase()}:${userLocation ? 'geo' : 'city'}:${localContext ? 'ctx' : 'no-ctx'}:${categoryFilter || ''}:${subCategoryFilter || ''}`;
   if (responseCache.has(cacheKey)) {
     return responseCache.get(cacheKey)!;
   }
@@ -51,7 +53,9 @@ export async function chatWithMaps(
         city,
         userLocation,
         localContext,
-        taxonomyContext: TAXONOMY_CONTEXT
+        taxonomyContext: TAXONOMY_CONTEXT,
+        categoryFilter,
+        subCategoryFilter
       })
     });
 
