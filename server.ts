@@ -8,6 +8,14 @@ import { supabaseAdmin } from "./src/lib/supabase-server";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Process] Unhandled Rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Process] Uncaught Exception:', err);
+});
+
 const app = express();
 app.use(express.json());
 
@@ -92,7 +100,16 @@ let establishments: Establishment[] = [
 
 // API Routes
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  res.json({ 
+    status: "ok", 
+    timestamp: new Date().toISOString(),
+    env: {
+      node_env: process.env.NODE_ENV,
+      vercel: process.env.VERCEL,
+      has_gemini_key: !!(process.env.GEMINI_API_KEY || process.env.API_KEY),
+      has_supabase_url: !!process.env.VITE_SUPABASE_URL
+    }
+  });
 });
 
 app.get("/api/states", async (req, res) => {
@@ -132,18 +149,6 @@ app.get("/api/cities", async (req, res) => {
     console.error("Error fetching cities:", error);
     res.json(cities);
   }
-});
-
-app.get("/api/health", (req, res) => {
-  res.json({ 
-    status: "ok", 
-    env: {
-      node_env: process.env.NODE_ENV,
-      vercel: process.env.VERCEL,
-      has_gemini_key: !!(process.env.GEMINI_API_KEY || process.env.API_KEY),
-      has_supabase_url: !!process.env.VITE_SUPABASE_URL
-    }
-  });
 });
 
 app.get("/api/cities/search", async (req, res) => {
@@ -219,74 +224,70 @@ const sanitizeSupabaseQuery = (text: string) => {
 };
 
 app.post("/api/chat", async (req, res) => {
-  const { message, city, userLocation, localContext, taxonomyContext, categoryFilter, subCategoryFilter } = req.body;
-  
-  const cityName = city?.name || "sua cidade";
-  const cityUf = city?.uf || "Brasil";
-
-  // Get the key from environment variables
-  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey === "") {
-    console.error("GEMINI_API_KEY is missing or placeholder");
-    return res.json({ 
-      role: "model",
-      text: "A chave da API Gemini ainda não foi detectada pelo servidor.\n\n**Como resolver:**\n1. No menu de 'Secrets' (onde você tirou o print), clique no ícone do 'olho' (👁️) na linha da `GEMINI_API_KEY`.\n2. Se estiver vazio ou escrito 'AI Studio Free Tier', tente **colar sua chave de API real** (aquela que começa com 'AIza...') diretamente no campo de valor.\n3. Salve e clique no botão de **'Restart'** no topo do editor.\n\nSe você já fez isso, aguarde alguns segundos e tente novamente."
-    });
-  }
-
   try {
-    // Initialize with the current key
+    console.log("[Chat] Request started");
+    
+    if (!req.body) {
+      console.error("[Chat] No body found");
+      return res.status(400).json({ error: "Corpo da requisição ausente" });
+    }
+
+    const { message, city, userLocation, localContext, taxonomyContext, categoryFilter, subCategoryFilter } = req.body;
+    
+    const cityName = city?.name || "sua cidade";
+    const cityUf = city?.uf || "Brasil";
+    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+
+    if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey === "") {
+      console.error("[Chat] API Key missing");
+      return res.json({ 
+        role: "model",
+        text: "Chave API não configurada. Verifique os Secrets do projeto."
+      });
+    }
+
+    console.log("[Chat] Initializing AI SDK");
     const ai = new GoogleGenAI({ apiKey });
     
-    const filterInstruction = (categoryFilter || subCategoryFilter) 
-      ? `\n\nREGRAS DE ORGANIZAÇÃO E FILTRO ESTRITO:
-         O usuário está navegando especificamente na categoria "${categoryFilter || 'N/A'}" e subcategoria "${subCategoryFilter || 'N/A'}".
-         Você DEVE retornar APENAS estabelecimentos que se encaixem EXATAMENTE nesta categoria/tipo.
-         NÃO misture resultados de outras categorias. Se não encontrar nada exato, informe que não há estabelecimentos deste tipo específico nesta área.`
-      : "";
+    const parseCoord = (val: any, fallback: number) => {
+      const n = Number(val);
+      return isNaN(n) ? fallback : n;
+    };
 
-    // Use gemini-2.5-flash as it's required for googleMaps grounding
+    const lat = parseCoord(userLocation?.latitude ?? city?.latitude, -11.7298);
+    const lng = parseCoord(userLocation?.longitude ?? city?.longitude, -49.0678);
+
+    console.log(`[Chat] Calling Gemini with lat=${lat}, lng=${lng}`);
+
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: message,
       config: {
-        systemInstruction: `Você é VidaLocal, um assistente de guia urbano premium para a cidade de ${cityName}-${cityUf}. 
-        Quando os usuários perguntarem sobre lugares, serviços ou empresas, você DEVE fornecer uma lista estruturada de opções relevantes.
-        Para cada empresa, inclua: 1. Nome, 2. Endereço Completo, 3. Número de Telefone (se disponível), e 4. Uma breve descrição.
-        Use listas Markdown para clareza. Sempre priorize a precisão e os dados em tempo real do Google Maps.
-        
-        ${taxonomyContext}
-        
-        ${localContext ? `IMPORTANTE: Os seguintes estabelecimentos foram encontrados em nossa base de dados local e DEVEM ser mencionados com destaque se forem relevantes para a pergunta:
-        ${localContext}` : ""}
-        
-        Sempre tente enquadrar os estabelecimentos encontrados nas categorias e tipos acima.
-        ${filterInstruction}`,
-        tools: [{ googleMaps: {} }, { googleSearch: {} }],
+        systemInstruction: `Você é VidaLocal para ${cityName}. Ajude o usuário a encontrar locais. Use Markdown.`,
+        tools: [{ googleMaps: {} }], // Simplified tools
         toolConfig: {
           retrievalConfig: {
-            latLng: {
-              latitude: Number(userLocation?.latitude || city?.latitude || -11.7298),
-              longitude: Number(userLocation?.longitude || city?.longitude || -49.0678),
-            },
+            latLng: { latitude: lat, longitude: lng },
           },
         },
       },
     });
 
-    // Safer way to get text, as .text can throw if blocked or empty
+    console.log("[Chat] Response received from Gemini");
+
     let text = "";
     try {
-      text = response.text || "Não consegui encontrar uma resposta textual para isso.";
-    } catch (e) {
-      console.warn("Response.text access failed:", e);
-      text = "O modelo não retornou uma resposta em texto, possivelmente devido a filtros de segurança ou ausência de resultados.";
+      text = response.text || "Sem resposta textual.";
+    } catch (e: any) {
+      console.warn("[Chat] Text extraction failed:", e.message);
+      text = "Resposta bloqueada ou vazia pelo modelo.";
     }
 
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks as any[];
+    const candidates = response.candidates || [];
+    const firstCandidate = candidates[0];
+    const chunks = firstCandidate?.groundingMetadata?.groundingChunks || [];
     
-    const groundingChunks = chunks?.map(chunk => ({
+    const groundingChunks = chunks.map((chunk: any) => ({
       maps: chunk.maps ? { 
         uri: chunk.maps.uri, 
         title: chunk.maps.title,
@@ -296,30 +297,21 @@ app.post("/api/chat", async (req, res) => {
         } : undefined
       } : undefined,
       web: chunk.web ? { uri: chunk.web.uri, title: chunk.web.title } : undefined,
-    })).filter(c => c.maps || c.web) || [];
+    })).filter((c: any) => c.maps || c.web);
 
-    res.json({
-      role: "model",
-      text,
-      groundingChunks,
-    });
+    console.log(`[Chat] Request completed successfully. Chunks: ${groundingChunks.length}`);
+    return res.json({ role: "model", text, groundingChunks });
+
   } catch (error: any) {
-    console.error("Gemini API Error Detail:", error);
+    console.error("[Chat] ERROR HANDLED:", error);
     
-    // Avoid JSON.stringify on the error object as it might have circular references
-    const errorMessage = error.message || String(error);
-    const errorString = errorMessage.toLowerCase();
+    // Detailed error message for debugging
+    const msg = error.message || "Erro desconhecido";
+    const status = error.status || 500;
     
-    const isRateLimit = 
-      errorString.includes("429") || 
-      errorString.includes("resource_exhausted") ||
-      errorString.includes("quota exceeded");
-
-    res.status(200).json({ // Return 200 even on error to let the client handle the message gracefully
-      role: "model",
-      text: isRateLimit 
-        ? "Desculpe, o serviço está temporariamente sobrecarregado devido ao alto volume de buscas. Por favor, tente novamente em alguns instantes."
-        : `Desculpe, encontrei um erro ao processar sua solicitação: ${errorMessage}. Por favor, tente novamente.`,
+    return res.status(200).json({ 
+      role: "model", 
+      text: `Erro na comunicação com a IA (${status}): ${msg}. Verifique se sua chave de API tem permissão para o Google Maps.`
     });
   }
 });
@@ -550,12 +542,20 @@ const distPath = path.resolve(rootDir, "dist");
 const distExists = fs.existsSync(distPath);
 
 if (!isProd) {
-  const { createServer: createViteServer } = await import("vite");
-  const vite = await createViteServer({ 
+  // Dynamic import without top-level await to avoid making the module async
+  const vitePromise = import("vite").then(m => m.createServer({ 
     server: { middlewareMode: true }, 
     appType: "spa" 
+  }));
+  
+  app.use(async (req, res, next) => {
+    try {
+      const vite = await vitePromise;
+      vite.middlewares(req, res, next);
+    } catch (err) {
+      next(err);
+    }
   });
-  app.use(vite.middlewares);
 } else if (distExists) {
   // Static serving for production (only if dist exists)
   app.use(express.static(distPath));
@@ -569,5 +569,14 @@ if (!process.env.VERCEL) {
   const PORT = 3000;
   app.listen(PORT, "0.0.0.0", () => console.log(`Server running on http://localhost:${PORT}`));
 }
+
+// Global error handler
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("[Global Error]:", err);
+  res.status(500).json({ 
+    error: "Internal Server Error", 
+    message: err.message || "Ocorreu um erro inesperado no servidor." 
+  });
+});
 
 export default app;
