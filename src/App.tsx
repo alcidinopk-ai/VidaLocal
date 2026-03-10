@@ -94,6 +94,15 @@ export default function App() {
   
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const detectLocation = () => {
     // Default to city center
     const defaultLoc = {
@@ -201,10 +210,6 @@ export default function App() {
     const categoryName = CATEGORIES.find(c => c.id === activeCategoryId)?.name;
     const query = `${subCategoryName} em ${currentCity.name}${currentCity.uf ? ` - ${currentCity.uf}` : ''}`;
     
-    // Open map panel to show establishments
-    setIsMapOpen(true);
-    setView('chat');
-    
     // Trigger search automatically with strict filters
     performSearch(query, true, activeCategoryId || undefined, subCategoryName);
   };
@@ -300,6 +305,8 @@ export default function App() {
           );
           return [...newChunks, ...prev].slice(0, 20);
         });
+        // Auto-open map panel when results are found
+        setIsMapOpen(true);
       }
     } catch (err) {
       console.error("Search error:", err);
@@ -390,9 +397,17 @@ export default function App() {
             
             <button 
               onClick={() => setIsMapOpen(!isMapOpen)}
-              className="lg:hidden p-2 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
+              className={`p-2 rounded-xl transition-all flex items-center gap-2 ${
+                isMapOpen 
+                  ? 'bg-[#00897b] text-white shadow-lg shadow-emerald-100' 
+                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+              }`}
+              title={isMapOpen ? "Fechar painel de locais" : "Abrir painel de locais"}
             >
               <MapPin className="w-5 h-5" />
+              <span className="hidden xl:inline text-xs font-bold">
+                {isMapOpen ? "Ocultar Locais" : "Mostrar Locais"}
+              </span>
             </button>
           </div>
         </header>
@@ -730,10 +745,19 @@ export default function App() {
       </div>
 
       {/* Map Display Panel */}
-      <div className={`
-        ${isMapOpen ? 'fixed inset-0 z-50 bg-white' : 'hidden'} 
-        lg:static lg:block lg:w-[400px] shrink-0 border-l border-zinc-200
-      `}>
+      <motion.div 
+        initial={false}
+        animate={{ 
+          width: isMapOpen ? (isMobile ? '100vw' : 400) : 0,
+          opacity: isMapOpen ? 1 : 0,
+          borderLeftWidth: isMapOpen ? 1 : 0
+        }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className={`
+          ${isMapOpen ? 'fixed inset-0 z-50 bg-white lg:static lg:block' : 'hidden lg:block lg:w-0'} 
+          shrink-0 border-zinc-200 overflow-hidden
+        `}
+      >
         {isMapOpen && (
           <button 
             onClick={() => setIsMapOpen(false)}
@@ -742,8 +766,16 @@ export default function App() {
             <X className="w-5 h-5" />
           </button>
         )}
-        <MapDisplay chunks={allGroundingChunks} userLocation={location} isRealLocation={isRealLocation} isLoading={isLoading} />
-      </div>
+        <div className="w-[400px] h-full">
+          <MapDisplay 
+            chunks={allGroundingChunks} 
+            userLocation={location} 
+            isRealLocation={isRealLocation} 
+            isLoading={isLoading} 
+            onClose={() => setIsMapOpen(false)}
+          />
+        </div>
+      </motion.div>
       {/* Floating Action Button for Mobile - Suggest Local */}
       <button 
         onClick={() => setIsRegisterModalOpen(true)}

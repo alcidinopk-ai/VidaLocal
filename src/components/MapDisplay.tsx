@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigation, Compass, Loader2 } from 'lucide-react';
+import { Navigation, Compass, Loader2, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { GroundingChunk } from '../services/geminiService';
 import { EstablishmentCard } from './EstablishmentCard';
@@ -9,6 +9,7 @@ interface MapDisplayProps {
   userLocation?: { latitude: number; longitude: number };
   isRealLocation?: boolean;
   isLoading?: boolean;
+  onClose?: () => void;
 }
 
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -24,7 +25,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return d;
 };
 
-export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, isRealLocation, isLoading }) => {
+export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, isRealLocation, isLoading, onClose }) => {
   const mapChunks = chunks.filter(c => c.maps);
 
   const getDistanceString = (chunk: GroundingChunk) => {
@@ -58,7 +59,16 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, is
             <p className="text-[10px] text-zinc-400 font-medium uppercase tracking-widest">Exploração Urbana</p>
           </div>
         </div>
-        {/* Coordinates hidden as per user request */}
+        
+        {onClose && (
+          <button 
+            onClick={onClose}
+            className="hidden lg:flex p-2 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-all"
+            title="Ocultar painel"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -83,13 +93,13 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, is
             />
           ))
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-center p-10">
-            <div className="w-24 h-24 rounded-[32px] bg-zinc-50 flex items-center justify-center text-zinc-200 mb-8 border border-zinc-100/50">
-              <Compass className="w-12 h-12" />
+          <div className="h-full flex flex-col items-center justify-center text-center p-6">
+            <div className="w-16 h-16 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-200 mb-4 border border-zinc-100/50">
+              <Compass className="w-8 h-8" />
             </div>
-            <h3 className="text-zinc-900 font-bold text-xl mb-3">Nenhum local encontrado</h3>
-            <p className="text-sm text-zinc-400 leading-relaxed max-w-[240px] mx-auto">
-              Pergunte sobre serviços ou lugares em sua cidade para visualizar aqui.
+            <h3 className="text-zinc-900 font-bold text-base mb-2">Aguardando busca</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed max-w-[200px] mx-auto">
+              Selecione uma categoria ou pergunte algo para ver os locais aqui.
             </p>
           </div>
         )}
