@@ -246,8 +246,9 @@ app.post("/api/chat", async (req, res) => {
          NÃO misture resultados de outras categorias. Se não encontrar nada exato, informe que não há estabelecimentos deste tipo específico nesta área.`
       : "";
 
+    // Use gemini-2.5-flash as it's required for googleMaps grounding
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-2.5-flash",
       contents: message,
       config: {
         systemInstruction: `Você é VidaLocal, um assistente de guia urbano premium para a cidade de ${cityName}-${cityUf}. 
@@ -266,15 +267,23 @@ app.post("/api/chat", async (req, res) => {
         toolConfig: {
           retrievalConfig: {
             latLng: {
-              latitude: userLocation?.latitude || city?.latitude || -11.7298,
-              longitude: userLocation?.longitude || city?.longitude || -49.0678,
+              latitude: Number(userLocation?.latitude || city?.latitude || -11.7298),
+              longitude: Number(userLocation?.longitude || city?.longitude || -49.0678),
             },
           },
         },
       },
     });
 
-    const text = response.text || "Não consegui encontrar uma resposta para isso.";
+    // Safer way to get text, as .text can throw if blocked or empty
+    let text = "";
+    try {
+      text = response.text || "Não consegui encontrar uma resposta textual para isso.";
+    } catch (e) {
+      console.warn("Response.text access failed:", e);
+      text = "O modelo não retornou uma resposta em texto, possivelmente devido a filtros de segurança ou ausência de resultados.";
+    }
+
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks as any[];
     
     const groundingChunks = chunks?.map(chunk => ({
@@ -295,18 +304,22 @@ app.post("/api/chat", async (req, res) => {
       groundingChunks,
     });
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    const errorString = JSON.stringify(error).toLowerCase();
+    console.error("Gemini API Error Detail:", error);
+    
+    // Avoid JSON.stringify on the error object as it might have circular references
+    const errorMessage = error.message || String(error);
+    const errorString = errorMessage.toLowerCase();
+    
     const isRateLimit = 
       errorString.includes("429") || 
       errorString.includes("resource_exhausted") ||
       errorString.includes("quota exceeded");
 
-    res.json({
+    res.status(200).json({ // Return 200 even on error to let the client handle the message gracefully
       role: "model",
       text: isRateLimit 
         ? "Desculpe, o serviço está temporariamente sobrecarregado devido ao alto volume de buscas. Por favor, tente novamente em alguns instantes."
-        : "Desculpe, encontrei um erro ao processar sua solicitação. Por favor, tente novamente.",
+        : `Desculpe, encontrei um erro ao processar sua solicitação: ${errorMessage}. Por favor, tente novamente.`,
     });
   }
 });
