@@ -134,6 +134,18 @@ app.get("/api/cities", async (req, res) => {
   }
 });
 
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    env: {
+      node_env: process.env.NODE_ENV,
+      vercel: process.env.VERCEL,
+      has_gemini_key: !!(process.env.GEMINI_API_KEY || process.env.API_KEY),
+      has_supabase_url: !!process.env.VITE_SUPABASE_URL
+    }
+  });
+});
+
 app.get("/api/cities/search", async (req, res) => {
   const q = String(req.query.q || "").toLowerCase();
   if (!q) return res.json([]);
@@ -235,7 +247,7 @@ app.post("/api/chat", async (req, res) => {
       : "";
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-latest",
       contents: message,
       config: {
         systemInstruction: `Você é VidaLocal, um assistente de guia urbano premium para a cidade de ${cityName}-${cityUf}. 
@@ -520,7 +532,9 @@ app.post("/api/establishments/register", async (req, res) => {
 
 // Vite middleware for development
 const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
-const distExists = fs.existsSync(path.resolve(__dirname, "dist"));
+const rootDir = process.env.VERCEL ? path.resolve(__dirname, "..") : __dirname;
+const distPath = path.resolve(rootDir, "dist");
+const distExists = fs.existsSync(distPath);
 
 if (!isProd) {
   const { createServer: createViteServer } = await import("vite");
@@ -531,7 +545,6 @@ if (!isProd) {
   app.use(vite.middlewares);
 } else if (distExists) {
   // Static serving for production (only if dist exists)
-  const distPath = path.resolve(__dirname, "dist");
   app.use(express.static(distPath));
   app.get("*", (req, res) => {
     res.sendFile(path.join(distPath, "index.html"));

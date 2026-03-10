@@ -60,10 +60,21 @@ export async function chatWithMaps(
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      let errorText = "Desculpe, ocorreu um erro no servidor ao processar sua busca.";
+      try {
+        const errorData = await response.json();
+        errorText = errorData.text || errorText;
+      } catch (e) {
+        // If response is not JSON (e.g. Vercel timeout page), use a more descriptive message
+        if (response.status === 504) {
+          errorText = "O servidor demorou muito para responder (Timeout). Isso geralmente acontece em buscas complexas no plano gratuito da Vercel. Por favor, tente uma pergunta mais simples ou tente novamente.";
+        } else {
+          errorText = `Erro do servidor (${response.status}): Não foi possível processar a resposta.`;
+        }
+      }
       return {
         role: "model",
-        text: errorData.text || "Desculpe, ocorreu um erro no servidor ao processar sua busca."
+        text: errorText
       };
     }
 
