@@ -11,7 +11,8 @@ import {
   X,
   CheckCircle2,
   Share2,
-  Printer
+  Printer,
+  Edit
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GroundingChunk } from '../services/geminiService';
@@ -24,10 +25,10 @@ interface EstablishmentCardProps {
   isRealLocation?: boolean;
 }
 
-type ModalType = 'avaliar' | 'reclamar' | 'indicar' | null;
+type ModalType = 'avaliar' | 'reclamar' | 'indicar' | 'corrigir' | null;
 
 export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, distance, userLocation, isRealLocation }) => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [feedbackText, setFeedbackText] = useState('');
   const [rating, setRating] = useState(0);
@@ -38,14 +39,25 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
   const location = chunk.maps?.location;
   
   // Use phone from chunk if available, otherwise fallback
-  const phone = chunk.maps?.phone || chunk.maps?.whatsapp || "(63) 99999-9999"; 
-  const whatsappNumber = chunk.maps?.whatsapp || chunk.maps?.phone || "63999999999";
-  const whatsappUrl = `https://wa.me/55${whatsappNumber.replace(/\D/g, '')}`;
-  const telUrl = `tel:${phone.replace(/\D/g, '')}`;
+  const rawPhone = chunk.maps?.phone || chunk.maps?.whatsapp;
+  const phone = rawPhone || "(63) 3312-0000"; 
+  
+  const rawWhatsapp = chunk.maps?.whatsapp || chunk.maps?.phone;
+  const whatsappNumber = rawWhatsapp ? rawWhatsapp.replace(/\D/g, '') : "";
+  
+  // Ensure we have the 55 prefix only if not already present
+  const formattedWhatsapp = whatsappNumber 
+    ? (whatsappNumber.startsWith('55') ? whatsappNumber : `55${whatsappNumber}`)
+    : "";
+    
+  const whatsappUrl = formattedWhatsapp ? `https://wa.me/${formattedWhatsapp}` : "#";
+  const telUrl = rawPhone ? `tel:${rawPhone.replace(/\D/g, '')}` : "#";
   const routeUrl = location 
     ? `https://www.google.com/maps/dir/?api=1&destination=${location.latitude},${location.longitude}${userLocation ? `&origin=${userLocation.latitude},${userLocation.longitude}` : ''}`
     : uri;
   const shareText = `Confira ${title} no VidaLocal: ${uri}`;
+
+  const canEdit = user && (role === 'admin' || user.id === chunk.maps?.user_id);
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -98,6 +110,13 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
       icon: <ThumbsUp className="w-5 h-5 text-emerald-500" />,
       buttonClass: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
       label: 'Indicação'
+    },
+    corrigir: {
+      title: 'Sugerir Correção de Contato',
+      placeholder: 'Informe o telefone ou WhatsApp correto...',
+      icon: <MessageCircle className="w-5 h-5 text-[#25D366]" />,
+      buttonClass: 'bg-[#25D366] text-white',
+      label: 'Correção'
     }
   };
 
@@ -118,6 +137,12 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-zinc-900 text-sm group-hover:text-emerald-700 transition-colors">{title}</h3>
               </div>
+              {rawPhone && (
+                <p className="text-[10px] font-bold text-emerald-600 mt-0.5 flex items-center gap-1">
+                  <Phone className="w-2.5 h-2.5" />
+                  {rawPhone}
+                </p>
+              )}
               <p className="text-xs text-zinc-500 mt-1 line-clamp-2 leading-relaxed">
                 {location && isRealLocation 
                   ? `Localizado a ${distance} de sua posição atual.` 
@@ -168,16 +193,22 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
           <div className="flex items-center gap-2">
             <a 
               href={whatsappUrl}
-              target="_blank"
+              target={whatsappUrl !== "#" ? "_blank" : undefined}
               rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366] text-white text-xs font-bold hover:bg-[#128C7E] transition-all shadow-sm"
+              onClick={(e) => whatsappUrl === "#" && e.preventDefault()}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-xs font-bold transition-all shadow-sm ${
+                whatsappUrl !== "#" ? "bg-[#25D366] hover:bg-[#128C7E]" : "bg-zinc-200 cursor-not-allowed"
+              }`}
             >
               <MessageCircle className="w-3.5 h-3.5" />
               WhatsApp
             </a>
             <a 
               href={telUrl}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 transition-all shadow-sm"
+              onClick={(e) => telUrl === "#" && e.preventDefault()}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-xs font-bold transition-all shadow-sm ${
+                telUrl !== "#" ? "bg-zinc-900 hover:bg-zinc-800" : "bg-zinc-200 cursor-not-allowed"
+              }`}
             >
               <Phone className="w-3.5 h-3.5" />
               Ligar
@@ -201,11 +232,28 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
             Reclamar
           </button>
           <button 
+            onClick={() => setActiveModal('corrigir')}
+            className="p-2 rounded-xl bg-white border border-zinc-200 text-zinc-400 hover:text-emerald-600 hover:border-emerald-200 transition-all"
+            title="Sugerir Correção"
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+          </button>
+          <button 
             onClick={() => setActiveModal('indicar')}
             className="p-2 rounded-xl bg-white border border-zinc-200 text-zinc-400 hover:text-emerald-600 hover:border-emerald-200 transition-all"
+            title="Indicar"
           >
             <ThumbsUp className="w-3.5 h-3.5" />
           </button>
+          {canEdit && (
+            <button 
+              onClick={() => alert('Funcionalidade de edição em breve!')}
+              className="p-2 rounded-xl bg-emerald-50 border border-emerald-100 text-[#00897b] hover:bg-emerald-100 transition-all"
+              title="Editar"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </motion.div>
 

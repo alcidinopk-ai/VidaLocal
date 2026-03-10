@@ -87,7 +87,7 @@ let establishments: Establishment[] = [
   { id: "e11", name: "Restaurante Popular", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Av. Maranhão, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0680, rating: 4.5, whatsapp: "63992990011", phone: "6333122211", description: "Almoço self-service com grande variedade e preço justo.", status: 'approved' },
   { id: "e12", name: "Lanchonete Central", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Rua 4, 600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0675, rating: 4.7, whatsapp: "63992001122", phone: "6333121100", description: "Salgados frescos, sucos naturais e o melhor café da manhã.", status: 'approved' },
   { id: "e13", name: "Pizzaria do Vale", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Av. Pará, 2000, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0700, rating: 4.8, whatsapp: "63992112233", phone: "6333120099", description: "Pizzas no forno a lenha com bordas recheadas e muito sabor.", status: 'approved' },
-  { id: "e14", name: "Hospital Regional de Gurupi", category_id: 3, sub_category: "Hospital / Clínica / UPA", address: "Av. Pará, S/N, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0750, rating: 4.1, whatsapp: "6333151234", phone: "6333151234", description: "Atendimento hospitalar de urgência e emergência para a região.", status: 'approved' },
+  { id: "e14", name: "Hospital Regional de Gurupi", category_id: 3, sub_category: "Hospital / Clínica / UPA", address: "Av. Pará, S/N, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0750, rating: 4.1, whatsapp: "6333150200", phone: "6333150200", description: "Atendimento hospitalar de urgência e emergência para a região.", status: 'approved' },
   { id: "e15", name: "Prefeitura Municipal", category_id: 3, sub_category: "Prefeitura / Câmara / Secretarias", address: "Rua 1, Centro, Gurupi - TO", city_id: 1, latitude: -11.7250, longitude: -49.0650, rating: 4.0, whatsapp: "6333150000", phone: "6333150000", description: "Sede administrativa do poder executivo municipal de Gurupi.", status: 'approved' },
   { id: "e16", name: "Escola Municipal de Gurupi", category_id: 10, sub_category: "Escola (infantil ao médio)", address: "Rua 10, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0660, rating: 4.5, whatsapp: "6333151111", phone: "6333151111", description: "Educação de qualidade para crianças e jovens da nossa cidade.", status: 'approved' },
   { id: "e17", name: "Igreja Matriz de Gurupi", category_id: 9, sub_category: "Igrejas / Templos / Comunidades Religiosas", address: "Praça da Matriz, Centro, Gurupi - TO", city_id: 1, latitude: -11.7290, longitude: -49.0670, rating: 4.9, whatsapp: "6333152222", phone: "6333152222", description: "Comunidade religiosa acolhedora no coração de Gurupi.", status: 'approved' },
@@ -239,16 +239,18 @@ app.post("/api/chat", async (req, res) => {
       return res.status(400).json({ error: "Mensagem ausente" });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-    if (!apiKey || apiKey.length < 10) {
-      console.error("[Chat] Invalid API Key");
+    const rawKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
+    const apiKey = rawKey.trim();
+    
+    if (!apiKey || apiKey.length < 10 || apiKey.includes("YOUR_API_KEY") || apiKey.includes("MY_GEMINI_API_KEY")) {
+      console.error("[Chat] Invalid or missing API Key:", apiKey ? "Present but invalid format" : "Missing");
       return res.json({ 
         role: "model", 
-        text: "Chave API Gemini não configurada ou inválida nos Secrets." 
+        text: "Chave API Gemini não configurada corretamente nos Secrets do projeto. Por favor, configure a GEMINI_API_KEY." 
       });
     }
 
-    console.log("[Chat] Initializing Gemini");
+    console.log("[Chat] Initializing Gemini with key (length):", apiKey.length);
     const ai = new GoogleGenAI({ apiKey });
     
     const lat = Number(userLocation?.latitude || city?.latitude || -11.7298);

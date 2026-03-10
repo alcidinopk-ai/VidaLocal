@@ -149,6 +149,7 @@ export default function App() {
             uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
             phone: est.phone,
             whatsapp: est.whatsapp,
+            user_id: est.user_id,
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -276,6 +277,7 @@ export default function App() {
             uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
             phone: est.phone,
             whatsapp: est.whatsapp,
+            user_id: est.user_id,
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -353,7 +355,7 @@ export default function App() {
           
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => setIsRegisterModalOpen(true)}
+              onClick={() => user ? setIsRegisterModalOpen(true) : setIsAuthModalOpen(true)}
               className="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-50 text-[#00897b] text-xs font-bold rounded-xl hover:bg-emerald-100 transition-all border border-emerald-100"
             >
               <Plus className="w-4 h-4" />
@@ -779,7 +781,7 @@ export default function App() {
       </motion.div>
       {/* Floating Action Button for Mobile - Suggest Local */}
       <button 
-        onClick={() => setIsRegisterModalOpen(true)}
+        onClick={() => user ? setIsRegisterModalOpen(true) : setIsAuthModalOpen(true)}
         className="md:hidden fixed bottom-24 right-6 z-40 w-14 h-14 bg-[#00897b] text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
       >
         <Plus className="w-6 h-6" />

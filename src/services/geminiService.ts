@@ -12,6 +12,7 @@ export interface GroundingChunk {
     title: string;
     phone?: string;
     whatsapp?: string;
+    user_id?: string;
     location?: {
       latitude: number;
       longitude: number;
