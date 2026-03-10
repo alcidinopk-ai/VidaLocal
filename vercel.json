@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/chat",
+      "destination": "/api/chat.ts"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index.ts"
     }
