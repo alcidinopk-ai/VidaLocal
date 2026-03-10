@@ -21,13 +21,21 @@ import { CATEGORIES, SUB_CATEGORIES } from '../constants/taxonomy';
 interface RegisterEstablishmentModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialData?: any;
+  onSuccess?: () => void;
 }
 
-export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProps> = ({ isOpen, onClose }) => {
+export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  initialData,
+  onSuccess 
+}) => {
   const { currentCity } = useCity();
   const { user } = useAuth();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     categoryId: '',
@@ -42,6 +50,40 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     longitude: null as number | null,
     mapsLink: ''
   });
+
+  React.useEffect(() => {
+    if (initialData && isOpen) {
+      setFormData({
+        name: initialData.title || '',
+        categoryId: String(initialData.categoryId || ''),
+        subCategory: initialData.subCategory || '',
+        address: initialData.address || '',
+        phone: initialData.phone || '',
+        whatsapp: initialData.whatsapp || '',
+        website: initialData.website || '',
+        hours: initialData.hours || '',
+        description: initialData.description || '',
+        latitude: initialData.location?.latitude || null,
+        longitude: initialData.location?.longitude || null,
+        mapsLink: initialData.uri || ''
+      });
+    } else if (!initialData && isOpen) {
+      setFormData({
+        name: '',
+        categoryId: '',
+        subCategory: '',
+        address: '',
+        phone: '',
+        whatsapp: '',
+        website: '',
+        hours: '',
+        description: '',
+        latitude: null,
+        longitude: null,
+        mapsLink: ''
+      });
+    }
+  }, [initialData, isOpen]);
 
   const [isLocating, setIsLocating] = useState(false);
 
@@ -72,24 +114,53 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[Register] Submit triggered");
+    
+    if (!user) {
+      console.error("[Register] No user found in context");
+      setError("Você precisa estar logado para cadastrar um local.");
+      return;
+    }
+
     setIsLoading(true);
+    setError(null);
     
     try {
-      const response = await fetch('/api/establishments/register', {
-        method: 'POST',
+      const payload = {
+        ...formData,
+        cityId: currentCity.id,
+        cityName: currentCity.name,
+        cityUf: currentCity.uf,
+        cityLat: currentCity.latitude,
+        cityLng: currentCity.longitude,
+        userId: user.id,
+        userEmail: user.email
+      };
+      
+      console.log("[Register] Sending payload:", payload);
+
+      const url = initialData 
+        ? `/api/establishments/${initialData.id}` 
+        : '/api/establishments/register';
+      
+      const response = await fetch(url, {
+        method: initialData ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          cityId: currentCity.id,
-          cityName: currentCity.name,
-          cityUf: currentCity.uf,
-          userId: user?.id,
-          userEmail: user?.email
-        })
+        body: JSON.stringify(payload)
       });
+
+      console.log("[Register] Response status:", response.status);
+      const result = await response.json();
+      console.log("[Register] Result:", result);
 
       if (response.ok) {
         setIsSubmitted(true);
+        if (onSuccess) onSuccess();
+        // Inform user about where it was saved
+        if (result.supabase === false) {
+          console.warn("[Register] Saved locally only (Supabase not configured)");
+        }
+        
         setTimeout(() => {
           setIsSubmitted(false);
           onClose();
@@ -108,9 +179,12 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             mapsLink: ''
           });
         }, 3000);
+      } else {
+        setError(result.error || result.message || "Ocorreu um erro ao cadastrar.");
       }
-    } catch (error) {
-      console.error("Error registering establishment:", error);
+    } catch (error: any) {
+      console.error("[Register] Connection error:", error);
+      setError("Erro de conexão com o servidor. Verifique sua internet e tente novamente.");
     } finally {
       setIsLoading(false);
     }
@@ -128,12 +202,16 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         {/* Header */}
         <div className="p-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#00897b] flex items-center justify-center text-white">
+            <div className="w-8 h-8 rounded-full bg-[#00897b] flex items-center justify-center text-white">
               <Plus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-zinc-900">Cadastrar Estabelecimento</h2>
-              <p className="text-[10px] text-zinc-500">Sugerir novo local em {currentCity.name} - {currentCity.uf}</p>
+              <h2 className="text-lg font-bold text-zinc-900">
+                {initialData ? 'Editar Estabelecimento' : 'Cadastrar Estabelecimento'}
+              </h2>
+              <p className="text-[10px] text-zinc-500">
+                {initialData ? 'Atualizar informações do local' : `Sugerir novo local em ${currentCity.name} - ${currentCity.uf}`}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
@@ -148,9 +226,13 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
               <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-6">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl font-bold text-zinc-900">Estabelecimento Publicado!</h3>
+              <h3 className="text-2xl font-bold text-zinc-900">
+                {initialData ? 'Alterações Salvas!' : 'Estabelecimento Publicado!'}
+              </h3>
               <p className="text-zinc-500 mt-3 max-w-md mx-auto">
-                Obrigado por contribuir! Seu cadastro foi realizado com sucesso e **já está visível** para todos os usuários do VidaLocal em {currentCity.name}.
+                {initialData 
+                  ? 'As informações foram atualizadas com sucesso.' 
+                  : `Obrigado por contribuir! Seu cadastro foi realizado com sucesso e **já está visível** para todos os usuários do VidaLocal em ${currentCity.name}.`}
               </p>
               <button 
                 onClick={onClose}
@@ -161,6 +243,14 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-4 text-red-600 text-sm mb-6">
+                  <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center shrink-0 shadow-sm shadow-red-200">
+                    <X className="w-3.5 h-3.5 text-white stroke-[3px]" />
+                  </div>
+                  <p className="font-bold">{error}</p>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Basic Info */}
                 <div className="space-y-4">
@@ -337,12 +427,12 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-zinc-100 flex items-center justify-between gap-4">
+              <div className="pt-6 border-t border-zinc-100 bg-zinc-50/50 -mx-6 -mb-6 p-6 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 text-zinc-400">
                   <ImageIcon className="w-4 h-4" />
                   <span className="text-[10px] font-medium uppercase">Fotos poderão ser adicionadas após validação</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-4">
                   <button 
                     type="button"
                     onClick={onClose}
@@ -353,10 +443,10 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                   <button 
                     type="submit"
                     disabled={isLoading}
-                    className="px-5 py-2 bg-[#00897b] text-white rounded-xl text-xs font-bold hover:bg-[#00796b] transition-all shadow-md shadow-[#00897b]/10 disabled:opacity-50 flex items-center gap-2"
+                    className="px-8 py-3 bg-[#00897b] text-white rounded-2xl text-xs font-bold hover:bg-[#00796b] transition-all shadow-lg shadow-[#00897b]/20 disabled:opacity-50 flex items-center gap-2 active:scale-95"
                   >
                     {isLoading && <Loader2 className="w-3 h-3 animate-spin" />}
-                    Publicar Agora
+                    {initialData ? 'Salvar Alterações' : 'Publicar Agora'}
                   </button>
                 </div>
               </div>

@@ -30,6 +30,7 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
   const { user } = useAuth();
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && user) {
@@ -38,15 +39,28 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
   }, [isOpen, user]);
 
   const fetchUserEstablishments = async () => {
+    if (!user) {
+      console.warn("[UserEst] No user found to fetch establishments");
+      return;
+    }
+    
+    console.log("[UserEst] Fetching establishments for user:", user.id);
     setIsLoading(true);
+    setError(null);
     try {
-      const response = await fetch(`/api/establishments/user/${user?.id}`);
+      const response = await fetch(`/api/establishments/user/${user.id}`);
+      const data = await response.json();
+      
+      console.log("[UserEst] Response received:", data);
+      
       if (response.ok) {
-        const data = await response.json();
         setEstablishments(data);
+      } else {
+        setError(data.error || data.message || "Erro ao carregar seus cadastros.");
       }
-    } catch (error) {
-      console.error("Error fetching user establishments:", error);
+    } catch (error: any) {
+      console.error("[UserEst] Fetch error:", error);
+      setError("Não foi possível conectar ao servidor.");
     } finally {
       setIsLoading(false);
     }
@@ -79,7 +93,21 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {isLoading ? (
+          {error ? (
+            <div className="py-12 flex flex-col items-center justify-center text-center">
+              <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center text-red-500 mb-4">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-zinc-900">Ops! Algo deu errado</h3>
+              <p className="text-sm text-zinc-500 mt-2 max-w-xs mx-auto">{error}</p>
+              <button 
+                onClick={fetchUserEstablishments}
+                className="mt-6 px-6 py-2 bg-zinc-100 text-zinc-900 rounded-xl text-xs font-bold hover:bg-zinc-200 transition-all"
+              >
+                Tentar Novamente
+              </button>
+            </div>
+          ) : isLoading ? (
             <div className="py-20 flex flex-col items-center justify-center text-zinc-400">
               <Loader2 className="w-8 h-8 animate-spin mb-4" />
               <p className="text-sm font-medium">Carregando seus cadastros...</p>

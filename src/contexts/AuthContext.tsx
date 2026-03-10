@@ -61,6 +61,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Check active sessions and sets the user
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
+      console.log("[Auth] Initial session user:", currentUser?.email || "None");
       setUser(currentUser);
       if (currentUser) {
         fetchProfile(currentUser.id).finally(() => setIsLoading(false));
@@ -73,6 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Listen for changes on auth state (logged in, signed out, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user ?? null;
+      console.log("[Auth] State change user:", currentUser?.email || "None");
       setUser(currentUser);
       if (currentUser) {
         fetchProfile(currentUser.id).finally(() => setIsLoading(false));

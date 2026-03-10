@@ -8,8 +8,14 @@ ${CATEGORIES.map(c => `- Categoria: ${c.name} (ID: ${c.id})
 
 export interface GroundingChunk {
   maps?: {
+    id?: string;
     uri: string;
     title: string;
+    categoryId?: number;
+    subCategory?: string;
+    address?: string;
+    hours?: string;
+    description?: string;
     phone?: string;
     whatsapp?: string;
     user_id?: string;

@@ -145,7 +145,13 @@ export default function App() {
       .then(data => {
         const initialChunks: GroundingChunk[] = data.map((est: any) => ({
           maps: {
+            id: est.id,
             title: est.name,
+            categoryId: est.category_id,
+            subCategory: est.sub_category,
+            address: est.address,
+            hours: est.hours,
+            description: est.description,
             uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
             phone: est.phone,
             whatsapp: est.whatsapp,
@@ -273,7 +279,13 @@ export default function App() {
         .filter((item: any) => item.id && item.name && item.latitude)
         .map((est: any) => ({
           maps: {
+            id: est.id,
             title: est.name,
+            categoryId: est.category_id,
+            subCategory: est.sub_category,
+            address: est.address,
+            hours: est.hours,
+            description: est.description,
             uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
             phone: est.phone,
             whatsapp: est.whatsapp,

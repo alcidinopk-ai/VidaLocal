@@ -12,11 +12,13 @@ import {
   CheckCircle2,
   Share2,
   Printer,
-  Edit
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GroundingChunk } from '../services/geminiService';
 import { useAuth } from '../contexts/AuthContext';
+import { RegisterEstablishmentModal } from './RegisterEstablishmentModal';
 
 interface EstablishmentCardProps {
   chunk: GroundingChunk;
@@ -30,9 +32,11 @@ type ModalType = 'avaliar' | 'reclamar' | 'indicar' | 'corrigir' | null;
 export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, distance, userLocation, isRealLocation }) => {
   const { user, role } = useAuth();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [rating, setRating] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const title = chunk.maps?.title || 'Estabelecimento';
   const uri = chunk.maps?.uri || '#';
@@ -57,7 +61,30 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
     : uri;
   const shareText = `Confira ${title} no VidaLocal: ${uri}`;
 
-  const canEdit = user && (role === 'admin' || user.id === chunk.maps?.user_id);
+  const isAdmin = user && role === 'admin';
+
+  const handleDelete = async () => {
+    if (!chunk.maps?.id) return;
+    if (!confirm(`Tem certeza que deseja excluir "${title}"?`)) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/establishments/${chunk.maps.id}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        alert("Estabelecimento excluído com sucesso!");
+        window.location.reload(); // Simple way to refresh the list
+      } else {
+        alert("Erro ao excluir estabelecimento.");
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert("Erro de conexão ao excluir.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -173,13 +200,6 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
         {/* Feedback Buttons */}
         <div className="flex flex-col gap-2 mt-4 no-print">
           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => window.print()}
-              className="p-2.5 rounded-xl bg-white border border-zinc-100 text-zinc-400 hover:text-zinc-900 transition-all shadow-sm"
-              title="Imprimir"
-            >
-              <Printer className="w-4 h-4" />
-            </button>
             <a 
               href={routeUrl}
               target="_blank"
@@ -245,17 +265,36 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
           >
             <ThumbsUp className="w-3.5 h-3.5" />
           </button>
-          {canEdit && (
-            <button 
-              onClick={() => alert('Funcionalidade de edição em breve!')}
-              className="p-2 rounded-xl bg-emerald-50 border border-emerald-100 text-[#00897b] hover:bg-emerald-100 transition-all"
-              title="Editar"
-            >
-              <Edit className="w-3.5 h-3.5" />
-            </button>
+          {isAdmin && (
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setIsEditModalOpen(true)}
+                className="p-2 rounded-xl bg-emerald-50 border border-emerald-100 text-[#00897b] hover:bg-emerald-100 transition-all"
+                title="Editar"
+              >
+                <Edit className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="p-2 rounded-xl bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 transition-all disabled:opacity-50"
+                title="Excluir"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )}
         </div>
       </motion.div>
+
+      <RegisterEstablishmentModal 
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        initialData={chunk.maps}
+        onSuccess={() => {
+          setTimeout(() => window.location.reload(), 2000);
+        }}
+      />
 
       {/* Modals */}
       <AnimatePresence>

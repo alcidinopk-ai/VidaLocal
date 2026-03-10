@@ -19,8 +19,12 @@ process.on('uncaughtException', (err) => {
 const app = express();
 app.use(express.json());
 
-// Initialize Gemini on the server - Moved inside route for dynamic key updates
-// const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+// Check Supabase configuration on startup
+const isSupabaseConfigured = process.env.VITE_SUPABASE_URL && 
+                             process.env.SUPABASE_SERVICE_ROLE_KEY && 
+                             !process.env.VITE_SUPABASE_URL.includes('placeholder');
+
+console.log(`[Startup] Supabase configured: ${isSupabaseConfigured}`);
 
 // Request logging
 app.use((req, res, next) => {
@@ -452,28 +456,153 @@ function cityResultsMap(data: any[]) {
 
 app.get("/api/establishments/user/:userId", async (req, res) => {
   const { userId } = req.params;
-  if (!userId || userId === 'undefined' || userId === 'null') return res.json([]);
+  console.log(`[API] Fetching establishments for user: ${userId}`);
+  
+  if (!userId || userId === 'undefined' || userId === 'null') {
+    console.warn("[API] Invalid userId provided to fetch establishments");
+    return res.json([]);
+  }
+
   try {
     if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
-      const { data, error } = await supabaseAdmin.from('establishments').select('*').eq('user_id', userId).order('created_at', { ascending: false });
-      if (error) throw error;
+      const { data, error } = await supabaseAdmin
+        .from('establishments')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error("[Supabase Error] Fetching user establishments:", error);
+        throw error;
+      }
       return res.json(data || []);
     }
     
     // Fallback to local establishments for this session
     const userEsts = establishments.filter(e => e.user_id === userId);
+    console.log(`[API] Found ${userEsts.length} local establishments for user ${userId}`);
     res.json(userEsts);
-  } catch (error) {
-    console.error("Error fetching user establishments:", error);
-    res.status(500).json({ error: "Internal server error" });
+  } catch (error: any) {
+    console.error("[API Error] Error fetching user establishments:", error);
+    res.status(500).json({ 
+      error: "Erro ao buscar seus cadastros", 
+      message: error.message || "Erro interno no servidor" 
+    });
+  }
+});
+
+app.put("/api/establishments/:id", async (req, res) => {
+  const { id } = req.params;
+  const registration = req.body;
+  
+  try {
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      const { data, error } = await supabaseAdmin
+        .from('establishments')
+        .update({
+          name: registration.name,
+          category_id: Number(registration.categoryId),
+          sub_category: registration.subCategory,
+          address: registration.address,
+          phone: registration.phone,
+          whatsapp: registration.whatsapp,
+          website: registration.website,
+          hours: registration.hours,
+          description: registration.description,
+          latitude: registration.latitude,
+          longitude: registration.longitude,
+          maps_link: registration.mapsLink,
+          city_id: registration.cityId
+        })
+        .eq('id', id)
+        .select();
+
+      if (error) throw error;
+      return res.json(data?.[0]);
+    } else {
+      const index = establishments.findIndex(e => e.id === id);
+      if (index !== -1) {
+        establishments[index] = {
+          ...establishments[index],
+          name: registration.name,
+          category_id: Number(registration.categoryId),
+          sub_category: registration.subCategory,
+          address: registration.address,
+          phone: registration.phone,
+          whatsapp: registration.whatsapp,
+          website: registration.website,
+          hours: registration.hours,
+          description: registration.description,
+          latitude: registration.latitude || establishments[index].latitude,
+          longitude: registration.longitude || establishments[index].longitude,
+          city_id: Number(registration.cityId)
+        };
+        return res.json(establishments[index]);
+      }
+      return res.status(404).json({ error: "Estabelecimento não encontrado" });
+    }
+  } catch (error: any) {
+    console.error("[API Error] Updating establishment:", error);
+    res.status(500).json({ error: "Erro ao atualizar estabelecimento", message: error.message });
+  }
+});
+
+app.delete("/api/establishments/:id", async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      const { error } = await supabaseAdmin
+        .from('establishments')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return res.json({ success: true });
+    } else {
+      const index = establishments.findIndex(e => e.id === id);
+      if (index !== -1) {
+        establishments.splice(index, 1);
+        return res.json({ success: true });
+      }
+      return res.status(404).json({ error: "Estabelecimento não encontrado" });
+    }
+  } catch (error: any) {
+    console.error("[API Error] Deleting establishment:", error);
+    res.status(500).json({ error: "Erro ao excluir estabelecimento", message: error.message });
   }
 });
 
 app.post("/api/establishments/register", async (req, res) => {
   const registration = req.body;
+  console.log("[API] Registering new establishment:", JSON.stringify(registration, null, 2));
+
   try {
+    // SQL Schema for 'establishments' table:
+    /*
+    CREATE TABLE establishments (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      name TEXT NOT NULL,
+      category_id INTEGER NOT NULL,
+      sub_category TEXT NOT NULL,
+      address TEXT,
+      phone TEXT,
+      whatsapp TEXT,
+      website TEXT,
+      hours TEXT,
+      description TEXT,
+      latitude DOUBLE PRECISION,
+      longitude DOUBLE PRECISION,
+      maps_link TEXT,
+      city_id INTEGER NOT NULL,
+      user_id UUID REFERENCES auth.users(id),
+      status TEXT DEFAULT 'approved',
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    */
+
     if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
-      const { error } = await supabaseAdmin.from('establishments').insert([{
+      const { data, error } = await supabaseAdmin.from('establishments').insert([{
         name: registration.name,
         category_id: Number(registration.categoryId),
         sub_category: registration.subCategory,
@@ -483,14 +612,42 @@ app.post("/api/establishments/register", async (req, res) => {
         website: registration.website,
         hours: registration.hours,
         description: registration.description,
-        latitude: registration.latitude,
-        longitude: registration.longitude,
+        latitude: registration.latitude || registration.cityLat || -11.7298,
+        longitude: registration.longitude || registration.cityLng || -49.0678,
         maps_link: registration.mapsLink,
         city_id: registration.cityId,
         user_id: registration.userId,
         status: 'approved'
-      }]);
-      if (error) throw error;
+      }]).select();
+
+      if (error) {
+        console.error("[Supabase Error] Registering establishment:", JSON.stringify(error, null, 2));
+        
+        let userMessage = "Erro ao salvar no banco de dados";
+        if (error.code === '42P01') {
+          userMessage = "Tabela 'establishments' não encontrada no Supabase. Por favor, crie a tabela no seu painel do Supabase.";
+        } else if (error.code === '42703' || (error.message && error.message.includes('user_id'))) {
+          userMessage = "Erro de esquema: A coluna 'user_id' não foi encontrada na tabela 'establishments'. Certifique-se de que ela existe e é do tipo UUID.";
+        } else if (error.code === '42703' && error.message && error.message.includes('maps_link')) {
+          userMessage = "Erro de esquema: Coluna 'maps_link' não encontrada na tabela 'establishments'. Verifique se ela existe.";
+        } else if (error.message) {
+          userMessage = `Erro no Supabase: ${error.message}`;
+        }
+
+        return res.status(400).json({ 
+          error: userMessage, 
+          message: error.message,
+          code: error.code
+        });
+      }
+      
+      console.log("[API] Establishment registered successfully in Supabase");
+      return res.json({ 
+        status: "approved", 
+        message: "Seu estabelecimento foi cadastrado e já está visível!",
+        data: data?.[0],
+        supabase: true
+      });
     } else {
       // Persist locally for the session if Supabase is not available
       const newEstablishment = {
@@ -513,12 +670,21 @@ app.post("/api/establishments/register", async (req, res) => {
         created_at: new Date().toISOString()
       };
       establishments.push(newEstablishment);
-      console.log("New establishment registered locally for user:", registration.userId, newEstablishment.name);
+      console.log("[API] New establishment registered locally for user:", registration.userId, newEstablishment.name);
+      
+      return res.json({ 
+        status: "approved", 
+        message: "Seu estabelecimento foi cadastrado localmente e já está visível!",
+        data: newEstablishment,
+        supabase: false
+      });
     }
-    res.json({ status: "approved", message: "Seu estabelecimento foi cadastrado e já está visível para todos os usuários!" });
-  } catch (error) {
-    console.error("Supabase Error:", error);
-    res.json({ status: "approved", message: "Seu estabelecimento foi cadastrado com sucesso!" });
+  } catch (error: any) {
+    console.error("[API Error] Registering establishment:", error);
+    res.status(500).json({ 
+      error: "Erro interno ao processar cadastro", 
+      message: error.message 
+    });
   }
 });
 
