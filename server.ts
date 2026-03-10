@@ -227,44 +227,41 @@ app.post("/api/chat", async (req, res) => {
   try {
     console.log("[Chat] Request started");
     
-    if (!req.body) {
-      console.error("[Chat] No body found");
-      return res.status(400).json({ error: "Corpo da requisição ausente" });
+    const { message, city, userLocation } = req.body || {};
+    
+    // Diagnostic ping test
+    if (message === "ping") {
+      console.log("[Chat] Ping received");
+      return res.json({ role: "model", text: "pong" });
     }
 
-    const { message, city, userLocation, localContext, taxonomyContext, categoryFilter, subCategoryFilter } = req.body;
-    
-    const cityName = city?.name || "sua cidade";
-    const cityUf = city?.uf || "Brasil";
-    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    if (!message) {
+      return res.status(400).json({ error: "Mensagem ausente" });
+    }
 
-    if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey === "") {
-      console.error("[Chat] API Key missing");
+    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    if (!apiKey || apiKey.length < 10) {
+      console.error("[Chat] Invalid API Key");
       return res.json({ 
-        role: "model",
-        text: "Chave API não configurada. Verifique os Secrets do projeto."
+        role: "model", 
+        text: "Chave API Gemini não configurada ou inválida nos Secrets." 
       });
     }
 
-    console.log("[Chat] Initializing AI SDK");
+    console.log("[Chat] Initializing Gemini");
     const ai = new GoogleGenAI({ apiKey });
     
-    const parseCoord = (val: any, fallback: number) => {
-      const n = Number(val);
-      return isNaN(n) ? fallback : n;
-    };
+    const lat = Number(userLocation?.latitude || city?.latitude || -11.7298);
+    const lng = Number(userLocation?.longitude || city?.longitude || -49.0678);
 
-    const lat = parseCoord(userLocation?.latitude ?? city?.latitude, -11.7298);
-    const lng = parseCoord(userLocation?.longitude ?? city?.longitude, -49.0678);
-
-    console.log(`[Chat] Calling Gemini with lat=${lat}, lng=${lng}`);
+    console.log(`[Chat] Calling Gemini 2.5 Flash with lat=${lat}, lng=${lng}`);
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: message,
       config: {
-        systemInstruction: `Você é VidaLocal para ${cityName}. Ajude o usuário a encontrar locais. Use Markdown.`,
-        tools: [{ googleMaps: {} }], // Simplified tools
+        systemInstruction: `Você é VidaLocal, um guia para ${city?.name || 'sua cidade'}. Ajude o usuário a encontrar locais.`,
+        tools: [{ googleMaps: {} }],
         toolConfig: {
           retrievalConfig: {
             latLng: { latitude: lat, longitude: lng },
@@ -273,45 +270,33 @@ app.post("/api/chat", async (req, res) => {
       },
     });
 
-    console.log("[Chat] Response received from Gemini");
+    console.log("[Chat] Response received");
 
     let text = "";
     try {
       text = response.text || "Sem resposta textual.";
     } catch (e: any) {
       console.warn("[Chat] Text extraction failed:", e.message);
-      text = "Resposta bloqueada ou vazia pelo modelo.";
+      text = "Resposta bloqueada ou vazia.";
     }
 
-    const candidates = response.candidates || [];
-    const firstCandidate = candidates[0];
-    const chunks = firstCandidate?.groundingMetadata?.groundingChunks || [];
-    
-    const groundingChunks = chunks.map((chunk: any) => ({
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
       maps: chunk.maps ? { 
         uri: chunk.maps.uri, 
         title: chunk.maps.title,
-        location: chunk.maps.location ? {
-          latitude: chunk.maps.location.latitude,
-          longitude: chunk.maps.location.longitude
-        } : undefined
+        location: chunk.maps.location
       } : undefined,
       web: chunk.web ? { uri: chunk.web.uri, title: chunk.web.title } : undefined,
-    })).filter((c: any) => c.maps || c.web);
+    })).filter((c: any) => c.maps || c.web) || [];
 
-    console.log(`[Chat] Request completed successfully. Chunks: ${groundingChunks.length}`);
+    console.log("[Chat] Success");
     return res.json({ role: "model", text, groundingChunks });
 
   } catch (error: any) {
-    console.error("[Chat] ERROR HANDLED:", error);
-    
-    // Detailed error message for debugging
-    const msg = error.message || "Erro desconhecido";
-    const status = error.status || 500;
-    
+    console.error("[Chat] ERROR:", error);
     return res.status(200).json({ 
       role: "model", 
-      text: `Erro na comunicação com a IA (${status}): ${msg}. Verifique se sua chave de API tem permissão para o Google Maps.`
+      text: `Erro: ${error.message || "Falha na comunicação com a IA"}. Verifique sua chave de API.`
     });
   }
 });

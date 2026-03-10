@@ -315,10 +315,11 @@ export default function App() {
     }
   };
 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
-    performSearch(input, false); // Keep previous if searching manually
+    performSearch(input, false);
     setInput('');
   };
 
