@@ -52,7 +52,17 @@ export const FeaturedEstablishments = () => {
     );
   }
 
-  if (establishments.length === 0) return null;
+  if (establishments.length === 0) {
+    return (
+      <div className="mt-12 px-6 max-w-7xl mx-auto w-full pb-12">
+        <div className="bg-zinc-50 border border-dashed border-zinc-200 rounded-[32px] p-12 text-center">
+          <MapPin className="w-8 h-8 text-zinc-300 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-zinc-900">Nenhum destaque em {currentCity.name}</h3>
+          <p className="text-sm text-zinc-500 mt-2">Seja o primeiro a sugerir um local incrível nesta cidade!</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-12 px-6 max-w-7xl mx-auto w-full pb-12">

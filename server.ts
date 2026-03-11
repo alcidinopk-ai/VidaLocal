@@ -20,11 +20,16 @@ const app = express();
 app.use(express.json());
 
 // Check Supabase configuration on startup
-const isSupabaseConfigured = process.env.VITE_SUPABASE_URL && 
-                             process.env.SUPABASE_SERVICE_ROLE_KEY && 
-                             !process.env.VITE_SUPABASE_URL.includes('placeholder');
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+const isSupabaseConfigured = supabaseUrl && 
+                             supabaseKey && 
+                             !supabaseUrl.includes('placeholder');
 
 console.log(`[Startup] Supabase configured: ${isSupabaseConfigured}`);
+if (isSupabaseConfigured) {
+  console.log(`[Startup] Supabase URL: ${supabaseUrl?.substring(0, 20)}...`);
+}
 
 // Request logging
 app.use((req, res, next) => {
@@ -104,6 +109,8 @@ let establishments: Establishment[] = [
 
 // API Routes
 app.get("/api/health", (req, res) => {
+  const sUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
   res.json({ 
     status: "ok", 
     timestamp: new Date().toISOString(),
@@ -111,7 +118,9 @@ app.get("/api/health", (req, res) => {
       node_env: process.env.NODE_ENV,
       vercel: process.env.VERCEL,
       has_gemini_key: !!(process.env.GEMINI_API_KEY || process.env.API_KEY),
-      has_supabase_url: !!process.env.VITE_SUPABASE_URL
+      has_supabase_url: !!sUrl,
+      has_supabase_key: !!sKey,
+      supabase_url_prefix: sUrl ? sUrl.substring(0, 15) : null
     }
   });
 });
@@ -322,10 +331,14 @@ app.post("/api/chat", async (req, res) => {
 
 app.get("/api/establishments/featured", async (req, res) => {
   const { city_id } = req.query;
-  console.log(`[API] Fetching featured establishments for city_id: ${city_id}`);
+  const sUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  const isConfigured = sUrl && sKey && !sUrl.includes('placeholder');
+
+  console.log(`[API] Fetching featured establishments for city_id: ${city_id}. Supabase configured: ${isConfigured}`);
   
   try {
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    if (isConfigured) {
       let query = supabaseAdmin.from('establishments').select('*').eq('status', 'approved');
       if (city_id) {
         query = query.eq('city_id', Number(city_id));
@@ -337,14 +350,17 @@ app.get("/api/establishments/featured", async (req, res) => {
         throw error;
       }
       
+      console.log(`[API] Supabase returned ${data?.length || 0} establishments for city_id ${city_id}`);
+      
       if (data && data.length > 0) {
         return res.json(data);
       }
       
-      console.log("[API] No featured establishments found in Supabase, falling back to mock data");
+      console.log("[API] No featured establishments found in Supabase for this city, falling back to mock data");
     }
     
     const results = establishments.filter(e => !city_id || e.city_id === Number(city_id));
+    console.log(`[API] Mock fallback returned ${results.length} establishments for city_id ${city_id}`);
     res.json(results.slice(0, 8));
   } catch (error: any) {
     console.error("[API Error] Fetching featured establishments:", error);
