@@ -313,8 +313,9 @@ export default function App() {
           response.text = `Encontrei **${localChunks.length} estabelecimentos** em nossa base de dados local para sua busca. \n\nEmbora ${reason}, você pode ver os locais encontrados no mapa ao lado ou na lista abaixo:\n\n` + 
             localResults.map((est: any) => `* **${est.name}**: ${est.address}`).join("\n") +
             `\n\n*(Dica: Tente novamente em alguns instantes ou use as categorias para navegar)*`;
-        } else if (response.text.includes("limite de buscas gratuitas")) {
-          response.text = `O limite de buscas gratuitas da IA foi atingido para hoje e não encontrei estabelecimentos correspondentes em nossa base de dados local para: "${query}".\n\nPor favor, tente uma busca mais simples ou verifique as categorias acima.`;
+        } else {
+          // No local results and AI failed
+          response.text = `Não encontramos estabelecimentos para **"${query}"** em nossa base de dados local no momento. \n\nAlém disso, o assistente de IA está temporariamente indisponível (limite de uso). \n\n**Sugestões:**\n1. Verifique se a cidade selecionada está correta.\n2. Tente uma busca mais simples (ex: apenas "Táxi" em vez de uma frase longa).\n3. Explore as categorias acima.`;
         }
       }
 

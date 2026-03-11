@@ -473,37 +473,56 @@ app.get("/api/search", async (req, res) => {
   
   try {
     if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
-      let query = supabaseAdmin.from('establishments').select('*').eq('status', 'approved');
-      
-      if (city_id) {
-        query = query.eq('city_id', Number(city_id));
-      }
-
-      if (category_id) {
-        query = query.eq('category_id', Number(category_id));
-      }
-
-      if (sub_category) {
-        query = query.ilike('sub_category', `%${sub_category}%`);
-      }
-
-      if (q) {
-        const sanitizedQ = sanitizeSupabaseQuery(q);
-        const queryWords = sanitizedQ.split(/\s+/).filter(w => w.length > 2);
+      // Try fetching with status approved first, then fallback to any status
+      const fetchFromSupabase = async (withStatus: boolean) => {
+        let query = supabaseAdmin.from('establishments').select('*');
         
-        let orConditions = `name.ilike.%${sanitizedQ}%,sub_category.ilike.%${sanitizedQ}%,description.ilike.%${sanitizedQ}%,address.ilike.%${sanitizedQ}%`;
-        
-        if (queryWords.length > 0) {
-          const wordConditions = queryWords.map(w => 
-            `name.ilike.%${w}%,sub_category.ilike.%${w}%,description.ilike.%${w}%,address.ilike.%${w}%`
-          ).join(',');
-          orConditions += `,${wordConditions}`;
+        if (withStatus) {
+          query = query.eq('status', 'approved');
         }
-        query = query.or(orConditions);
-      }
+        
+        if (city_id) {
+          query = query.eq('city_id', Number(city_id));
+        }
+
+        if (category_id) {
+          query = query.eq('category_id', Number(category_id));
+        }
+
+        if (sub_category) {
+          query = query.ilike('sub_category', `%${sub_category}%`);
+        }
+
+        if (q) {
+          const sanitizedQ = sanitizeSupabaseQuery(q);
+          const queryWords = sanitizedQ.split(/\s+/).filter(w => w.length > 2);
+          
+          let orConditions = `name.ilike.%${sanitizedQ}%,sub_category.ilike.%${sanitizedQ}%,description.ilike.%${sanitizedQ}%,address.ilike.%${sanitizedQ}%`;
+          
+          if (queryWords.length > 0) {
+            const wordConditions = queryWords.map(w => 
+              `name.ilike.%${w}%,sub_category.ilike.%${w}%,description.ilike.%${w}%,address.ilike.%${w}%`
+            ).join(',');
+            orConditions += `,${wordConditions}`;
+          }
+          query = query.or(orConditions);
+        }
+        
+        return await query.limit(20);
+      };
+
+      let { data, error } = await fetchFromSupabase(true);
       
-      const { data, error } = await query.limit(20);
-      if (error) throw error;
+      if (!data || data.length === 0) {
+        console.log("[API Search] No approved results, trying without status filter...");
+        const retry = await fetchFromSupabase(false);
+        data = retry.data;
+        error = retry.error;
+      }
+
+      if (error) {
+        console.error("[Supabase Search Error]:", error.message);
+      }
       
       if (data && data.length > 0) {
         return res.json(data);
@@ -517,15 +536,31 @@ app.get("/api/search", async (req, res) => {
           .ilike('name', `%${q}%`)
           .eq('active', true);
         
-        return res.json(cityResultsMap(cityData));
+        if (cityData && cityData.length > 0) {
+          return res.json(cityResultsMap(cityData));
+        }
       }
     }
       
     // Ultimate fallback for search: if Supabase returned nothing, try mock data
     console.log(`[API] Supabase search returned 0 results for "${q}", falling back to mock data`);
     
+    // Get city name for name-based matching if ID might be different
+    let cityName = "";
+    if (city_id) {
+      // Try to find city name in Supabase cities or mock cities
+      if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        const { data: cityData } = await supabaseAdmin.from('cities').select('name').eq('id', Number(city_id)).single();
+        if (cityData) cityName = cityData.name;
+      }
+      if (!cityName) {
+        cityName = cities.find(c => c.id === Number(city_id))?.name || "";
+      }
+    }
+
     let mockResults = establishments.filter(e => {
-      const matchCity = city_id && !isNaN(Number(city_id)) ? e.city_id === Number(city_id) : true;
+      const eCity = cities.find(c => c.id === e.city_id);
+      const matchCity = city_id ? (e.city_id === Number(city_id) || (cityName && eCity && normalize(eCity.name) === normalize(cityName))) : true;
       const matchCategory = category_id ? e.category_id === Number(category_id) : true;
       const matchSub = sub_category ? normalize(e.sub_category).includes(normalize(String(sub_category))) : true;
       
