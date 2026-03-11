@@ -359,51 +359,54 @@ app.get("/api/establishments/featured", async (req, res) => {
   
   try {
     if (isConfigured) {
-      // Try with status approved first
-      let query = supabaseAdmin.from('establishments').select('*');
+      let targetCityIds: number[] = [Number(city_id)];
       
-      if (city_id) {
-        query = query.eq('city_id', Number(city_id));
-      }
+      // Find all IDs for cities with the same name to handle duplicates (like IDs 1, 2, 3 for Gurupi)
+      const mockCity = cities.find(c => c.id === Number(city_id));
+      const cityName = mockCity ? mockCity.name : "Gurupi";
+
+      const { data: matchingCities } = await supabaseAdmin
+        .from('cities')
+        .select('id')
+        .ilike('name', cityName);
       
-      // Attempt to fetch approved first
-      const { data: approvedData, error: approvedError } = await supabaseAdmin
-        .from('establishments')
-        .select('*')
-        .eq('city_id', Number(city_id))
-        .eq('status', 'approved')
-        .limit(8);
-      
-      if (approvedError) {
-        console.error("[Supabase Error] Querying approved establishments:", approvedError.message, approvedError.code);
+      if (matchingCities && matchingCities.length > 0) {
+        targetCityIds = matchingCities.map(c => c.id);
+        console.log(`[API Featured] Searching for "${cityName}" using IDs: ${targetCityIds.join(', ')}`);
       }
 
-      if (approvedData && approvedData.length > 0) {
-        console.log(`[API] Found ${approvedData.length} approved establishments in Supabase`);
-        return res.json(approvedData);
+      // Try fetching with status approved first
+      const fetchFromSupabase = async (withStatus: boolean) => {
+        let query = supabaseAdmin.from('establishments').select('*');
+        if (withStatus) query = query.eq('status', 'approved');
+        if (targetCityIds.length > 0) {
+          query = query.in('city_id', targetCityIds);
+        }
+        return await query.limit(8);
+      };
+
+      let { data, error } = await fetchFromSupabase(true);
+      
+      if (!data || data.length === 0) {
+        console.log("[API Featured] No approved found, trying without status filter...");
+        const retry = await fetchFromSupabase(false);
+        data = retry.data;
+        error = retry.error;
       }
 
-      // If no approved found, try fetching ANY establishments for this city to see if it's a status issue
-      console.log("[API] No approved found, trying to fetch any establishments for this city...");
-      const { data: anyData, error: anyError } = await supabaseAdmin
-        .from('establishments')
-        .select('*')
-        .eq('city_id', Number(city_id))
-        .limit(8);
-      
-      if (anyData && anyData.length > 0) {
-        console.log(`[API] Found ${anyData.length} total establishments (regardless of status) in Supabase`);
-        return res.json(anyData);
+      if (data && data.length > 0) {
+        console.log(`[API Featured] Found ${data.length} establishments in Supabase`);
+        return res.json(data);
       }
 
-      if (anyError) {
-        console.error("[Supabase Error] Querying any establishments:", anyError.message);
+      if (error) {
+        console.error("[Supabase Error] Querying featured:", error.message);
       }
       
-      console.log("[API] No establishments found in Supabase for this city ID, falling back to mock/name-based search");
+      console.log("[API Featured] No establishments found in Supabase for this city, falling back to mock data");
     }
     
-    // Fallback logic with name-matching
+    // Fallback logic with name-matching for mock data
     let results = establishments.filter(e => !city_id || e.city_id === Number(city_id));
     
     if (results.length === 0 && city_id) {
@@ -473,6 +476,22 @@ app.get("/api/search", async (req, res) => {
   
   try {
     if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      let targetCityIds: number[] = [Number(city_id)];
+      
+      // Find all IDs for cities with the same name to handle duplicates (like IDs 1, 2, 3 for Gurupi)
+      const mockCity = cities.find(c => c.id === Number(city_id));
+      const cityName = mockCity ? mockCity.name : "Gurupi";
+
+      const { data: matchingCities } = await supabaseAdmin
+        .from('cities')
+        .select('id')
+        .ilike('name', cityName);
+      
+      if (matchingCities && matchingCities.length > 0) {
+        targetCityIds = matchingCities.map(c => c.id);
+        console.log(`[API Search] Searching for "${cityName}" using IDs: ${targetCityIds.join(', ')}`);
+      }
+
       // Try fetching with status approved first, then fallback to any status
       const fetchFromSupabase = async (withStatus: boolean) => {
         let query = supabaseAdmin.from('establishments').select('*');
@@ -481,8 +500,8 @@ app.get("/api/search", async (req, res) => {
           query = query.eq('status', 'approved');
         }
         
-        if (city_id) {
-          query = query.eq('city_id', Number(city_id));
+        if (targetCityIds.length > 0) {
+          query = query.in('city_id', targetCityIds);
         }
 
         if (category_id) {
@@ -747,6 +766,25 @@ app.post("/api/establishments/register", async (req, res) => {
     */
 
     if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      let targetCityId = Number(registration.cityId);
+
+      // Map mock ID to real Supabase ID if necessary
+      if (targetCityId > 0 && targetCityId < 100) {
+        const mockCity = cities.find(c => c.id === targetCityId);
+        if (mockCity) {
+          const { data: realCity } = await supabaseAdmin
+            .from('cities')
+            .select('id')
+            .ilike('name', mockCity.name)
+            .single();
+          
+          if (realCity) {
+            console.log(`[API Register] Mapping mock city ID ${targetCityId} to Supabase ID ${realCity.id} for registration`);
+            targetCityId = realCity.id;
+          }
+        }
+      }
+
       const { data, error } = await supabaseAdmin.from('establishments').insert([{
         name: registration.name,
         category_id: Number(registration.categoryId),
@@ -760,7 +798,7 @@ app.post("/api/establishments/register", async (req, res) => {
         latitude: registration.latitude || registration.cityLat || -11.7298,
         longitude: registration.longitude || registration.cityLng || -49.0678,
         maps_link: registration.mapsLink,
-        city_id: registration.cityId,
+        city_id: targetCityId,
         user_id: registration.userId,
         status: 'approved'
       }]).select();
