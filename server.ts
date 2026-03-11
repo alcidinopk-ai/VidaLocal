@@ -114,13 +114,17 @@ app.get("/api/health", (req, res) => {
   res.json({ 
     status: "ok", 
     timestamp: new Date().toISOString(),
+    mock_data_count: {
+      establishments: establishments.length,
+      cities: cities.length
+    },
     env: {
       node_env: process.env.NODE_ENV,
       vercel: process.env.VERCEL,
       has_gemini_key: !!(process.env.GEMINI_API_KEY || process.env.API_KEY),
       has_supabase_url: !!sUrl,
       has_supabase_key: !!sKey,
-      supabase_url_prefix: sUrl ? sUrl.substring(0, 15) : null
+      supabase_url_prefix: sUrl ? sUrl.substring(0, 20) : null
     }
   });
 });
@@ -347,26 +351,46 @@ app.get("/api/establishments/featured", async (req, res) => {
       
       if (error) {
         console.error("[Supabase Error] Fetching featured:", error);
-        throw error;
-      }
-      
-      console.log(`[API] Supabase returned ${data?.length || 0} establishments for city_id ${city_id}`);
-      
-      if (data && data.length > 0) {
-        return res.json(data);
+        // Don't throw, let it fallback
+      } else {
+        console.log(`[API] Supabase returned ${data?.length || 0} establishments for city_id ${city_id}`);
+        if (data && data.length > 0) {
+          return res.json(data);
+        }
       }
       
       console.log("[API] No featured establishments found in Supabase for this city, falling back to mock data");
     }
     
-    const results = establishments.filter(e => !city_id || e.city_id === Number(city_id));
-    console.log(`[API] Mock fallback returned ${results.length} establishments for city_id ${city_id}`);
+    // Fallback logic with name-matching to handle ID inconsistencies between DBs
+    let results = establishments.filter(e => !city_id || e.city_id === Number(city_id));
+    
+    if (results.length === 0 && city_id) {
+      console.log(`[API] No mock results for ID ${city_id}, attempting name-based fallback...`);
+      // If we are using Supabase for cities, the ID might be different from our mock IDs
+      // Let's try to find the city name from the requested ID (if it exists in our mock cities)
+      // or just return any establishments if we can't match.
+      const cityObj = cities.find(c => c.id === Number(city_id));
+      if (cityObj) {
+        const normName = normalize(cityObj.name);
+        results = establishments.filter(e => {
+          const eCity = cities.find(c => c.id === e.city_id);
+          return eCity && normalize(eCity.name) === normName;
+        });
+        console.log(`[API] Name-based fallback for "${cityObj.name}" found ${results.length} results`);
+      }
+    }
+
+    // Ultimate fallback: if still nothing, just show some general approved establishments
+    if (results.length === 0) {
+      console.log("[API] Ultimate fallback: returning first 8 mock establishments");
+      results = establishments.slice(0, 8);
+    }
+    
     res.json(results.slice(0, 8));
   } catch (error: any) {
     console.error("[API Error] Fetching featured establishments:", error);
-    // Always fallback to mock data on error instead of returning error object to frontend
-    const results = establishments.filter(e => !city_id || e.city_id === Number(city_id));
-    res.json(results.slice(0, 8));
+    res.json(establishments.slice(0, 8));
   }
 });
 
