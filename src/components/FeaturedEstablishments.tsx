@@ -25,8 +25,14 @@ export const FeaturedEstablishments = () => {
       setIsLoading(true);
       try {
         const res = await fetch(`/api/establishments/featured?city_id=${currentCity.id}`);
+        if (!res.ok) throw new Error('Failed to fetch featured');
         const data = await res.json();
-        setEstablishments(data);
+        if (Array.isArray(data)) {
+          setEstablishments(data);
+        } else {
+          console.error("Featured API returned non-array data:", data);
+          setEstablishments([]);
+        }
       } catch (err) {
         console.error(err);
       } finally {

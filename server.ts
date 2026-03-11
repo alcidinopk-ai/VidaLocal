@@ -322,6 +322,8 @@ app.post("/api/chat", async (req, res) => {
 
 app.get("/api/establishments/featured", async (req, res) => {
   const { city_id } = req.query;
+  console.log(`[API] Fetching featured establishments for city_id: ${city_id}`);
+  
   try {
     if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
       let query = supabaseAdmin.from('establishments').select('*').eq('status', 'approved');
@@ -329,14 +331,26 @@ app.get("/api/establishments/featured", async (req, res) => {
         query = query.eq('city_id', Number(city_id));
       }
       const { data, error } = await query.limit(8).order('created_at', { ascending: false });
-      if (error) throw error;
-      return res.json(data || []);
+      
+      if (error) {
+        console.error("[Supabase Error] Fetching featured:", error);
+        throw error;
+      }
+      
+      if (data && data.length > 0) {
+        return res.json(data);
+      }
+      
+      console.log("[API] No featured establishments found in Supabase, falling back to mock data");
     }
+    
     const results = establishments.filter(e => !city_id || e.city_id === Number(city_id));
-    res.json(results);
-  } catch (error) {
-    console.error("Error fetching featured establishments:", error);
-    res.json(establishments);
+    res.json(results.slice(0, 8));
+  } catch (error: any) {
+    console.error("[API Error] Fetching featured establishments:", error);
+    // Always fallback to mock data on error instead of returning error object to frontend
+    const results = establishments.filter(e => !city_id || e.city_id === Number(city_id));
+    res.json(results.slice(0, 8));
   }
 });
 

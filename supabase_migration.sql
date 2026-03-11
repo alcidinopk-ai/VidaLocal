@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS establishments (
   maps_link TEXT,
   city_id BIGINT REFERENCES cities(id),
   user_id UUID,
+  rating DOUBLE PRECISION DEFAULT 5.0,
   status TEXT DEFAULT 'pending', -- pending, approved, rejected
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
