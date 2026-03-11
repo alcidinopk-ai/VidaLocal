@@ -27,6 +27,7 @@ const isSupabaseConfigured = supabaseUrl &&
                              !supabaseUrl.includes('placeholder');
 
 console.log(`[Startup] Supabase configured: ${isSupabaseConfigured}`);
+console.log(`[Startup] Environment: ${process.env.NODE_ENV}, VERCEL: ${process.env.VERCEL}`);
 // Test connection after a short delay to not block startup
 if (isSupabaseConfigured) {
   setTimeout(() => {
