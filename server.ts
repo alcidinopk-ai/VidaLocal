@@ -315,20 +315,36 @@ app.post("/api/chat", async (req, res) => {
     console.error("[Chat] ERROR:", error);
     
     let userMessage = "Desculpe, ocorreu um erro ao processar sua busca.";
+    let fallbackResults: any[] = [];
+
+    // Attempt a local search fallback if AI fails
+    const message = req.body?.message || "";
+    const q = normalize(message);
+    fallbackResults = establishments.filter(e => {
+      const normName = normalize(e.name);
+      const normSub = normalize(e.sub_category);
+      return normName.includes(q) || normSub.includes(q) || q.includes(normName) || q.includes(normSub);
+    }).slice(0, 3);
     
     if (error.message && (error.message.includes("429") || error.message.includes("quota") || error.message.includes("RESOURCE_EXHAUSTED"))) {
-      userMessage = "O limite de buscas gratuitas foi atingido para hoje. Por favor, tente novamente em alguns instantes ou amanhã. Estamos trabalhando para aumentar nossa capacidade!";
+      userMessage = `O limite de buscas gratuitas da IA foi atingido para hoje. `;
+      if (fallbackResults.length > 0) {
+        userMessage += `Não consegui usar a IA, mas encontrei estes locais que podem te interessar: ${fallbackResults.map(f => f.name).join(", ")}. `;
+      } else {
+        userMessage += `Tente usar as categorias acima ou a busca manual enquanto restabelecemos o serviço. `;
+      }
     } else if (error.message && (error.message.includes("500") || error.message.includes("Internal Server Error"))) {
       userMessage = "O servidor da IA está temporariamente instável. Por favor, tente novamente em alguns segundos.";
     } else if (error.message && error.message.includes("API key")) {
-      userMessage = "Erro de configuração: Chave de API inválida ou não encontrada.";
-    } else {
-      userMessage = `Erro: ${error.message || "Falha na comunicação com a IA"}.`;
+      userMessage = "Erro de configuração: Chave de API inválida ou não encontrada no Vercel.";
     }
 
     return res.json({ 
       role: "model", 
-      text: userMessage
+      text: userMessage,
+      groundingChunks: fallbackResults.map(f => ({
+        maps: { title: f.name, uri: `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}` }
+      }))
     });
   }
 });
@@ -478,12 +494,12 @@ app.get("/api/search", async (req, res) => {
         
         return res.json(cityResultsMap(cityData));
       }
-      
-      return res.json([]);
     }
-
-    // Local Mock Search
-    let results = establishments.filter(e => {
+      
+    // Ultimate fallback for search: if Supabase returned nothing, try mock data
+    console.log(`[API] Supabase search returned 0 results for "${q}", falling back to mock data`);
+    
+    let mockResults = establishments.filter(e => {
       const matchCity = city_id && !isNaN(Number(city_id)) ? e.city_id === Number(city_id) : true;
       const matchCategory = category_id ? e.category_id === Number(category_id) : true;
       const matchSub = sub_category ? normalize(e.sub_category).includes(normalize(String(sub_category))) : true;
@@ -502,7 +518,7 @@ app.get("/api/search", async (req, res) => {
       return matchCity && matchCategory && matchSub && matchText;
     });
 
-    if (results.length === 0 && q && !category_id && !sub_category) {
+    if (mockResults.length === 0 && q && !category_id && !sub_category) {
       const cityResults = cities.filter(c => {
         const state = states.find(s => s.id === c.state_id);
         const fullName = normalize(`${c.name} ${state?.uf}`);
@@ -510,10 +526,12 @@ app.get("/api/search", async (req, res) => {
       });
       return res.json(cityResults);
     }
-    res.json(results);
+    
+    return res.json(mockResults);
   } catch (error) {
     console.error("Search error:", error);
-    res.json([]);
+    // Fallback to mock data on error
+    res.json(establishments.slice(0, 10));
   }
 });
 
