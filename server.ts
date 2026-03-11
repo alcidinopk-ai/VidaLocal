@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
-import { supabaseAdmin } from "./src/lib/supabase-server";
+import { getSupabaseAdmin } from "./src/lib/supabase-server";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,9 +22,9 @@ app.use(express.json());
 // Check Supabase configuration on startup
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-const isSupabaseConfigured = supabaseUrl && 
+const isSupabaseConfigured = !!(supabaseUrl && 
                              supabaseKey && 
-                             !supabaseUrl.includes('placeholder');
+                             !supabaseUrl.includes('placeholder'));
 
 console.log(`[Startup] Supabase configured: ${isSupabaseConfigured}`);
 console.log(`[Startup] Environment: ${process.env.NODE_ENV}, VERCEL: ${process.env.VERCEL}`);
@@ -32,14 +32,18 @@ console.log(`[Startup] Environment: ${process.env.NODE_ENV}, VERCEL: ${process.e
 if (isSupabaseConfigured) {
   setTimeout(() => {
     console.log("[Startup] Testing Supabase connection...");
-    supabaseAdmin.from('cities').select('count', { count: 'exact', head: true })
-      .then(({ count, error }: any) => {
-        if (error) console.error('[Startup] Supabase Connection Test Failed:', error.message);
-        else console.log(`[Startup] Supabase Connection Test Success. Cities count: ${count}`);
-      })
-      .catch((err: any) => {
-        console.error('[Startup] Supabase Connection Test Exception:', err.message);
-      });
+    const supabase = getSupabase();
+    if (supabase) {
+      (async () => {
+        try {
+          const { count, error } = await supabase.from('cities').select('count', { count: 'exact', head: true });
+          if (error) console.error('[Startup] Supabase Connection Test Failed:', error.message);
+          else console.log(`[Startup] Supabase Connection Test Success. Cities count: ${count}`);
+        } catch (err: any) {
+          console.error('[Startup] Supabase Connection Test Exception:', err.message);
+        }
+      })();
+    }
   }, 1000);
 }
 
@@ -133,12 +137,13 @@ app.get("/api/debug-supabase", async (req, res) => {
     tables: {}
   };
 
-  if (sUrl && sKey) {
-    try {
-      const { data: cities, error: cityErr } = await supabaseAdmin.from('cities').select('*').limit(5);
-      debug.tables.cities = { count: cities?.length || 0, error: cityErr?.message, sample: cities };
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const { data: cities, error: cityErr } = await supabase.from('cities').select('*').limit(5);
+        debug.tables.cities = { count: cities?.length || 0, error: cityErr?.message, sample: cities };
 
-      const { data: ests, error: estErr } = await supabaseAdmin.from('establishments').select('*').limit(5);
+        const { data: ests, error: estErr } = await supabase.from('establishments').select('*').limit(5);
       debug.tables.establishments = { count: ests?.length || 0, error: estErr?.message, sample: ests };
       
       if (ests && ests.length > 0) {
@@ -166,8 +171,9 @@ app.get("/api/health", async (req, res) => {
 
   if (sUrl && sKey && !sUrl.includes('placeholder')) {
     try {
+      const supabase = getSupabase();
       // Check if we can connect and what columns exist
-      const { data, error } = await supabaseAdmin.from('establishments').select('*').limit(1);
+      const { data, error } = supabase ? await supabase.from('establishments').select('*').limit(1) : { data: null, error: new Error("Supabase not initialized") };
       if (error) {
         supabase_status = `error: ${error.message}`;
       } else {
@@ -206,10 +212,13 @@ app.get("/api/health", async (req, res) => {
   });
 });
 
+const getSupabase = () => getSupabaseAdmin();
+
 app.get("/api/states", async (req, res) => {
   try {
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
-      const { data, error } = await supabaseAdmin.from('states').select('*').order('name');
+    const supabase = getSupabase();
+    if (supabase) {
+      const { data, error } = await supabase.from('states').select('*').order('name');
       if (error) throw error;
       return res.json(data || []);
     }
@@ -223,8 +232,9 @@ app.get("/api/states", async (req, res) => {
 app.get("/api/cities", async (req, res) => {
   const { state_uf } = req.query;
   try {
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
-      let query = supabaseAdmin.from('cities').select('*, states!inner(uf)');
+    const supabase = getSupabase();
+    if (supabase) {
+      let query = supabase.from('cities').select('*, states!inner(uf)');
       if (state_uf) {
         query = query.eq('states.uf', String(state_uf).toUpperCase());
       }
@@ -250,9 +260,10 @@ app.get("/api/cities/search", async (req, res) => {
   if (!q) return res.json([]);
   
   try {
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    const supabase = getSupabase();
+    if (supabase) {
       const sanitizedQ = sanitizeSupabaseQuery(q);
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('cities')
         .select('*, states!inner(uf)')
         .or(`name.ilike.%${sanitizedQ}%,states.uf.ilike.%${sanitizedQ}%`)
@@ -278,11 +289,9 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
   const { lat, lng } = req.body;
   
   try {
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
-      // Supabase doesn't have a built-in "nearest" without PostGIS, 
-      // but we can do a simple distance calculation if the dataset is small,
-      // or just fetch all active cities and calculate in JS like the mock does.
-      const { data, error } = await supabaseAdmin.from('cities').select('*, states(uf)').eq('active', true);
+    const supabase = getSupabase();
+    if (supabase) {
+      const { data, error } = await supabase.from('cities').select('*, states(uf)').eq('active', true);
       if (error) throw error;
       
       if (data && data.length > 0) {
@@ -432,21 +441,19 @@ app.post("/api/chat", async (req, res) => {
 
 app.get("/api/establishments/featured", async (req, res) => {
   const { city_id } = req.query;
-  const sUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-  const isConfigured = sUrl && sKey && !sUrl.includes('placeholder');
+  const supabase = getSupabase();
 
-  console.log(`[API] Fetching featured for city_id: ${city_id}. Supabase configured: ${isConfigured}`);
+  console.log(`[API] Fetching featured for city_id: ${city_id}. Supabase available: ${!!supabase}`);
   
   try {
-    if (isConfigured) {
+    if (supabase) {
       let targetCityIds: number[] = [Number(city_id)];
       
-      // Find all IDs for cities with the same name to handle duplicates (like IDs 1, 2, 3 for Gurupi)
+      // Find all IDs for cities with the same name to handle duplicates
       const mockCity = cities.find(c => c.id === Number(city_id));
       const cityName = mockCity ? mockCity.name : "Gurupi";
 
-      const { data: matchingCities } = await supabaseAdmin
+      const { data: matchingCities } = await supabase
         .from('cities')
         .select('id')
         .ilike('name', cityName);
@@ -459,16 +466,12 @@ app.get("/api/establishments/featured", async (req, res) => {
       // Try fetching with status approved first
       const fetchFromSupabase = async (withStatus: boolean) => {
         try {
-          let query = supabaseAdmin.from('establishments').select('*');
+          let query = supabase.from('establishments').select('*');
           if (withStatus) query = query.eq('status', 'approved');
           if (targetCityIds.length > 0) {
             query = query.in('city_id', targetCityIds);
           }
-          const result = await query.limit(8);
-          if (result.error) {
-            console.error(`[Supabase Featured Error] Status ${withStatus}:`, result.error.message);
-          }
-          return result;
+          return await query.limit(8);
         } catch (e: any) {
           console.error("[Supabase Featured Exception]:", e.message);
           return { data: null, error: e };
@@ -500,10 +503,6 @@ app.get("/api/establishments/featured", async (req, res) => {
     let results = establishments.filter(e => !city_id || e.city_id === Number(city_id));
     
     if (results.length === 0 && city_id) {
-      console.log(`[API] No mock results for ID ${city_id}, attempting name-based fallback...`);
-      // If we are using Supabase for cities, the ID might be different from our mock IDs
-      // Let's try to find the city name from the requested ID (if it exists in our mock cities)
-      // or just return any establishments if we can't match.
       const cityObj = cities.find(c => c.id === Number(city_id));
       if (cityObj) {
         const normName = normalize(cityObj.name);
@@ -511,13 +510,10 @@ app.get("/api/establishments/featured", async (req, res) => {
           const eCity = cities.find(c => c.id === e.city_id);
           return eCity && normalize(eCity.name) === normName;
         });
-        console.log(`[API] Name-based fallback for "${cityObj.name}" found ${results.length} results`);
       }
     }
 
-    // Ultimate fallback: if still nothing, just show some general approved establishments
     if (results.length === 0) {
-      console.log("[API] Ultimate fallback: returning first 8 mock establishments");
       results = establishments.slice(0, 8);
     }
     
@@ -533,10 +529,11 @@ app.get("/api/search/suggest", async (req, res) => {
   if (!q) return res.json({ intents: [], types: [] });
   
   try {
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    const supabase = getSupabase();
+    if (supabase) {
       // Fetch intents and types from DB
-      const { data: intentsData } = await supabaseAdmin.from('search_intents').select('id, name').ilike('name', `%${q}%`).eq('active', true).limit(5);
-      const { data: typesData } = await supabaseAdmin.from('establishments').select('sub_category').ilike('sub_category', `%${q}%`).eq('status', 'approved').limit(20);
+      const { data: intentsData } = await supabase.from('search_intents').select('id, name').ilike('name', `%${q}%`).eq('active', true).limit(5);
+      const { data: typesData } = await supabase.from('establishments').select('sub_category').ilike('sub_category', `%${q}%`).eq('status', 'approved').limit(20);
       
       const types = Array.from(new Set(typesData?.map(e => e.sub_category) || [])).slice(0, 5);
       return res.json({ intents: intentsData || [], types });
@@ -564,18 +561,19 @@ app.get("/api/search", async (req, res) => {
   const rawQ = String(req.query.q || "");
   const q = cleanQuery(rawQ);
   const { city_id, category_id, sub_category } = req.query;
+  const supabase = getSupabase();
   
-  console.log(`[API Search] Query: "${rawQ}" -> Cleaned: "${q}". City: ${city_id}, Category: ${category_id}`);
+  console.log(`[API Search] Query: "${rawQ}" -> Cleaned: "${q}". City: ${city_id}, Category: ${category_id}. Supabase: ${!!supabase}`);
   
   try {
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    if (supabase) {
       let targetCityIds: number[] = [Number(city_id)];
       
       // Find all IDs for cities with the same name to handle duplicates (like IDs 1, 2, 3 for Gurupi)
       const mockCity = cities.find(c => c.id === Number(city_id));
       const cityName = mockCity ? mockCity.name : "Gurupi";
 
-      const { data: matchingCities } = await supabaseAdmin
+      const { data: matchingCities } = await supabase
         .from('cities')
         .select('id')
         .ilike('name', cityName);
@@ -588,7 +586,7 @@ app.get("/api/search", async (req, res) => {
       // Try fetching with status approved first, then fallback to any status
       const fetchFromSupabase = async (withStatus: boolean) => {
         try {
-          let query = supabaseAdmin.from('establishments').select('*');
+          let query = supabase.from('establishments').select('*');
           
           if (withStatus) {
             query = query.eq('status', 'approved');
@@ -649,7 +647,7 @@ app.get("/api/search", async (req, res) => {
             // If error is about missing column, we could try a simpler query here
             if (result.error.message.includes('column') && result.error.message.includes('does not exist')) {
               console.log("[Supabase] Attempting simplified query without category/sub_category filters...");
-              let simpleQuery = supabaseAdmin.from('establishments').select('*');
+              let simpleQuery = supabase.from('establishments').select('*');
               if (withStatus) simpleQuery = simpleQuery.eq('status', 'approved');
               if (targetCityIds.length > 0) simpleQuery = simpleQuery.in('city_id', targetCityIds);
               return await simpleQuery.limit(20);
@@ -681,7 +679,7 @@ app.get("/api/search", async (req, res) => {
 
       // If no results and it was a general search, try cities
       if (q && !category_id && !sub_category) {
-        const { data: cityData } = await supabaseAdmin
+        const { data: cityData } = await supabase
           .from('cities')
           .select('*, states(uf)')
           .ilike('name', `%${q}%`)
@@ -700,8 +698,9 @@ app.get("/api/search", async (req, res) => {
     let cityName = "";
     if (city_id) {
       // Try to find city name in Supabase cities or mock cities
-      if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        const { data: cityData } = await supabaseAdmin.from('cities').select('name').eq('id', Number(city_id)).single();
+      const supabase = getSupabase();
+      if (supabase) {
+        const { data: cityData } = await supabase.from('cities').select('name').eq('id', Number(city_id)).single();
         if (cityData) cityName = cityData.name;
       }
       if (!cityName) {
@@ -760,8 +759,9 @@ app.get("/api/establishments/user/:userId", async (req, res) => {
   }
 
   try {
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
-      const { data, error } = await supabaseAdmin
+    const supabase = getSupabase();
+    if (supabase) {
+      const { data, error } = await supabase
         .from('establishments')
         .select('*')
         .eq('user_id', userId)
@@ -792,8 +792,9 @@ app.put("/api/establishments/:id", async (req, res) => {
   const registration = req.body;
   
   try {
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
-      const { data, error } = await supabaseAdmin
+    const supabase = getSupabase();
+    if (supabase) {
+      const { data, error } = await supabase
         .from('establishments')
         .update({
           name: registration.name,
@@ -847,8 +848,9 @@ app.delete("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
   
   try {
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
-      const { error } = await supabaseAdmin
+    const supabase = getSupabase();
+    if (supabase) {
+      const { error } = await supabase
         .from('establishments')
         .delete()
         .eq('id', id);
@@ -897,14 +899,15 @@ app.post("/api/establishments/register", async (req, res) => {
     );
     */
 
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    const supabase = getSupabase();
+    if (supabase) {
       let targetCityId = Number(registration.cityId);
 
       // Map mock ID to real Supabase ID if necessary
       if (targetCityId > 0 && targetCityId < 100) {
         const mockCity = cities.find(c => c.id === targetCityId);
         if (mockCity) {
-          const { data: realCity } = await supabaseAdmin
+          const { data: realCity } = await supabase
             .from('cities')
             .select('id')
             .ilike('name', mockCity.name)
@@ -917,7 +920,7 @@ app.post("/api/establishments/register", async (req, res) => {
         }
       }
 
-      const { data, error } = await supabaseAdmin.from('establishments').insert([{
+      const { data, error } = await supabase.from('establishments').insert([{
         name: registration.name,
         category_id: Number(registration.categoryId),
         sub_category: registration.subCategory,

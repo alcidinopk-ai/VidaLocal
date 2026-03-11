@@ -1,36 +1,35 @@
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
 
-if (!process.env.VERCEL) {
-  dotenv.config();
-}
+const getSupabaseConfig = () => {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  return { url, key };
+};
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+export const getSupabaseAdmin = () => {
+  const { url, key } = getSupabaseConfig();
+  
+  if (!url || !key || url.includes('placeholder')) {
+    return null;
+  }
+  
+  try {
+    return createClient(url, key);
+  } catch (e) {
+    console.error('Error creating Supabase admin client:', e);
+    return null;
+  }
+};
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.warn('Supabase server-side credentials missing. Check VITE_SUPABASE_URL/SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/SUPABASE_SERVICE_KEY');
-}
-
-let client: any;
-try {
-  const url = supabaseUrl || 'https://placeholder.supabase.co';
-  const key = supabaseServiceKey || 'placeholder';
-  client = createClient(url, key);
-} catch (e: any) {
-  console.error('Critical error initializing Supabase client:', e.message);
-  // Create a mock client that returns errors instead of crashing
-  client = {
-    from: () => ({
-      select: () => ({
-        limit: () => Promise.resolve({ data: null, error: { message: `Client init failed: ${e.message}` } }),
-        eq: () => ({ limit: () => Promise.resolve({ data: null, error: { message: `Client init failed: ${e.message}` } }) }),
-        in: () => ({ limit: () => Promise.resolve({ data: null, error: { message: `Client init failed: ${e.message}` } }) }),
-      }),
-      insert: () => Promise.resolve({ data: null, error: { message: `Client init failed: ${e.message}` } }),
-      update: () => Promise.resolve({ data: null, error: { message: `Client init failed: ${e.message}` } }),
-    })
-  };
-}
-
-export const supabaseAdmin = client;
+// For backward compatibility, but prefer getSupabaseAdmin()
+export const supabaseAdmin = getSupabaseAdmin() || {
+  from: () => ({
+    select: () => ({
+      limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+      eq: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }) }),
+      in: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }) }),
+    }),
+    insert: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+    update: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+  })
+};
