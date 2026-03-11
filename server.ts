@@ -355,30 +355,55 @@ app.get("/api/establishments/featured", async (req, res) => {
   const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
   const isConfigured = sUrl && sKey && !sUrl.includes('placeholder');
 
-  console.log(`[API] Fetching featured establishments for city_id: ${city_id}. Supabase configured: ${isConfigured}`);
+  console.log(`[API] Fetching featured for city_id: ${city_id}. Supabase configured: ${isConfigured}`);
   
   try {
     if (isConfigured) {
-      let query = supabaseAdmin.from('establishments').select('*').eq('status', 'approved');
+      // Try with status approved first
+      let query = supabaseAdmin.from('establishments').select('*');
+      
       if (city_id) {
         query = query.eq('city_id', Number(city_id));
       }
-      const { data, error } = await query.limit(8).order('created_at', { ascending: false });
       
-      if (error) {
-        console.error("[Supabase Error] Fetching featured:", error);
-        // Don't throw, let it fallback
-      } else {
-        console.log(`[API] Supabase returned ${data?.length || 0} establishments for city_id ${city_id}`);
-        if (data && data.length > 0) {
-          return res.json(data);
-        }
+      // Attempt to fetch approved first
+      const { data: approvedData, error: approvedError } = await supabaseAdmin
+        .from('establishments')
+        .select('*')
+        .eq('city_id', Number(city_id))
+        .eq('status', 'approved')
+        .limit(8);
+      
+      if (approvedError) {
+        console.error("[Supabase Error] Querying approved establishments:", approvedError.message, approvedError.code);
+      }
+
+      if (approvedData && approvedData.length > 0) {
+        console.log(`[API] Found ${approvedData.length} approved establishments in Supabase`);
+        return res.json(approvedData);
+      }
+
+      // If no approved found, try fetching ANY establishments for this city to see if it's a status issue
+      console.log("[API] No approved found, trying to fetch any establishments for this city...");
+      const { data: anyData, error: anyError } = await supabaseAdmin
+        .from('establishments')
+        .select('*')
+        .eq('city_id', Number(city_id))
+        .limit(8);
+      
+      if (anyData && anyData.length > 0) {
+        console.log(`[API] Found ${anyData.length} total establishments (regardless of status) in Supabase`);
+        return res.json(anyData);
+      }
+
+      if (anyError) {
+        console.error("[Supabase Error] Querying any establishments:", anyError.message);
       }
       
-      console.log("[API] No featured establishments found in Supabase for this city, falling back to mock data");
+      console.log("[API] No establishments found in Supabase for this city ID, falling back to mock/name-based search");
     }
     
-    // Fallback logic with name-matching to handle ID inconsistencies between DBs
+    // Fallback logic with name-matching
     let results = establishments.filter(e => !city_id || e.city_id === Number(city_id));
     
     if (results.length === 0 && city_id) {
