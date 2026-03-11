@@ -10,7 +10,25 @@ if (!supabaseUrl || !supabaseServiceKey) {
   console.warn('Supabase server-side credentials missing. Check VITE_SUPABASE_URL/SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/SUPABASE_SERVICE_KEY');
 }
 
-export const supabaseAdmin = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseServiceKey || 'placeholder'
-);
+let client: any;
+try {
+  const url = supabaseUrl || 'https://placeholder.supabase.co';
+  const key = supabaseServiceKey || 'placeholder';
+  client = createClient(url, key);
+} catch (e: any) {
+  console.error('Critical error initializing Supabase client:', e.message);
+  // Create a mock client that returns errors instead of crashing
+  client = {
+    from: () => ({
+      select: () => ({
+        limit: () => Promise.resolve({ data: null, error: { message: `Client init failed: ${e.message}` } }),
+        eq: () => ({ limit: () => Promise.resolve({ data: null, error: { message: `Client init failed: ${e.message}` } }) }),
+        in: () => ({ limit: () => Promise.resolve({ data: null, error: { message: `Client init failed: ${e.message}` } }) }),
+      }),
+      insert: () => Promise.resolve({ data: null, error: { message: `Client init failed: ${e.message}` } }),
+      update: () => Promise.resolve({ data: null, error: { message: `Client init failed: ${e.message}` } }),
+    })
+  };
+}
+
+export const supabaseAdmin = client;

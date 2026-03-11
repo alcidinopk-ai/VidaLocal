@@ -27,8 +27,19 @@ const isSupabaseConfigured = supabaseUrl &&
                              !supabaseUrl.includes('placeholder');
 
 console.log(`[Startup] Supabase configured: ${isSupabaseConfigured}`);
+// Test connection after a short delay to not block startup
 if (isSupabaseConfigured) {
-  console.log(`[Startup] Supabase URL: ${supabaseUrl?.substring(0, 20)}...`);
+  setTimeout(() => {
+    console.log("[Startup] Testing Supabase connection...");
+    supabaseAdmin.from('cities').select('count', { count: 'exact', head: true })
+      .then(({ count, error }: any) => {
+        if (error) console.error('[Startup] Supabase Connection Test Failed:', error.message);
+        else console.log(`[Startup] Supabase Connection Test Success. Cities count: ${count}`);
+      })
+      .catch((err: any) => {
+        console.error('[Startup] Supabase Connection Test Exception:', err.message);
+      });
+  }, 1000);
 }
 
 // Request logging
@@ -106,6 +117,43 @@ let establishments: Establishment[] = [
   { id: "e21", name: "Ponto de Táxi Central", category_id: 11, sub_category: "Táxi / Motorista de Aplicativo", address: "Praça do Rato, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0650, rating: 4.8, whatsapp: "63992446677", phone: "6333126677", description: "Transporte rápido e seguro 24 horas por dia.", status: 'approved' },
   { id: "e22", name: "Farmácia DrogaMais", category_id: 1, sub_category: "Farmácia", address: "Av. Goiás, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7330, longitude: -49.0690, rating: 4.6, whatsapp: "63992557788", phone: "6333127788", description: "Sua saúde em primeiro lugar com atendimento especializado.", status: 'approved' },
 ];
+
+app.get("/api/debug-supabase", async (req, res) => {
+  const sUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  
+  const debug: any = {
+    timestamp: new Date().toISOString(),
+    config: {
+      has_url: !!sUrl,
+      has_key: !!sKey,
+      url_prefix: sUrl ? sUrl.substring(0, 20) : null,
+    },
+    tables: {}
+  };
+
+  if (sUrl && sKey) {
+    try {
+      const { data: cities, error: cityErr } = await supabaseAdmin.from('cities').select('*').limit(5);
+      debug.tables.cities = { count: cities?.length || 0, error: cityErr?.message, sample: cities };
+
+      const { data: ests, error: estErr } = await supabaseAdmin.from('establishments').select('*').limit(5);
+      debug.tables.establishments = { count: ests?.length || 0, error: estErr?.message, sample: ests };
+      
+      if (ests && ests.length > 0) {
+        debug.tables.establishments.columns = Object.keys(ests[0]);
+      }
+    } catch (e: any) {
+      debug.error = e.message;
+    }
+  }
+
+  res.json(debug);
+});
+
+app.get("/api/ping", (req, res) => {
+  res.send("pong");
+});
 
 // API Routes
 app.get("/api/health", async (req, res) => {
@@ -262,6 +310,10 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
 });
 
 const normalize = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const cleanQuery = (text: string) => {
+  return normalize(text).replace(/[()[\],.-]/g, ' ').replace(/\s+/g, ' ').trim();
+};
 
 const sanitizeSupabaseQuery = (text: string) => {
   // Remove special characters that can break Supabase .or() logic tree
@@ -508,8 +560,11 @@ app.get("/api/search/suggest", async (req, res) => {
 });
 
 app.get("/api/search", async (req, res) => {
-  const q = normalize(String(req.query.q || ""));
+  const rawQ = String(req.query.q || "");
+  const q = cleanQuery(rawQ);
   const { city_id, category_id, sub_category } = req.query;
+  
+  console.log(`[API Search] Query: "${rawQ}" -> Cleaned: "${q}". City: ${city_id}, Category: ${category_id}`);
   
   try {
     if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_URL.includes('placeholder')) {
