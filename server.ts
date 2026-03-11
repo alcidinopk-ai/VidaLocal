@@ -260,10 +260,10 @@ app.post("/api/chat", async (req, res) => {
     const lat = Number(userLocation?.latitude || city?.latitude || -11.7298);
     const lng = Number(userLocation?.longitude || city?.longitude || -49.0678);
 
-    console.log(`[Chat] Calling Gemini 2.5 Flash with lat=${lat}, lng=${lng}`);
+    console.log(`[Chat] Calling Gemini 3 Flash with lat=${lat}, lng=${lng}`);
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: message,
       config: {
         systemInstruction: `Você é VidaLocal, um guia para ${city?.name || 'sua cidade'}. Ajude o usuário a encontrar locais.`,
@@ -300,9 +300,22 @@ app.post("/api/chat", async (req, res) => {
 
   } catch (error: any) {
     console.error("[Chat] ERROR:", error);
-    return res.status(200).json({ 
+    
+    let userMessage = "Desculpe, ocorreu um erro ao processar sua busca.";
+    
+    if (error.message && (error.message.includes("429") || error.message.includes("quota") || error.message.includes("RESOURCE_EXHAUSTED"))) {
+      userMessage = "O limite de buscas gratuitas foi atingido para hoje. Por favor, tente novamente em alguns instantes ou amanhã. Estamos trabalhando para aumentar nossa capacidade!";
+    } else if (error.message && (error.message.includes("500") || error.message.includes("Internal Server Error"))) {
+      userMessage = "O servidor da IA está temporariamente instável. Por favor, tente novamente em alguns segundos.";
+    } else if (error.message && error.message.includes("API key")) {
+      userMessage = "Erro de configuração: Chave de API inválida ou não encontrada.";
+    } else {
+      userMessage = `Erro: ${error.message || "Falha na comunicação com a IA"}.`;
+    }
+
+    return res.json({ 
       role: "model", 
-      text: `Erro: ${error.message || "Falha na comunicação com a IA"}. Verifique sua chave de API.`
+      text: userMessage
     });
   }
 });

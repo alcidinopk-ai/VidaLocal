@@ -28,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const lng = Number(userLocation?.longitude || city?.longitude || -49.0678);
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: message,
       config: {
         systemInstruction: `Você é VidaLocal, um guia para ${city?.name || 'sua cidade'}.
@@ -102,9 +102,23 @@ Seja prestativo e forneça informações precisas sobre localização e contato.
     return res.status(200).json({ role: 'model', text, groundingChunks });
 
   } catch (error: any) {
+    console.error("[Chat API Error]:", error);
+    
+    let userMessage = "Desculpe, ocorreu um erro ao processar sua busca.";
+    
+    if (error.message && (error.message.includes("429") || error.message.includes("quota") || error.message.includes("RESOURCE_EXHAUSTED"))) {
+      userMessage = "O limite de buscas gratuitas foi atingido para hoje. Por favor, tente novamente em alguns instantes ou amanhã. Estamos trabalhando para aumentar nossa capacidade!";
+    } else if (error.message && (error.message.includes("500") || error.message.includes("Internal Server Error"))) {
+      userMessage = "O servidor da IA está temporariamente instável. Por favor, tente novamente em alguns segundos.";
+    } else if (error.message && error.message.includes("API key")) {
+      userMessage = "Erro de configuração: Chave de API inválida ou não encontrada.";
+    } else {
+      userMessage = `Erro no serviço de busca: ${error.message || "Falha na comunicação com a IA"}.`;
+    }
+
     return res.status(200).json({ 
       role: 'model', 
-      text: `Erro no handler isolado: ${error.message}` 
+      text: userMessage
     });
   }
 }

@@ -298,13 +298,23 @@ export default function App() {
         }));
 
       // If AI failed but we have local results, add a helpful message
-      if (response.text.includes("chave da API Gemini") || response.text.includes("API_KEY")) {
+      const aiFailed = 
+        response.text.includes("chave da API Gemini") || 
+        response.text.includes("API_KEY") ||
+        response.text.includes("limite de buscas gratuitas") ||
+        response.text.includes("servidor da IA está temporariamente instável");
+
+      if (aiFailed) {
         if (localChunks.length > 0) {
-          response.text = `Encontrei **${localChunks.length} estabelecimentos** em nossa base de dados local para sua busca. \n\nEmbora o assistente de IA esteja temporariamente indisponível (chave API não configurada), você pode ver os locais encontrados no mapa ao lado ou na lista abaixo:\n\n` + 
+          let reason = "o assistente de IA está temporariamente indisponível";
+          if (response.text.includes("limite de buscas gratuitas")) reason = "o limite de buscas da IA foi atingido";
+          if (response.text.includes("servidor da IA está temporariamente instável")) reason = "o servidor da IA está instável";
+
+          response.text = `Encontrei **${localChunks.length} estabelecimentos** em nossa base de dados local para sua busca. \n\nEmbora ${reason}, você pode ver os locais encontrados no mapa ao lado ou na lista abaixo:\n\n` + 
             localResults.map((est: any) => `* **${est.name}**: ${est.address}`).join("\n") +
-            `\n\n*(Dica: Para habilitar o assistente de IA completo, configure sua GEMINI_API_KEY nas configurações do projeto)*`;
-        } else {
-          response.text = `O assistente de IA está temporariamente indisponível (chave API não configurada) e não encontrei estabelecimentos correspondentes em nossa base de dados local para: "${query}".\n\nPor favor, tente uma busca mais simples ou verifique as categorias acima.\n\n*(Dica: Para habilitar o assistente de IA completo, configure sua GEMINI_API_KEY nas configurações do projeto)*`;
+            `\n\n*(Dica: Tente novamente em alguns instantes ou use as categorias para navegar)*`;
+        } else if (response.text.includes("limite de buscas gratuitas")) {
+          response.text = `O limite de buscas gratuitas da IA foi atingido para hoje e não encontrei estabelecimentos correspondentes em nossa base de dados local para: "${query}".\n\nPor favor, tente uma busca mais simples ou verifique as categorias acima.`;
         }
       }
 
