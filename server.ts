@@ -509,12 +509,27 @@ app.get("/api/search", async (req, res) => {
         }
 
         if (sub_category) {
-          query = query.ilike('sub_category', `%${sub_category}%`);
+          const subStr = String(sub_category);
+          if (subStr.includes('/')) {
+            const parts = subStr.split('/').map(p => p.trim()).filter(p => p.length > 0);
+            const orParts = parts.map(p => `sub_category.ilike.%${p}%`).join(',');
+            query = query.or(orParts);
+          } else {
+            query = query.ilike('sub_category', `%${subStr}%`);
+          }
         }
 
         if (q) {
           const sanitizedQ = sanitizeSupabaseQuery(q);
-          const queryWords = sanitizedQ.split(/\s+/).filter(w => w.length > 2);
+          // Remove common words like "em", "no", "na", and the city name to focus on the business type
+          const cityNames = [cityName, "Gurupi", "Palmas", "Araguaína"];
+          let searchTerms = sanitizedQ;
+          cityNames.forEach(cn => {
+            searchTerms = searchTerms.replace(new RegExp(cn, 'gi'), '');
+          });
+          searchTerms = searchTerms.replace(/\b(em|no|na|de|do|da|para|com)\b/gi, '').trim();
+
+          const queryWords = searchTerms.split(/\s+/).filter(w => w.length > 2);
           
           let orConditions = `name.ilike.%${sanitizedQ}%,sub_category.ilike.%${sanitizedQ}%,description.ilike.%${sanitizedQ}%,address.ilike.%${sanitizedQ}%`;
           
