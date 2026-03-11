@@ -108,9 +108,33 @@ let establishments: Establishment[] = [
 ];
 
 // API Routes
-app.get("/api/health", (req, res) => {
+app.get("/api/health", async (req, res) => {
   const sUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  
+  let supabase_status = "not_configured";
+  let table_schema: any = null;
+
+  if (sUrl && sKey && !sUrl.includes('placeholder')) {
+    try {
+      // Check if we can connect and what columns exist
+      const { data, error } = await supabaseAdmin.from('establishments').select('*').limit(1);
+      if (error) {
+        supabase_status = `error: ${error.message}`;
+      } else {
+        supabase_status = "connected";
+        if (data && data.length > 0) {
+          table_schema = Object.keys(data[0]);
+        } else {
+          // If table is empty, try to get columns via a different way or just report empty
+          supabase_status = "connected_but_empty";
+        }
+      }
+    } catch (e: any) {
+      supabase_status = `exception: ${e.message}`;
+    }
+  }
+
   res.json({ 
     status: "ok", 
     timestamp: new Date().toISOString(),
@@ -118,13 +142,17 @@ app.get("/api/health", (req, res) => {
       establishments: establishments.length,
       cities: cities.length
     },
+    supabase: {
+      status: supabase_status,
+      has_url: !!sUrl,
+      has_key: !!sKey,
+      url_prefix: sUrl ? sUrl.substring(0, 20) : null,
+      detected_columns: table_schema
+    },
     env: {
       node_env: process.env.NODE_ENV,
       vercel: process.env.VERCEL,
-      has_gemini_key: !!(process.env.GEMINI_API_KEY || process.env.API_KEY),
-      has_supabase_url: !!sUrl,
-      has_supabase_key: !!sKey,
-      supabase_url_prefix: sUrl ? sUrl.substring(0, 20) : null
+      has_gemini_key: !!(process.env.GEMINI_API_KEY || process.env.API_KEY)
     }
   });
 });
@@ -377,12 +405,21 @@ app.get("/api/establishments/featured", async (req, res) => {
 
       // Try fetching with status approved first
       const fetchFromSupabase = async (withStatus: boolean) => {
-        let query = supabaseAdmin.from('establishments').select('*');
-        if (withStatus) query = query.eq('status', 'approved');
-        if (targetCityIds.length > 0) {
-          query = query.in('city_id', targetCityIds);
+        try {
+          let query = supabaseAdmin.from('establishments').select('*');
+          if (withStatus) query = query.eq('status', 'approved');
+          if (targetCityIds.length > 0) {
+            query = query.in('city_id', targetCityIds);
+          }
+          const result = await query.limit(8);
+          if (result.error) {
+            console.error(`[Supabase Featured Error] Status ${withStatus}:`, result.error.message);
+          }
+          return result;
+        } catch (e: any) {
+          console.error("[Supabase Featured Exception]:", e.message);
+          return { data: null, error: e };
         }
-        return await query.limit(8);
       };
 
       let { data, error } = await fetchFromSupabase(true);
@@ -494,55 +531,79 @@ app.get("/api/search", async (req, res) => {
 
       // Try fetching with status approved first, then fallback to any status
       const fetchFromSupabase = async (withStatus: boolean) => {
-        let query = supabaseAdmin.from('establishments').select('*');
-        
-        if (withStatus) {
-          query = query.eq('status', 'approved');
-        }
-        
-        if (targetCityIds.length > 0) {
-          query = query.in('city_id', targetCityIds);
-        }
-
-        if (category_id) {
-          query = query.eq('category_id', Number(category_id));
-        }
-
-        if (sub_category) {
-          const subStr = String(sub_category);
-          if (subStr.includes('/')) {
-            const parts = subStr.split('/').map(p => p.trim()).filter(p => p.length > 0);
-            const orParts = parts.map(p => `sub_category.ilike.%${p}%`).join(',');
-            query = query.or(orParts);
-          } else {
-            query = query.ilike('sub_category', `%${subStr}%`);
-          }
-        }
-
-        if (q) {
-          const sanitizedQ = sanitizeSupabaseQuery(q);
-          // Remove common words like "em", "no", "na", and the city name to focus on the business type
-          const cityNames = [cityName, "Gurupi", "Palmas", "Araguaína"];
-          let searchTerms = sanitizedQ;
-          cityNames.forEach(cn => {
-            searchTerms = searchTerms.replace(new RegExp(cn, 'gi'), '');
-          });
-          searchTerms = searchTerms.replace(/\b(em|no|na|de|do|da|para|com)\b/gi, '').trim();
-
-          const queryWords = searchTerms.split(/\s+/).filter(w => w.length > 2);
+        try {
+          let query = supabaseAdmin.from('establishments').select('*');
           
-          let orConditions = `name.ilike.%${sanitizedQ}%,sub_category.ilike.%${sanitizedQ}%,description.ilike.%${sanitizedQ}%,address.ilike.%${sanitizedQ}%`;
-          
-          if (queryWords.length > 0) {
-            const wordConditions = queryWords.map(w => 
-              `name.ilike.%${w}%,sub_category.ilike.%${w}%,description.ilike.%${w}%,address.ilike.%${w}%`
-            ).join(',');
-            orConditions += `,${wordConditions}`;
+          if (withStatus) {
+            query = query.eq('status', 'approved');
           }
-          query = query.or(orConditions);
+          
+          if (targetCityIds.length > 0) {
+            query = query.in('city_id', targetCityIds);
+          }
+
+          // Only apply these filters if we suspect the columns exist
+          // We can't easily check columns per query without overhead, 
+          // but we can catch the error if they are missing.
+          if (category_id) {
+            query = query.eq('category_id', Number(category_id));
+          }
+
+          if (sub_category) {
+            const subStr = String(sub_category);
+            if (subStr.includes('/')) {
+              const parts = subStr.split('/').map(p => p.trim()).filter(p => p.length > 0);
+              const orParts = parts.map(p => `sub_category.ilike.%${p}%`).join(',');
+              query = query.or(orParts);
+            } else {
+              query = query.ilike('sub_category', `%${subStr}%`);
+            }
+          }
+
+          if (q) {
+            const sanitizedQ = sanitizeSupabaseQuery(q);
+            // Remove common words like "em", "no", "na", and the city name to focus on the business type
+            const cityNames = [cityName, "Gurupi", "Palmas", "Araguaína"];
+            let searchTerms = sanitizedQ;
+            cityNames.forEach(cn => {
+              searchTerms = searchTerms.replace(new RegExp(cn, 'gi'), '');
+            });
+            searchTerms = searchTerms.replace(/\b(em|no|na|de|do|da|para|com)\b/gi, '').trim();
+
+            const queryWords = searchTerms.split(/\s+/).filter(w => w.length > 2);
+            
+            let orConditions = `name.ilike.%${sanitizedQ}%,description.ilike.%${sanitizedQ}%,address.ilike.%${sanitizedQ}%`;
+            
+            // Only add sub_category to OR if it's likely to exist
+            // For now, we'll try to include it and see if it fails
+            orConditions += `,sub_category.ilike.%${sanitizedQ}%`;
+            
+            if (queryWords.length > 0) {
+              const wordConditions = queryWords.map(w => 
+                `name.ilike.%${w}%,description.ilike.%${w}%,address.ilike.%${w}%,sub_category.ilike.%${w}%`
+              ).join(',');
+              orConditions += `,${wordConditions}`;
+            }
+            query = query.or(orConditions);
+          }
+          
+          const result = await query.limit(20);
+          if (result.error) {
+            console.error(`[Supabase Query Error] Status ${withStatus}:`, result.error.message);
+            // If error is about missing column, we could try a simpler query here
+            if (result.error.message.includes('column') && result.error.message.includes('does not exist')) {
+              console.log("[Supabase] Attempting simplified query without category/sub_category filters...");
+              let simpleQuery = supabaseAdmin.from('establishments').select('*');
+              if (withStatus) simpleQuery = simpleQuery.eq('status', 'approved');
+              if (targetCityIds.length > 0) simpleQuery = simpleQuery.in('city_id', targetCityIds);
+              return await simpleQuery.limit(20);
+            }
+          }
+          return result;
+        } catch (e: any) {
+          console.error("[Supabase Exception]:", e.message);
+          return { data: null, error: e };
         }
-        
-        return await query.limit(20);
       };
 
       let { data, error } = await fetchFromSupabase(true);
