@@ -477,7 +477,7 @@ export default function App() {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && performSearch(input, true)}
-                            onFocus={() => input.length >= 2 && setShowSuggestions(true)}
+                            onFocus={() => setShowSuggestions(true)}
                             placeholder="O que você precisa agora?"
                             className="w-full bg-transparent border-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 text-sm"
                           />
@@ -496,45 +496,76 @@ export default function App() {
 
                       {/* Intelligent Suggestions */}
                       <AnimatePresence>
-                        {showSuggestions && (suggestions.types.length > 0 || suggestions.intents.length > 0) && (
+                        {showSuggestions && (
                           <motion.div 
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 10 }}
                             className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-zinc-100 overflow-hidden z-[60] p-4"
                           >
-                            {suggestions.intents.length > 0 && (
-                              <div className="mb-4">
-                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Intenções Detectadas</span>
-                                <div className="flex flex-wrap gap-2">
-                                  {suggestions.intents.map(intent => (
-                                    <button 
-                                      key={intent.id}
-                                      onClick={() => handleSelectSuggestion(intent.name)}
-                                      className="px-3 py-1.5 bg-zinc-50 text-zinc-600 rounded-lg text-xs font-bold hover:bg-zinc-100 transition-colors border border-zinc-100"
-                                    >
-                                      {intent.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            {suggestions.types.length > 0 && (
+                            {input.length < 2 ? (
                               <div>
-                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 block">Sugestões de Filtro</span>
+                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 block">Buscas Populares</span>
                                 <div className="flex flex-wrap gap-2">
-                                  {suggestions.types.map(type => (
+                                  {["Restaurante", "Farmácia", "Açougue", "Padaria", "Oficina"].map(term => (
                                     <button 
-                                      key={type}
-                                      onClick={() => handleSelectSuggestion(type)}
-                                      className="px-3 py-1.5 bg-emerald-50 text-[#00897b] rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-100 flex items-center gap-1.5"
+                                      key={term}
+                                      onClick={() => handleSelectSuggestion(term)}
+                                      className="px-3 py-2 bg-zinc-50 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-100 transition-all border border-zinc-100 flex items-center gap-2"
                                     >
-                                      <Search className="w-3 h-3" />
-                                      {type}
+                                      <Sparkles className="w-3 h-3 text-[#f57c00]" />
+                                      {term}
                                     </button>
                                   ))}
                                 </div>
                               </div>
+                            ) : (
+                              <>
+                                {suggestions.intents.length > 0 && (
+                                  <div className="mb-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className="w-1 h-3 bg-[#f57c00] rounded-full" />
+                                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Intenções Detectadas</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {suggestions.intents.map(intent => (
+                                        <button 
+                                          key={intent.id}
+                                          onClick={() => handleSelectSuggestion(intent.name)}
+                                          className="px-3 py-1.5 bg-orange-50 text-[#f57c00] rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors border border-orange-100"
+                                        >
+                                          {intent.name}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {suggestions.types.length > 0 && (
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className="w-1 h-3 bg-[#00897b] rounded-full" />
+                                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sugestões de Filtro</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {suggestions.types.map(type => (
+                                        <button 
+                                          key={type}
+                                          onClick={() => handleSelectSuggestion(type)}
+                                          className="px-3 py-1.5 bg-emerald-50 text-[#00897b] rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-100 flex items-center gap-1.5"
+                                        >
+                                          <Search className="w-3 h-3" />
+                                          {type}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {suggestions.intents.length === 0 && suggestions.types.length === 0 && (
+                                  <div className="py-4 text-center">
+                                    <p className="text-xs text-zinc-400 italic">Continue digitando para ver sugestões...</p>
+                                  </div>
+                                )}
+                              </>
                             )}
                           </motion.div>
                         )}

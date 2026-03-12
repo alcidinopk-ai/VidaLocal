@@ -100,18 +100,18 @@ interface Establishment {
 
 let establishments: Establishment[] = [
   { id: "e1", name: "Espetinho do Adão B13", category_id: 1, sub_category: "Espetinho", address: "Av. Goiás, 1438, Centro, Gurupi - TO", city_id: 1, latitude: -11.7289, longitude: -49.0692, rating: 4.8, whatsapp: "63984551234", phone: "6333121234", description: "O melhor espetinho da região com acompanhamentos tradicionais.", status: 'approved' },
-  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Av. Maranhão, 1245, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455", phone: "6333124455", description: "Comida caseira, lanches e sobremesas feitas com carinho.", status: 'approved' },
+  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Restaurante", address: "Av. Maranhão, 1245, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455", phone: "6333124455", description: "Comida caseira, lanches e sobremesas feitas com carinho.", status: 'approved' },
   { id: "e3", name: "Mecânica do Neném", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Maranhão, 2560, Setor Industrial, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0720, rating: 4.5, whatsapp: "63984112233", phone: "6333121122", description: "Manutenção preventiva e corretiva para seu veículo com confiança.", status: 'approved' },
   { id: "e4", name: "Pet Shop Amigão", category_id: 5, sub_category: "Pet Shop (varejo)", address: "Av. Goiás, 2100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0685, rating: 4.7, whatsapp: "63999887766", phone: "6333128877", description: "Tudo para o seu pet: rações, acessórios e banho e tosa.", status: 'approved' },
-  { id: "e5", name: "Pizzaria Bella Italia", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Av. Pará, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7295, longitude: -49.0670, rating: 4.6, whatsapp: "63992112233", phone: "6333129988", description: "Pizzas artesanais com massa fina e ingredientes selecionados.", status: 'approved' },
+  { id: "e5", name: "Pizzaria Bella Italia", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7295, longitude: -49.0670, rating: 4.6, whatsapp: "63992112233", phone: "6333129988", description: "Pizzas artesanais com massa fina e ingredientes selecionados.", status: 'approved' },
   { id: "e6", name: "Farmácia Preço Baixo", category_id: 1, sub_category: "Farmácia", address: "Rua 5, 800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7310, longitude: -49.0695, rating: 4.4, whatsapp: "63992445566", phone: "6333127766", description: "Medicamentos e perfumaria com os melhores preços da cidade.", status: 'approved' },
   { id: "e7", name: "Supermercado Araguaia", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Goiás, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7260, longitude: -49.0650, rating: 4.3, whatsapp: "63992556677", phone: "6333126655", description: "Variedade em hortifruti, açougue e mercearia para sua família.", status: 'approved' },
   { id: "e8", name: "Barbearia do Zé", category_id: 4, sub_category: "Salão de Beleza / Barbearia", address: "Rua 3, 450, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0680, rating: 4.9, whatsapp: "63992667788", phone: "6333125544", description: "Corte de cabelo e barba com estilo e atendimento personalizado.", status: 'approved' },
   { id: "e9", name: "Clínica Veterinária Vida", category_id: 5, sub_category: "Clínica Veterinária", address: "Av. Maranhão, 3000, Gurupi - TO", city_id: 1, latitude: -11.7380, longitude: -49.0750, rating: 4.8, whatsapp: "63992778899", phone: "6333124433", description: "Cuidado completo para a saúde do seu animal de estimação.", status: 'approved' },
   { id: "e10", name: "Posto Central", category_id: 6, sub_category: "Posto de Combustível", address: "Av. Goiás, 500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7250, longitude: -49.0640, rating: 4.2, whatsapp: "63992889900", phone: "6333123322", description: "Combustível de qualidade e conveniência 24 horas.", status: 'approved' },
-  { id: "e11", name: "Restaurante Popular", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Av. Maranhão, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0680, rating: 4.5, whatsapp: "63992990011", phone: "6333122211", description: "Almoço self-service com grande variedade e preço justo.", status: 'approved' },
-  { id: "e12", name: "Lanchonete Central", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Rua 4, 600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0675, rating: 4.7, whatsapp: "63992001122", phone: "6333121100", description: "Salgados frescos, sucos naturais e o melhor café da manhã.", status: 'approved' },
-  { id: "e13", name: "Pizzaria do Vale", category_id: 1, sub_category: "Alimentação (restaurante, lanchonete, pizzaria)", address: "Av. Pará, 2000, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0700, rating: 4.8, whatsapp: "63992112233", phone: "6333120099", description: "Pizzas no forno a lenha com bordas recheadas e muito sabor.", status: 'approved' },
+  { id: "e11", name: "Restaurante Popular", category_id: 1, sub_category: "Restaurante", address: "Av. Maranhão, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0680, rating: 4.5, whatsapp: "63992990011", phone: "6333122211", description: "Almoço self-service com grande variedade e preço justo.", status: 'approved' },
+  { id: "e12", name: "Lanchonete Central", category_id: 1, sub_category: "Lanchonete", address: "Rua 4, 600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0675, rating: 4.7, whatsapp: "63992001122", phone: "6333121100", description: "Salgados frescos, sucos naturais e o melhor café da manhã.", status: 'approved' },
+  { id: "e13", name: "Pizzaria do Vale", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 2000, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0700, rating: 4.8, whatsapp: "63992112233", phone: "6333120099", description: "Pizzas no forno a lenha com bordas recheadas e muito sabor.", status: 'approved' },
   { id: "e14", name: "Hospital Regional de Gurupi", category_id: 3, sub_category: "Hospital / Clínica / UPA", address: "Av. Pará, S/N, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0750, rating: 4.1, whatsapp: "6333150200", phone: "6333150200", description: "Atendimento hospitalar de urgência e emergência para a região.", status: 'approved' },
   { id: "e15", name: "Prefeitura Municipal", category_id: 3, sub_category: "Prefeitura / Câmara / Secretarias", address: "Rua 1, Centro, Gurupi - TO", city_id: 1, latitude: -11.7250, longitude: -49.0650, rating: 4.0, whatsapp: "6333150000", phone: "6333150000", description: "Sede administrativa do poder executivo municipal de Gurupi.", status: 'approved' },
   { id: "e16", name: "Escola Municipal de Gurupi", category_id: 10, sub_category: "Escola (infantil ao médio)", address: "Rua 10, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0660, rating: 4.5, whatsapp: "6333151111", phone: "6333151111", description: "Educação de qualidade para crianças e jovens da nossa cidade.", status: 'approved' },
@@ -121,6 +121,36 @@ let establishments: Establishment[] = [
   { id: "e20", name: "Moda Fashion", category_id: 12, sub_category: "Moda (feminina, masculina, infantil, fitness)", address: "Rua 5, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0700, rating: 4.6, whatsapp: "63992335566", phone: "6333125566", description: "As últimas tendências da moda com os melhores preços.", status: 'approved' },
   { id: "e21", name: "Ponto de Táxi Central", category_id: 11, sub_category: "Táxi / Motorista de Aplicativo", address: "Praça do Rato, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0650, rating: 4.8, whatsapp: "63992446677", phone: "6333126677", description: "Transporte rápido e seguro 24 horas por dia.", status: 'approved' },
   { id: "e22", name: "Farmácia DrogaMais", category_id: 1, sub_category: "Farmácia", address: "Av. Goiás, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7330, longitude: -49.0690, rating: 4.6, whatsapp: "63992557788", phone: "6333127788", description: "Sua saúde em primeiro lugar com atendimento especializado.", status: 'approved' },
+  { id: "e23", name: "Casa de Carnes Boi de Ouro", category_id: 1, sub_category: "Açougue", address: "Av. Maranhão, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7290, longitude: -49.0675, rating: 4.9, whatsapp: "63992113344", phone: "6333124455", description: "Carnes nobres e selecionadas para o seu churrasco.", status: 'approved' },
+  { id: "e24", name: "Supermercado Beira Rio", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Goiás, 2500, Gurupi - TO", city_id: 1, latitude: -11.7360, longitude: -49.0710, rating: 4.5, whatsapp: "6333131000", phone: "6333131000", description: "O melhor preço e variedade para sua casa.", status: 'approved' },
+  { id: "e25", name: "Drogaria Ultra Popular", category_id: 1, sub_category: "Farmácia", address: "Av. Goiás, 1100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0660, rating: 4.7, whatsapp: "6333122020", phone: "6333122020", description: "Farmácia com descontos reais em medicamentos.", status: 'approved' },
+  { id: "e26", name: "Gurupi Net", category_id: 2, sub_category: "Provedor de Internet / Automação / Suporte TI", address: "Rua 7, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7300, longitude: -49.0680, rating: 4.4, whatsapp: "6333153000", phone: "6333153000", description: "Internet ultraveloz em fibra óptica para sua casa ou empresa.", status: 'approved' },
+  { id: "e27", name: "Fórum de Gurupi", category_id: 3, sub_category: "Fórum / Tribunal", address: "Av. Pará, Centro, Gurupi - TO", city_id: 1, latitude: -11.7340, longitude: -49.0740, rating: 4.2, phone: "6333112300", description: "Comarca de Gurupi - Tribunal de Justiça do Estado do Tocantins.", status: 'approved' },
+  { id: "e28", name: "4º Batalhão da Polícia Militar", category_id: 3, sub_category: "Delegacia / Polícia / Bombeiros", address: "Av. Maranhão, Gurupi - TO", city_id: 1, latitude: -11.7400, longitude: -49.0800, rating: 4.8, phone: "6333121190", description: "Segurança pública e policiamento ostensivo em Gurupi.", status: 'approved' },
+  { id: "e29", name: "Barbearia Vip", category_id: 4, sub_category: "Salão de Beleza / Barbearia", address: "Av. Goiás, 1800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7310, longitude: -49.0690, rating: 4.9, whatsapp: "63992008877", description: "Corte moderno e ambiente climatizado para o homem de estilo.", status: 'approved' },
+  { id: "e30", name: "Clínica Veterinária São Francisco", category_id: 5, sub_category: "Clínica Veterinária", address: "Av. Maranhão, 2200, Gurupi - TO", city_id: 1, latitude: -11.7330, longitude: -49.0700, rating: 4.8, phone: "6333125566", description: "Atendimento veterinário com amor e dedicação aos animais.", status: 'approved' },
+  { id: "e31", name: "Posto Décio Gurupi", category_id: 6, sub_category: "Posto de Combustível", address: "Rodovia BR-153, Gurupi - TO", city_id: 1, latitude: -11.7500, longitude: -49.0900, rating: 4.6, phone: "6333128800", description: "Posto de serviços completo na BR-153.", status: 'approved' },
+  { id: "e32", name: "Constrular Materiais de Construção", category_id: 7, sub_category: "Material de Construção / Ferragista", address: "Av. Goiás, 3000, Gurupi - TO", city_id: 1, latitude: -11.7400, longitude: -49.0750, rating: 4.4, phone: "6333124400", description: "Do alicerce ao acabamento, tudo para sua obra.", status: 'approved' },
+  { id: "e33", name: "Imobiliária Terra", category_id: 8, sub_category: "Imobiliária / Corretor", address: "Av. Maranhão, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7260, longitude: -49.0650, rating: 4.7, phone: "6333121010", description: "Venda e aluguel de imóveis com transparência e segurança.", status: 'approved' },
+  { id: "e34", name: "UNIRG - Campus I", category_id: 10, sub_category: "Universidade / Instituto Federal", address: "Av. Antônio Nunes da Silva, Gurupi - TO", city_id: 1, latitude: -11.7450, longitude: -49.0600, rating: 4.5, phone: "6333112700", description: "Universidade de Gurupi - Ensino superior de excelência.", status: 'approved' },
+  { id: "e35", name: "IFTO - Campus Gurupi", category_id: 10, sub_category: "Universidade / Instituto Federal", address: "Alameda Madrid, Gurupi - TO", city_id: 1, latitude: -11.7600, longitude: -49.0500, rating: 4.8, phone: "6333115400", description: "Instituto Federal do Tocantins - Educação técnica e superior.", status: 'approved' },
+  { id: "e36", name: "Ponto de Táxi Rodoviária", category_id: 11, sub_category: "Táxi / Motorista de Aplicativo", address: "Rodoviária de Gurupi, Gurupi - TO", city_id: 1, latitude: -11.7420, longitude: -49.0780, rating: 4.3, description: "Serviço de táxi disponível 24h na rodoviária.", status: 'approved' },
+  { id: "e37", name: "Lojas Novo Mundo", category_id: 12, sub_category: "Móveis / Eletrodomésticos / Eletrônicos", address: "Av. Goiás, 1300, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0670, rating: 4.2, phone: "6333125050", description: "Eletrodomésticos, móveis e tecnologia para sua casa.", status: 'approved' },
+  { id: "e38", name: "Magazine Luiza", category_id: 12, sub_category: "Shopping / Loja de Departamento / Outlet", address: "Av. Goiás, 1400, Centro, Gurupi - TO", city_id: 1, latitude: -11.7290, longitude: -49.0680, rating: 4.4, phone: "6333126060", description: "Vem ser feliz no Magalu de Gurupi.", status: 'approved' },
+  // Palmas Establishments
+  { id: "p1", name: "Hospital Geral de Palmas (HGP)", category_id: 3, sub_category: "Hospital / Clínica / UPA", address: "NS 01, Qd. 201 Sul, Palmas - TO", city_id: 2, latitude: -10.1950, longitude: -48.3330, rating: 4.2, phone: "6332187800", description: "Principal hospital público do estado do Tocantins.", status: 'approved' },
+  { id: "p2", name: "Capim Dourado Shopping", category_id: 12, sub_category: "Shopping / Loja de Departamento / Outlet", address: "Qd. 107 Norte, NS 05, Palmas - TO", city_id: 2, latitude: -10.1750, longitude: -48.3350, rating: 4.7, phone: "6332129500", description: "O maior shopping center do Tocantins com cinema e praça de alimentação.", status: 'approved' },
+  { id: "p3", name: "UFT - Campus Palmas", category_id: 10, sub_category: "Universidade / Instituto Federal", address: "Qd. 109 Norte, Av. NS 15, Palmas - TO", city_id: 2, latitude: -10.1780, longitude: -48.3600, rating: 4.6, phone: "6332294400", description: "Universidade Federal do Tocantins - Campus Universitário de Palmas.", status: 'approved' },
+  { id: "p4", name: "Palácio Araguaia", category_id: 3, sub_category: "Prefeitura / Câmara / Secretarias", address: "Praça dos Girassóis, Palmas - TO", city_id: 2, latitude: -10.1840, longitude: -48.3330, rating: 4.8, description: "Sede do Governo do Estado do Tocantins.", status: 'approved' },
+  { id: "p5", name: "Supermercado Quartetto", category_id: 1, sub_category: "Supermercado / Mercado", address: "Qd. 204 Sul, Av. LO 05, Palmas - TO", city_id: 2, latitude: -10.1980, longitude: -48.3300, rating: 4.5, phone: "6332154400", description: "Rede de supermercados tocantinense com produtos de qualidade.", status: 'approved' },
+  { id: "p6", name: "Praia da Graciosa", category_id: 9, sub_category: "Parques", address: "Orla de Palmas, Palmas - TO", city_id: 2, latitude: -10.1850, longitude: -48.3650, rating: 4.7, description: "Principal ponto turístico e de lazer de Palmas às margens do Lago.", status: 'approved' },
+  // Araguaína Establishments
+  { id: "a1", name: "Hospital Regional de Araguaína", category_id: 3, sub_category: "Hospital / Clínica / UPA", address: "Av. Dom Emanuel, Araguaína - TO", city_id: 3, latitude: -7.1900, longitude: -48.2050, rating: 4.0, phone: "6334112600", description: "Atendimento hospitalar de referência no norte do estado.", status: 'approved' },
+  { id: "a2", name: "Via Lago", category_id: 9, sub_category: "Parques", address: "Av. Via Lago, Araguaína - TO", city_id: 3, latitude: -7.1850, longitude: -48.1950, rating: 4.9, description: "Cartão postal de Araguaína, ideal para caminhadas e lazer.", status: 'approved' },
+  { id: "a3", name: "UFNT - Campus Araguaína", category_id: 10, sub_category: "Universidade / Instituto Federal", address: "Rua Paraguai, Araguaína - TO", city_id: 3, latitude: -7.1950, longitude: -48.2150, rating: 4.5, phone: "6334165600", description: "Universidade Federal do Norte do Tocantins.", status: 'approved' },
+  { id: "a4", name: "Araguaína Park Shopping", category_id: 12, sub_category: "Shopping / Loja de Departamento / Outlet", address: "Av. Bernardo Sayão, Araguaína - TO", city_id: 3, latitude: -7.2100, longitude: -48.2250, rating: 4.6, phone: "6334115500", description: "Shopping center com diversas lojas e opções de lazer.", status: 'approved' },
+  { id: "a5", name: "Supermercado Campelo", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Filadélfia, Araguaína - TO", city_id: 3, latitude: -7.1880, longitude: -48.2020, rating: 4.7, phone: "6334117000", description: "Tradição e qualidade em supermercado em Araguaína.", status: 'approved' },
+  { id: "a6", name: "Rodoviária de Araguaína", category_id: 11, sub_category: "Transporte Público (ônibus)", address: "Av. Filadélfia, Araguaína - TO", city_id: 3, latitude: -7.1920, longitude: -48.2080, rating: 4.1, description: "Terminal rodoviário de passageiros de Araguaína.", status: 'approved' },
 ];
 
 app.get("/api/debug-supabase", async (req, res) => {
@@ -523,30 +553,74 @@ app.get("/api/establishments/featured", async (req, res) => {
 });
 
 app.get("/api/search/suggest", async (req, res) => {
-  const q = normalize(String(req.query.q || ""));
+  const rawQ = String(req.query.q || "");
+  const q = normalize(rawQ);
   if (!q) return res.json({ intents: [], types: [] });
   
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      // Fetch intents and types from DB
-      const { data: intentsData } = await supabase.from('search_intents').select('id, name').ilike('name', `%${q}%`).eq('active', true).limit(5);
-      const { data: typesData } = await supabase.from('establishments').select('sub_category').ilike('sub_category', `%${q}%`).eq('status', 'approved').limit(20);
+      // 1. Search in search_intents (direct name match)
+      const { data: intentsData } = await supabase
+        .from('search_intents')
+        .select('id, name')
+        .ilike('name', `%${q}%`)
+        .eq('active', true)
+        .limit(5);
+
+      // 2. Search in search_keywords (keyword match)
+      const { data: keywordIntents } = await supabase
+        .from('search_keywords')
+        .select('intent_id, search_intents(id, name)')
+        .ilike('keyword', `%${q}%`)
+        .limit(5);
+
+      // 3. Search in establishments (sub_category match)
+      const { data: typesData } = await supabase
+        .from('establishments')
+        .select('sub_category')
+        .ilike('sub_category', `%${q}%`)
+        .eq('status', 'approved')
+        .limit(20);
       
+      const combinedIntents = [...(intentsData || [])];
+      keywordIntents?.forEach((ki: any) => {
+        const intent = ki.search_intents;
+        if (intent && !combinedIntents.find(ci => ci.id === intent.id)) {
+          combinedIntents.push(intent);
+        }
+      });
+
       const types = Array.from(new Set(typesData?.map(e => e.sub_category) || [])).slice(0, 5);
-      return res.json({ intents: intentsData || [], types });
+      return res.json({ intents: combinedIntents.slice(0, 5), types });
     }
+
+    // Fallback dictionary for Intentional Search
+    const DICTIONARY: Record<string, string[]> = {
+      "Restaurante": ["comer", "fome", "almoço", "jantar", "comida", "restaurante", "gastronomia"],
+      "Lanchonete": ["lanche", "hamburguer", "podrão", "salgado", "lanchonete", "hot dog"],
+      "Pizzaria": ["pizza", "massa", "italiana", "pizzaria"],
+      "Padaria": ["pão", "café", "bolo", "doce", "padaria", "confeitaria"],
+      "Farmácia": ["remedio", "dor", "saude", "drogaria", "farmacia", "medicamento"],
+      "Supermercado": ["compras", "mercado", "rancho", "mantimentos", "supermercado", "hipermercado"],
+      "Açougue": ["carne", "churrasco", "picanha", "frango", "açougue", "boutique de carnes"],
+      "Hortifruti": ["fruta", "verdura", "legume", "feira", "hortifruti", "sacolão"],
+      "Oficina": ["carro", "conserto", "mecanico", "pneu", "oficina", "auto eletrica"],
+      "Pet Shop": ["cachorro", "gato", "ração", "banho", "pet shop", "veterinario"],
+      "Posto": ["gasolina", "etanol", "diesel", "combustivel", "posto"],
+    };
+
+    const intents = Object.entries(DICTIONARY)
+      .filter(([name, keywords]) => 
+        normalize(name).includes(q) || keywords.some(k => normalize(k).includes(q))
+      )
+      .map(([name], index) => ({ id: index + 1, name }))
+      .slice(0, 5);
 
     const types = Array.from(new Set(establishments
       .filter(e => normalize(e.sub_category).includes(q))
       .map(e => e.sub_category)
     )).slice(0, 5);
-
-    const intents = [
-      { id: 1, name: "Restaurantes" },
-      { id: 2, name: "Serviços Públicos" },
-      { id: 3, name: "Saúde" }
-    ].filter(i => normalize(i.name).includes(q));
 
     res.json({ intents, types });
   } catch (error) {

@@ -27,9 +27,13 @@ export const CATEGORIES: Category[] = [
 ];
 
 export const SUB_CATEGORIES: SubCategory[] = [
-  { categoryId: 1, id: 1000, name: "Alimentação (restaurante, lanchonete, pizzaria)" },
+  { categoryId: 1, id: 1000, name: "Restaurante" },
+  { categoryId: 1, id: 1011, name: "Lanchonete" },
+  { categoryId: 1, id: 1012, name: "Pizzaria" },
   { categoryId: 1, id: 1001, name: "Supermercado / Mercado" },
-  { categoryId: 1, id: 1002, name: "Padaria / Açougue / Hortifruti" },
+  { categoryId: 1, id: 1002, name: "Padaria" },
+  { categoryId: 1, id: 1013, name: "Açougue" },
+  { categoryId: 1, id: 1014, name: "Hortifruti" },
   { categoryId: 1, id: 1003, name: "Distribuidora (água, gás, bebidas)" },
   { categoryId: 1, id: 1004, name: "Farmácia" },
   { categoryId: 1, id: 1005, name: "Hospital / Clínica / UPA" },
