@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
-import { getSupabaseAdmin } from "./src/lib/supabase-server";
+import { getSupabaseAdmin } from "./src/lib/supabase-server.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,7 +32,7 @@ console.log(`[Startup] Environment: ${process.env.NODE_ENV}, VERCEL: ${process.e
 if (isSupabaseConfigured) {
   setTimeout(() => {
     console.log("[Startup] Testing Supabase connection...");
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       (async () => {
         try {
@@ -137,7 +137,7 @@ app.get("/api/debug-supabase", async (req, res) => {
     tables: {}
   };
 
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       try {
         const { data: cities, error: cityErr } = await supabase.from('cities').select('*').limit(5);
@@ -171,7 +171,7 @@ app.get("/api/health", async (req, res) => {
 
   if (sUrl && sKey && !sUrl.includes('placeholder')) {
     try {
-      const supabase = getSupabase();
+      const supabase = getSupabaseAdmin();
       // Check if we can connect and what columns exist
       const { data, error } = supabase ? await supabase.from('establishments').select('*').limit(1) : { data: null, error: new Error("Supabase not initialized") };
       if (error) {
@@ -212,11 +212,9 @@ app.get("/api/health", async (req, res) => {
   });
 });
 
-const getSupabase = () => getSupabaseAdmin();
-
 app.get("/api/states", async (req, res) => {
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       const { data, error } = await supabase.from('states').select('*').order('name');
       if (error) throw error;
@@ -232,7 +230,7 @@ app.get("/api/states", async (req, res) => {
 app.get("/api/cities", async (req, res) => {
   const { state_uf } = req.query;
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       let query = supabase.from('cities').select('*, states!inner(uf)');
       if (state_uf) {
@@ -260,7 +258,7 @@ app.get("/api/cities/search", async (req, res) => {
   if (!q) return res.json([]);
   
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       const sanitizedQ = sanitizeSupabaseQuery(q);
       const { data, error } = await supabase
@@ -289,7 +287,7 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
   const { lat, lng } = req.body;
   
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       const { data, error } = await supabase.from('cities').select('*, states(uf)').eq('active', true);
       if (error) throw error;
@@ -441,7 +439,7 @@ app.post("/api/chat", async (req, res) => {
 
 app.get("/api/establishments/featured", async (req, res) => {
   const { city_id } = req.query;
-  const supabase = getSupabase();
+  const supabase = getSupabaseAdmin();
 
   console.log(`[API] Fetching featured for city_id: ${city_id}. Supabase available: ${!!supabase}`);
   
@@ -529,7 +527,7 @@ app.get("/api/search/suggest", async (req, res) => {
   if (!q) return res.json({ intents: [], types: [] });
   
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       // Fetch intents and types from DB
       const { data: intentsData } = await supabase.from('search_intents').select('id, name').ilike('name', `%${q}%`).eq('active', true).limit(5);
@@ -561,7 +559,7 @@ app.get("/api/search", async (req, res) => {
   const rawQ = String(req.query.q || "");
   const q = cleanQuery(rawQ);
   const { city_id, category_id, sub_category } = req.query;
-  const supabase = getSupabase();
+  const supabase = getSupabaseAdmin();
   
   console.log(`[API Search] Query: "${rawQ}" -> Cleaned: "${q}". City: ${city_id}, Category: ${category_id}. Supabase: ${!!supabase}`);
   
@@ -698,7 +696,7 @@ app.get("/api/search", async (req, res) => {
     let cityName = "";
     if (city_id) {
       // Try to find city name in Supabase cities or mock cities
-      const supabase = getSupabase();
+      const supabase = getSupabaseAdmin();
       if (supabase) {
         const { data: cityData } = await supabase.from('cities').select('name').eq('id', Number(city_id)).single();
         if (cityData) cityName = cityData.name;
@@ -759,7 +757,7 @@ app.get("/api/establishments/user/:userId", async (req, res) => {
   }
 
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       const { data, error } = await supabase
         .from('establishments')
@@ -792,7 +790,7 @@ app.put("/api/establishments/:id", async (req, res) => {
   const registration = req.body;
   
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       const { data, error } = await supabase
         .from('establishments')
@@ -848,7 +846,7 @@ app.delete("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
   
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       const { error } = await supabase
         .from('establishments')
@@ -899,7 +897,7 @@ app.post("/api/establishments/register", async (req, res) => {
     );
     */
 
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     if (supabase) {
       let targetCityId = Number(registration.cityId);
 
