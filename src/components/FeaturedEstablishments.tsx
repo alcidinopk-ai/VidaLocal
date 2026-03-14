@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Star, MapPin, Share2, ExternalLink, MessageCircle } from 'lucide-react';
+import { Star, MapPin, Share2, ExternalLink, MessageCircle, Navigation2, Crown, CheckCircle2 } from 'lucide-react';
 import { useCity } from '../contexts/CityContext';
 
 interface Establishment {
@@ -13,6 +13,8 @@ interface Establishment {
   latitude: number;
   longitude: number;
   user_id?: string;
+  is_premium?: boolean;
+  is_verified?: boolean;
 }
 
 export const FeaturedEstablishments = () => {
@@ -99,7 +101,21 @@ export const FeaturedEstablishments = () => {
               </div>
 
               <div className="flex-1">
-                <h4 className="font-bold text-zinc-900 text-sm mb-1 group-hover:text-[#f57c00] transition-colors">{est.name}</h4>
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <h4 className="font-bold text-zinc-900 text-sm group-hover:text-[#f57c00] transition-colors">{est.name}</h4>
+                  {est.is_premium && (
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 bg-orange-500 text-white text-[8px] font-bold rounded-full shadow-sm">
+                      <Crown className="w-2 h-2" />
+                      Premium
+                    </div>
+                  )}
+                  {est.is_verified && (
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500 text-white text-[8px] font-bold rounded-full shadow-sm">
+                      <CheckCircle2 className="w-2 h-2" />
+                      Verificado
+                    </div>
+                  )}
+                </div>
                 <p className="text-[10px] font-bold text-[#00897b] uppercase tracking-wider mb-2">{est.sub_category}</p>
                 <p className="text-xs text-zinc-400 line-clamp-1">{est.address}</p>
                 {est.whatsapp && (
@@ -110,33 +126,44 @@ export const FeaturedEstablishments = () => {
                 )}
               </div>
 
-              <div className="flex items-center gap-2 mt-6 pt-4 border-t border-zinc-50">
+              <div className="flex flex-col gap-2 mt-6 pt-4 border-t border-zinc-50">
                 <a 
-                  href={whatsappUrl}
-                  target={whatsappUrl !== "#" ? "_blank" : undefined}
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${est.latitude},${est.longitude}`}
+                  target="_blank"
                   rel="noopener noreferrer"
-                  onClick={(e) => whatsappUrl === "#" && e.preventDefault()}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-bold transition-all ${
-                    whatsappUrl !== "#" ? "bg-zinc-900 text-white hover:bg-zinc-800" : "bg-zinc-100 text-zinc-400 cursor-not-allowed"
-                  }`}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#f57c00] text-white rounded-xl text-[10px] font-bold hover:bg-[#e65100] transition-all shadow-sm"
                 >
-                  <MessageCircle className="w-3.5 h-3.5" />
-                  WhatsApp
+                  <Navigation2 className="w-3.5 h-3.5" />
+                  Traçar Rota
                 </a>
-                <button 
-                  onClick={() => {
-                    const text = `Confira ${est.name} no VidaLocal!`;
-                    const url = `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`;
-                    if (navigator.share) {
-                      navigator.share({ title: est.name, text, url });
-                    } else {
-                      window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
-                    }
-                  }}
-                  className="p-2.5 rounded-xl bg-zinc-50 text-zinc-400 hover:text-[#f57c00] hover:bg-orange-50 transition-all"
-                >
-                  <Share2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <a 
+                    href={whatsappUrl}
+                    target={whatsappUrl !== "#" ? "_blank" : undefined}
+                    rel="noopener noreferrer"
+                    onClick={(e) => whatsappUrl === "#" && e.preventDefault()}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-bold transition-all ${
+                      whatsappUrl !== "#" ? "bg-zinc-900 text-white hover:bg-zinc-800" : "bg-zinc-100 text-zinc-400 cursor-not-allowed"
+                    }`}
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    WhatsApp
+                  </a>
+                  <button 
+                    onClick={() => {
+                      const text = `Confira ${est.name} no VidaLocal!`;
+                      const url = `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`;
+                      if (navigator.share) {
+                        navigator.share({ title: est.name, text, url });
+                      } else {
+                        window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
+                      }
+                    }}
+                    className="p-2.5 rounded-xl bg-zinc-50 text-zinc-400 hover:text-[#f57c00] hover:bg-orange-50 transition-all"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </motion.div>
           );

@@ -32,6 +32,7 @@ import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { chatWithMaps, ChatMessage, GroundingChunk } from './services/geminiService';
 import { MapDisplay } from './components/MapDisplay';
+import { EstablishmentCard } from './components/EstablishmentCard';
 import { useCity } from './contexts/CityContext';
 import { useAuth } from './contexts/AuthContext';
 import { CitySelectorButton } from './components/CitySelector';
@@ -66,6 +67,19 @@ const IconRenderer = ({ name, color, className }: { name: string; color?: string
   return <IconComponent className={className} style={color ? { color } : {}} />;
 };
 
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c; // Distance in km
+  return d;
+};
+
 export default function App() {
   const { currentCity, isLoading: isCityLoading } = useCity();
   const { user, signOut } = useAuth();
@@ -83,6 +97,8 @@ export default function App() {
   const [allGroundingChunks, setAllGroundingChunks] = useState<GroundingChunk[]>([]);
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+  const [categoryEstablishments, setCategoryEstablishments] = useState<any[]>([]);
+  const [isCategoryLoading, setIsCategoryLoading] = useState(false);
   
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -149,6 +165,7 @@ export default function App() {
             title: est.name,
             categoryId: est.category_id,
             subCategory: est.sub_category,
+            cityId: est.city_id,
             address: est.address,
             hours: est.hours,
             description: est.description,
@@ -156,6 +173,9 @@ export default function App() {
             phone: est.phone,
             whatsapp: est.whatsapp,
             user_id: est.user_id,
+            is_featured: est.is_featured,
+            is_verified: est.is_verified,
+            is_premium: est.is_premium,
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -182,6 +202,18 @@ export default function App() {
     setActiveCategoryId(categoryId);
     setSelectedSubCategory(null);
     setView('subcategories');
+    setIsCategoryLoading(true);
+    
+    fetch(`/api/establishments/category/${categoryId}?city_id=${currentCity.id}`)
+      .then(res => res.json())
+      .then(data => {
+        setCategoryEstablishments(data);
+        setIsCategoryLoading(false);
+      })
+      .catch(err => {
+        console.error("Error fetching category establishments:", err);
+        setIsCategoryLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -283,6 +315,7 @@ export default function App() {
             title: est.name,
             categoryId: est.category_id,
             subCategory: est.sub_category,
+            cityId: est.city_id,
             address: est.address,
             hours: est.hours,
             description: est.description,
@@ -290,6 +323,9 @@ export default function App() {
             phone: est.phone,
             whatsapp: est.whatsapp,
             user_id: est.user_id,
+            is_featured: est.is_featured,
+            is_verified: est.is_verified,
+            is_premium: est.is_premium,
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -609,55 +645,125 @@ export default function App() {
               /* Subcategories Screen */
               <motion.div
                 key="subcategories"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="h-full flex flex-col p-6 sm:p-10"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full flex flex-col bg-zinc-50"
               >
-                <div className="max-w-4xl mx-auto w-full">
+                {/* Blue Header */}
+                <div className="bg-[#1a73e8] px-6 py-8 text-white relative">
                   <button 
                     onClick={handleBackToCategories}
-                    className="mb-8 flex items-center gap-2 text-zinc-500 hover:text-zinc-900 transition-colors font-bold text-sm"
+                    className="absolute top-4 left-4 p-2 rounded-full hover:bg-white/10 transition-colors"
                   >
-                    <X className="w-4 h-4" />
-                    Voltar para Categorias
+                    <X className="w-5 h-5" />
                   </button>
                   
-                  <div className="mb-10">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div 
-                        className="w-3 h-8 rounded-full"
-                        style={{ backgroundColor: CATEGORIES.find(c => c.id === activeCategoryId)?.color }}
-                      />
-                      <h2 className="text-3xl font-bold text-zinc-900 tracking-tight">
-                        {CATEGORIES.find(c => c.id === activeCategoryId)?.name}
-                      </h2>
-                    </div>
-                    <p className="text-zinc-500">Escolha um tipo de estabelecimento para ver no mapa</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {SUB_CATEGORIES.filter(sc => sc.categoryId === activeCategoryId).map((sub) => {
-                      const parentColor = CATEGORIES.find(c => c.id === activeCategoryId)?.color || '#000';
-                      return (
-                        <button
-                          key={sub.id}
-                          onClick={() => handleSubCategoryClick(sub.name)}
-                          style={{ borderColor: parentColor + '20' }}
-                          className="flex items-center justify-between p-4 bg-white border rounded-2xl hover:bg-zinc-50 hover:border-zinc-300 transition-all group"
-                        >
-                          <span className="text-sm font-bold text-zinc-700">{sub.name}</span>
-                          <div 
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                            style={{ backgroundColor: parentColor }}
-                          >
-                            <MapPin className="w-4 h-4" />
-                          </div>
-                        </button>
-                      );
-                    })}
+                  <div className="max-w-4xl mx-auto">
+                    <h2 className="text-3xl font-bold mb-1">
+                      {CATEGORIES.find(c => c.id === activeCategoryId)?.name}
+                    </h2>
+                    <p className="text-blue-100 text-sm">
+                      {CATEGORIES.find(c => c.id === activeCategoryId)?.description || "Encontre o que você precisa nesta categoria"}
+                    </p>
                   </div>
                 </div>
+
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                  <div className="max-w-4xl mx-auto space-y-6">
+                    {/* Filter Card */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-zinc-100">
+                      <h3 className="text-base font-bold text-zinc-900 mb-4">Filtrar por tipo</h3>
+                      
+                      <div className="flex flex-wrap gap-2">
+                        {SUB_CATEGORIES.filter(sc => sc.categoryId === activeCategoryId).map((sub) => (
+                          <button
+                            key={sub.id}
+                            onClick={() => handleSubCategoryClick(sub.name)}
+                            className="px-4 py-1.5 bg-white border border-zinc-200 rounded-full text-xs font-medium text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50 transition-all"
+                          >
+                            {sub.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Results Count */}
+                    <div className="px-2">
+                      <span className="text-sm font-medium text-zinc-500">
+                        {isCategoryLoading ? "Carregando..." : `${categoryEstablishments.length} estabelecimentos encontrados`}
+                      </span>
+                    </div>
+
+                    {/* Establishments List */}
+                    <div className="space-y-4 pb-20">
+                      {isCategoryLoading ? (
+                        <div className="flex flex-col items-center justify-center py-12">
+                          <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-4" />
+                          <p className="text-sm text-zinc-400">Buscando locais...</p>
+                        </div>
+                      ) : categoryEstablishments.length > 0 ? (
+                        categoryEstablishments.map((est) => {
+                          const chunk: GroundingChunk = {
+                            maps: {
+                              id: est.id,
+                              title: est.name,
+                              uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
+                              location: {
+                                latitude: est.latitude,
+                                longitude: est.longitude
+                              },
+                              phone: est.phone,
+                              whatsapp: est.whatsapp,
+                              rating: est.rating,
+                              address: est.address,
+                              categoryId: est.category_id,
+                              subCategory: est.sub_category,
+                              cityId: est.city_id,
+                              is_featured: est.is_featured,
+                              is_verified: est.is_verified,
+                              is_premium: est.is_premium
+                            }
+                          };
+                          
+                          let distStr = "---";
+                          if (location) {
+                            const dist = calculateDistance(
+                              location.latitude,
+                              location.longitude,
+                              est.latitude,
+                              est.longitude
+                            );
+                            distStr = dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1)} km`;
+                          }
+
+                          return (
+                            <EstablishmentCard 
+                              key={est.id}
+                              chunk={chunk}
+                              distance={distStr}
+                              userLocation={location}
+                              isRealLocation={isRealLocation}
+                            />
+                          );
+                        })
+                      ) : (
+                        <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-zinc-200">
+                          <p className="text-sm text-zinc-400">Nenhum estabelecimento encontrado nesta categoria.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Floating Action Button for Suggesting Local */}
+                <button
+                  onClick={() => user ? setIsRegisterModalOpen(true) : setIsAuthModalOpen(true)}
+                  className="fixed bottom-6 right-6 w-14 h-14 bg-[#00897b] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50"
+                  title="Sugira um Local"
+                >
+                  <Plus className="w-6 h-6" />
+                </button>
               </motion.div>
             ) : (
               /* Chat / Results Screen */

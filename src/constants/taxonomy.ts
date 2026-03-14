@@ -3,6 +3,7 @@ export interface Category {
   name: string;
   color: string;
   icon: string;
+  description?: string;
 }
 
 export interface SubCategory {
@@ -12,18 +13,18 @@ export interface SubCategory {
 }
 
 export const CATEGORIES: Category[] = [
-  { id: 1, name: "Essencial", color: "#ef4444", icon: "Heart" },
-  { id: 2, name: "Segurança, Tecnologia e Suporte", color: "#3b82f6", icon: "ShieldCheck" },
-  { id: 3, name: "Órgãos Públicos & Instituições", color: "#10b981", icon: "Building2" },
-  { id: 4, name: "Beleza e Estética", color: "#ec4899", icon: "Sparkles" },
-  { id: 5, name: "Pet Shop", color: "#f59e0b", icon: "Dog" },
-  { id: 6, name: "Automotivo", color: "#6b7280", icon: "Car" },
-  { id: 7, name: "Casa e Construção", color: "#8b5cf6", icon: "Home" },
-  { id: 8, name: "Serviços Profissionais", color: "#06b6d4", icon: "Briefcase" },
-  { id: 9, name: "Social e Comunidade", color: "#f97316", icon: "Users" },
-  { id: 10, name: "Desenvolvimento Pessoal", color: "#84cc16", icon: "GraduationCap" },
-  { id: 11, name: "Mobilidade Urbana", color: "#6366f1", icon: "MapPin" },
-  { id: 12, name: "Comércio & Varejo", color: "#d946ef", icon: "ShoppingBag" },
+  { id: 1, name: "Essencial", color: "#ef4444", icon: "Heart", description: "Restaurantes, farmácias e serviços básicos" },
+  { id: 2, name: "Segurança, Tecnologia e Suporte", color: "#3b82f6", icon: "ShieldCheck", description: "TI, segurança eletrônica e assistência técnica" },
+  { id: 3, name: "Órgãos Públicos & Instituições", color: "#10b981", icon: "Building2", description: "Prefeituras, fóruns e serviços governamentais" },
+  { id: 4, name: "Beleza e Estética", color: "#ec4899", icon: "Sparkles", description: "Salões, barbearias e centros de estética" },
+  { id: 5, name: "Pet Shop", color: "#f59e0b", icon: "Dog", description: "Clínicas veterinárias e pet shops" },
+  { id: 6, name: "Automotivo", color: "#6b7280", icon: "Car", description: "Oficinas, postos e serviços veiculares" },
+  { id: 7, name: "Casa e Construção", color: "#8b5cf6", icon: "Home", description: "Materiais de construção e serviços domésticos" },
+  { id: 8, name: "Serviços Profissionais", color: "#06b6d4", icon: "Briefcase", description: "Advocacia, contabilidade e consultoria" },
+  { id: 9, name: "Social e Comunidade", color: "#f97316", icon: "Users", description: "Igrejas, esportes e eventos" },
+  { id: 10, name: "Desenvolvimento Pessoal", color: "#84cc16", icon: "GraduationCap", description: "Escolas, universidades e cursos" },
+  { id: 11, name: "Mobilidade Urbana", color: "#6366f1", icon: "MapPin", description: "Táxis, ônibus e transporte em geral" },
+  { id: 12, name: "Comércio & Varejo", color: "#d946ef", icon: "ShoppingBag", description: "Lojas, shoppings e comércio local" },
 ];
 
 export const SUB_CATEGORIES: SubCategory[] = [

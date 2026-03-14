@@ -67,6 +67,9 @@ CREATE TABLE IF NOT EXISTS establishments (
   user_id UUID,
   rating DOUBLE PRECISION DEFAULT 5.0,
   status TEXT DEFAULT 'pending', -- pending, approved, rejected
+  is_featured BOOLEAN DEFAULT FALSE,
+  is_verified BOOLEAN DEFAULT FALSE,
+  is_premium BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -81,9 +84,19 @@ INSERT INTO states (name, uf) VALUES
 ('Distrito Federal', 'DF')
 ON CONFLICT (uf) DO NOTHING;
 
--- Cities (Example for Gurupi)
+-- Cities (Example for Gurupi, Palmas and Araguaína)
 INSERT INTO cities (state_id, name, slug, active, latitude, longitude, population)
 SELECT id, 'Gurupi', 'gurupi', true, -11.7298, -49.0678, 87593
+FROM states WHERE uf = 'TO'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO cities (state_id, name, slug, active, latitude, longitude, population)
+SELECT id, 'Palmas', 'palmas', true, -10.1844, -48.3336, 306296
+FROM states WHERE uf = 'TO'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO cities (state_id, name, slug, active, latitude, longitude, population)
+SELECT id, 'Araguaína', 'araguaina', true, -7.1925, -48.2078, 183381
 FROM states WHERE uf = 'TO'
 ON CONFLICT DO NOTHING;
 
@@ -193,6 +206,39 @@ SELECT 'IFTO - Campus Gurupi', 10, 'Universidade / Instituto Federal', 'Alameda 
 SELECT 'Ponto de Táxi Rodoviária', 11, 'Táxi / Motorista de Aplicativo', 'Rodoviária de Gurupi, Gurupi - TO', NULL, NULL, 4.3, 'approved', id, -11.7420, -49.0780, 'Serviço de táxi disponível 24h na rodoviária.' FROM cities WHERE slug = 'gurupi' UNION ALL
 SELECT 'Lojas Novo Mundo', 12, 'Móveis / Eletrodomésticos / Eletrônicos', 'Av. Goiás, 1300, Centro, Gurupi - TO', '6333125050', NULL, 4.2, 'approved', id, -11.7280, -49.0670, 'Eletrodomésticos, móveis e tecnologia para sua casa.' FROM cities WHERE slug = 'gurupi' UNION ALL
 SELECT 'Magazine Luiza', 12, 'Shopping / Loja de Departamento / Outlet', 'Av. Goiás, 1400, Centro, Gurupi - TO', '6333126060', NULL, 4.4, 'approved', id, -11.7290, -49.0680, 'Vem ser feliz no Magalu de Gurupi.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Supermercado Quartetto', 1, 'Supermercado / Mercado', 'Av. Goiás, 1800, Centro, Gurupi - TO', '6333154400', NULL, 4.7, 'approved', id, -11.7315, -49.0685, 'Qualidade e variedade no coração de Gurupi.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Drogaria Globo', 1, 'Farmácia', 'Av. Goiás, 1250, Centro, Gurupi - TO', '6333122030', NULL, 4.6, 'approved', id, -11.7275, -49.0665, 'Atendimento farmacêutico completo e preços competitivos.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Mercado Municipal de Gurupi', 1, 'Supermercado / Mercado', 'Av. Goiás, 1000, Centro, Gurupi - TO', '6333150000', NULL, 4.4, 'approved', id, -11.7255, -49.0645, 'Produtos regionais frescos e tradicionais.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Supermercado Campelo', 1, 'Supermercado / Mercado', 'Av. Maranhão, 2200, Centro, Gurupi - TO', '6333124400', NULL, 4.8, 'approved', id, -11.7335, -49.0705, 'Tradição em servir bem a família gurupiense.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Farmácia Biofórmula', 1, 'Farmácia', 'Av. Maranhão, 1300, Centro, Gurupi - TO', '6333121100', NULL, 4.9, 'approved', id, -11.7280, -49.0670, 'Manipulação e medicamentos com rigor técnico.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Açougue Central', 1, 'Açougue', 'Av. Maranhão, 1100, Centro, Gurupi - TO', '6333123300', NULL, 4.5, 'approved', id, -11.7265, -49.0655, 'Carnes frescas e selecionadas diariamente.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Hospital Unimed Gurupi', 3, 'Hospital / Clínica / UPA', 'Av. Pará, 2500, Gurupi - TO', '6333112000', NULL, 4.7, 'approved', id, -11.7345, -49.0735, 'Atendimento médico hospitalar de alta qualidade.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Drogaria Rosário', 1, 'Farmácia', 'Av. Pará, 1800, Centro, Gurupi - TO', '6333125500', NULL, 4.5, 'approved', id, -11.7310, -49.0695, 'Sua saúde em boas mãos com a Drogaria Rosário.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Supermercado Supercom', 1, 'Supermercado / Mercado', 'Av. Pará, 1200, Centro, Gurupi - TO', '6333126600', NULL, 4.3, 'approved', id, -11.7285, -49.0665, 'Preço baixo e economia para o seu dia a dia.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Farmácia do Trabalhador', 1, 'Farmácia', 'Av. Piauí, 1400, Centro, Gurupi - TO', '6333127700', NULL, 4.6, 'approved', id, -11.7295, -49.0685, 'Medicamentos éticos e genéricos com o melhor preço.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Mini Mercado Piauí', 1, 'Supermercado / Mercado', 'Av. Piauí, 1600, Centro, Gurupi - TO', '6333128800', NULL, 4.2, 'approved', id, -11.7305, -49.0695, 'Conveniência e rapidez nas suas compras.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Drogaria Popular', 1, 'Farmácia', 'Av. Mato Grosso, 1100, Centro, Gurupi - TO', '6333129900', NULL, 4.4, 'approved', id, -11.7275, -49.0655, 'Atendimento humanizado e variedade em perfumaria.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Mercearia Mato Grosso', 1, 'Supermercado / Mercado', 'Av. Mato Grosso, 1300, Centro, Gurupi - TO', '6333120011', NULL, 4.1, 'approved', id, -11.7285, -49.0665, 'Produtos de mercearia e utilidades domésticas.' FROM cities WHERE slug = 'gurupi' UNION ALL
+-- Alimentação
+SELECT 'Churrascaria do Gaúcho', 1, 'Restaurante', 'Av. Goiás, 2200, Centro, Gurupi - TO', '6333121515', NULL, 4.7, 'approved', id, -11.7330, -49.0695, 'O melhor rodízio de carnes de Gurupi.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Lanchonete do Ponto', 1, 'Lanchonete', 'Av. Maranhão, 1400, Centro, Gurupi - TO', '6333122525', NULL, 4.5, 'approved', id, -11.7285, -49.0675, 'Salgados fritos e assados na hora.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Pizzaria Di Napoli', 1, 'Pizzaria', 'Av. Pará, 1600, Centro, Gurupi - TO', '6333123535', NULL, 4.8, 'approved', id, -11.7305, -49.0685, 'Pizzas tradicionais com borda recheada.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Restaurante Sabor de Minas', 1, 'Restaurante', 'Av. Piauí, 1200, Centro, Gurupi - TO', '6333124545', NULL, 4.6, 'approved', id, -11.7275, -49.0665, 'Comida mineira autêntica no fogão a lenha.' FROM cities WHERE slug = 'gurupi' UNION ALL
+-- Serviços Automotivos
+SELECT 'Posto Petrobras', 6, 'Posto de Combustível', 'Av. Goiás, 2800, Gurupi - TO', '6333125656', NULL, 4.4, 'approved', id, -11.7380, -49.0720, 'Combustível de confiança e troca de óleo.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Oficina do Alemão', 6, 'Oficina / Centro Automotivo', 'Av. Maranhão, 2800, Setor Industrial, Gurupi - TO', '6333126767', NULL, 4.7, 'approved', id, -11.7370, -49.0740, 'Especialista em injeção eletrônica e mecânica geral.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Gurupi Autopeças', 6, 'Oficina / Centro Automotivo', 'Av. Pará, 3000, Gurupi - TO', '6333127878', NULL, 4.5, 'approved', id, -11.7420, -49.0780, 'Peças para veículos nacionais e importados.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Posto Ipiranga', 6, 'Posto de Combustível', 'Av. Piauí, 2000, Gurupi - TO', '6333128989', NULL, 4.3, 'approved', id, -11.7350, -49.0710, 'Conveniência AM/PM e combustível de qualidade.' FROM cities WHERE slug = 'gurupi' UNION ALL
+-- Lazer e Bem-estar
+SELECT 'Academia Corpo e Mente', 9, 'Clube / Academia / Quadra', 'Av. Goiás, 3200, Gurupi - TO', '6333129090', NULL, 4.8, 'approved', id, -11.7410, -49.0740, 'Musculação, funcional e artes marciais.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Parque Mutuca', 9, 'Parques', 'Av. Beira Rio, Gurupi - TO', NULL, NULL, 4.9, 'approved', id, -11.7300, -49.0600, 'O principal ponto de encontro e lazer de Gurupi.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Igreja Presbiteriana de Gurupi', 9, 'Igrejas / Templos / Comunidades Religiosas', 'Av. Maranhão, 1600, Centro, Gurupi - TO', '6333120101', NULL, 4.7, 'approved', id, -11.7305, -49.0685, 'Comunidade cristã reformada.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Clube da OAB Gurupi', 9, 'Clube / Academia / Quadra', 'Av. Mato Grosso, Gurupi - TO', NULL, NULL, 4.6, 'approved', id, -11.7450, -49.0800, 'Lazer e esportes para advogados e convidados.' FROM cities WHERE slug = 'gurupi' UNION ALL
+-- Educação
+SELECT 'Colégio Objetivo Gurupi', 10, 'Escola (infantil ao médio)', 'Av. Goiás, 1100, Centro, Gurupi - TO', '6333121212', NULL, 4.8, 'approved', id, -11.7270, -49.0660, 'Ensino de qualidade do infantil ao pré-vestibular.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Faculdade Unicamps', 10, 'Universidade / Instituto Federal', 'Av. Maranhão, 2000, Gurupi - TO', '6333122323', NULL, 4.5, 'approved', id, -11.7320, -49.0700, 'Cursos superiores e pós-graduação.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Escola Estadual Costa e Silva', 10, 'Escola (infantil ao médio)', 'Av. Pará, Centro, Gurupi - TO', '6333123434', NULL, 4.3, 'approved', id, -11.7330, -49.0720, 'Educação pública tradicional em Gurupi.' FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'CNA Inglês e Espanhol', 10, 'Escola de Idiomas', 'Av. Piauí, 1500, Centro, Gurupi - TO', '6333124545', NULL, 4.9, 'approved', id, -11.7300, -49.0690, 'Aprenda um novo idioma com metodologia dinâmica.' FROM cities WHERE slug = 'gurupi' UNION ALL
 -- Palmas Establishments
 SELECT 'Hospital Geral de Palmas (HGP)', 3, 'Hospital / Clínica / UPA', 'NS 01, Qd. 201 Sul, Palmas - TO', '6332187800', NULL, 4.2, 'approved', id, -10.1950, -48.3330, 'Principal hospital público do estado do Tocantins.' FROM cities WHERE slug = 'palmas' UNION ALL
 SELECT 'Capim Dourado Shopping', 12, 'Shopping / Loja de Departamento / Outlet', 'Qd. 107 Norte, NS 05, Palmas - TO', '6332129500', NULL, 4.7, 'approved', id, -10.1750, -48.3350, 'O maior shopping center do Tocantins com cinema e praça de alimentação.' FROM cities WHERE slug = 'palmas' UNION ALL
@@ -200,11 +246,18 @@ SELECT 'UFT - Campus Palmas', 10, 'Universidade / Instituto Federal', 'Qd. 109 N
 SELECT 'Palácio Araguaia', 3, 'Prefeitura / Câmara / Secretarias', 'Praça dos Girassóis, Palmas - TO', NULL, NULL, 4.8, 'approved', id, -10.1840, -48.3330, 'Sede do Governo do Estado do Tocantins.' FROM cities WHERE slug = 'palmas' UNION ALL
 SELECT 'Supermercado Quartetto', 1, 'Supermercado / Mercado', 'Qd. 204 Sul, Av. LO 05, Palmas - TO', '6332154400', NULL, 4.5, 'approved', id, -10.1980, -48.3300, 'Rede de supermercados tocantinense com produtos de qualidade.' FROM cities WHERE slug = 'palmas' UNION ALL
 SELECT 'Praia da Graciosa', 9, 'Parques', 'Orla de Palmas, Palmas - TO', NULL, NULL, 4.7, 'approved', id, -10.1850, -48.3650, 'Principal ponto turístico e de lazer de Palmas às margens do Lago.' FROM cities WHERE slug = 'palmas' UNION ALL
+SELECT 'Palmas Shopping', 12, 'Shopping / Loja de Departamento / Outlet', 'Qd. 101 Sul, Av. LO 01, Palmas - TO', '6332212000', NULL, 4.5, 'approved', id, -10.1880, -48.3300, 'Shopping center tradicional no centro de Palmas.' FROM cities WHERE slug = 'palmas' UNION ALL
+SELECT 'Restaurante Cabana do Lago', 1, 'Restaurante', 'Qd. 103 Sul, Rua LO 01, Palmas - TO', '6332154321', NULL, 4.8, 'approved', id, -10.1860, -48.3310, 'Culinária regional e peixes do Tocantins.' FROM cities WHERE slug = 'palmas' UNION ALL
+SELECT 'Farmácia Pague Menos', 1, 'Farmácia', 'Av. JK, Qd. 104 Sul, Palmas - TO', '6332151010', NULL, 4.6, 'approved', id, -10.1830, -48.3340, 'Farmácia com grande variedade e atendimento 24h.' FROM cities WHERE slug = 'palmas' UNION ALL
+SELECT 'Hotel Girassol Plaza', 1, 'Hospedagem (hotel, pousada, temporada)', 'Qd. 101 Norte, NS 01, Palmas - TO', '6332120700', NULL, 4.7, 'approved', id, -10.1760, -48.3320, 'Hotel de alto padrão no centro de Palmas.' FROM cities WHERE slug = 'palmas' UNION ALL
 -- Araguaína Establishments
 SELECT 'Hospital Regional de Araguaína', 3, 'Hospital / Clínica / UPA', 'Av. Dom Emanuel, Araguaína - TO', '6334112600', NULL, 4.0, 'approved', id, -7.1900, -48.2050, 'Atendimento hospitalar de referência no norte do estado.' FROM cities WHERE slug = 'araguaina' UNION ALL
 SELECT 'Via Lago', 9, 'Parques', 'Av. Via Lago, Araguaína - TO', NULL, NULL, 4.9, 'approved', id, -7.1850, -48.1950, 'Cartão postal de Araguaína, ideal para caminhadas e lazer.' FROM cities WHERE slug = 'araguaina' UNION ALL
 SELECT 'UFNT - Campus Araguaína', 10, 'Universidade / Instituto Federal', 'Rua Paraguai, Araguaína - TO', '6334165600', NULL, 4.5, 'approved', id, -7.1950, -48.2150, 'Universidade Federal do Norte do Tocantins.' FROM cities WHERE slug = 'araguaina' UNION ALL
 SELECT 'Araguaína Park Shopping', 12, 'Shopping / Loja de Departamento / Outlet', 'Av. Bernardo Sayão, Araguaína - TO', '6334115500', NULL, 4.6, 'approved', id, -7.2100, -48.2250, 'Shopping center com diversas lojas e opções de lazer.' FROM cities WHERE slug = 'araguaina' UNION ALL
 SELECT 'Supermercado Campelo', 1, 'Supermercado / Mercado', 'Av. Filadélfia, Araguaína - TO', '6334117000', NULL, 4.7, 'approved', id, -7.1880, -48.2020, 'Tradição e qualidade em supermercado em Araguaína.' FROM cities WHERE slug = 'araguaina' UNION ALL
-SELECT 'Rodoviária de Araguaína', 11, 'Transporte Público (ônibus)', 'Av. Filadélfia, Araguaína - TO', NULL, NULL, 4.1, 'approved', id, -7.1920, -48.2080, 'Terminal rodoviário de passageiros de Araguaína.' FROM cities WHERE slug = 'araguaina'
+SELECT 'Rodoviária de Araguaína', 11, 'Transporte Público (ônibus)', 'Av. Filadélfia, Araguaína - TO', NULL, NULL, 4.1, 'approved', id, -7.1920, -48.2080, 'Terminal rodoviário de passageiros de Araguaína.' FROM cities WHERE slug = 'araguaina' UNION ALL
+SELECT 'Restaurante Tio Patinhas', 1, 'Restaurante', 'Av. Prefeito João de Sousa Lima, Araguaína - TO', '6334141234', NULL, 4.5, 'approved', id, -7.1890, -48.2060, 'Restaurante tradicional com buffet variado.' FROM cities WHERE slug = 'araguaina' UNION ALL
+SELECT 'Premier Hotel', 1, 'Hospedagem (hotel, pousada, temporada)', 'Av. Bernardo Sayão, Araguaína - TO', '6334113000', NULL, 4.6, 'approved', id, -7.2050, -48.2200, 'Conforto e praticidade para sua estadia em Araguaína.' FROM cities WHERE slug = 'araguaina' UNION ALL
+SELECT 'Colégio Santa Cruz', 10, 'Escola (infantil ao médio)', 'Av. Dom Emanuel, Araguaína - TO', '6334114455', NULL, 4.8, 'approved', id, -7.1910, -48.2040, 'Instituição de ensino tradicional em Araguaína.' FROM cities WHERE slug = 'araguaina'
 ON CONFLICT DO NOTHING;

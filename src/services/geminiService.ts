@@ -12,6 +12,7 @@ export interface GroundingChunk {
     uri: string;
     title: string;
     categoryId?: number;
+    cityId?: number;
     subCategory?: string;
     address?: string;
     hours?: string;
@@ -19,10 +20,14 @@ export interface GroundingChunk {
     phone?: string;
     whatsapp?: string;
     user_id?: string;
+    is_featured?: boolean;
+    is_verified?: boolean;
+    is_premium?: boolean;
     location?: {
       latitude: number;
       longitude: number;
     };
+    rating?: string | number;
   };
   web?: {
     uri: string;

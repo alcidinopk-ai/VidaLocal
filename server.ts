@@ -95,18 +95,21 @@ interface Establishment {
   description?: string;
   user_id?: string;
   status?: string;
+  is_featured?: boolean;
+  is_verified?: boolean;
+  is_premium?: boolean;
   created_at?: string;
 }
 
 let establishments: Establishment[] = [
-  { id: "e1", name: "Espetinho do Adão B13", category_id: 1, sub_category: "Espetinho", address: "Av. Goiás, 1438, Centro, Gurupi - TO", city_id: 1, latitude: -11.7289, longitude: -49.0692, rating: 4.8, whatsapp: "63984551234", phone: "6333121234", description: "O melhor espetinho da região com acompanhamentos tradicionais.", status: 'approved' },
-  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Restaurante", address: "Av. Maranhão, 1245, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455", phone: "6333124455", description: "Comida caseira, lanches e sobremesas feitas com carinho.", status: 'approved' },
+  { id: "e1", name: "Espetinho do Adão B13", category_id: 1, sub_category: "Espetinho", address: "Av. Goiás, 1438, Centro, Gurupi - TO", city_id: 1, latitude: -11.7289, longitude: -49.0692, rating: 4.8, whatsapp: "63984551234", phone: "6333121234", description: "O melhor espetinho da região com acompanhamentos tradicionais.", status: 'approved', is_featured: true, is_verified: true, is_premium: true },
+  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Restaurante", address: "Av. Maranhão, 1245, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455", phone: "6333124455", description: "Comida caseira, lanches e sobremesas feitas com carinho.", status: 'approved', is_featured: true, is_verified: true, is_premium: false },
   { id: "e3", name: "Mecânica do Neném", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Maranhão, 2560, Setor Industrial, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0720, rating: 4.5, whatsapp: "63984112233", phone: "6333121122", description: "Manutenção preventiva e corretiva para seu veículo com confiança.", status: 'approved' },
   { id: "e4", name: "Pet Shop Amigão", category_id: 5, sub_category: "Pet Shop (varejo)", address: "Av. Goiás, 2100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0685, rating: 4.7, whatsapp: "63999887766", phone: "6333128877", description: "Tudo para o seu pet: rações, acessórios e banho e tosa.", status: 'approved' },
-  { id: "e5", name: "Pizzaria Bella Italia", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7295, longitude: -49.0670, rating: 4.6, whatsapp: "63992112233", phone: "6333129988", description: "Pizzas artesanais com massa fina e ingredientes selecionados.", status: 'approved' },
+  { id: "e5", name: "Pizzaria Bella Italia", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7295, longitude: -49.0670, rating: 4.6, whatsapp: "63992112233", phone: "6333129988", description: "Pizzas artesanais com massa fina e ingredientes selecionados.", status: 'approved', is_featured: true, is_verified: true, is_premium: true },
   { id: "e6", name: "Farmácia Preço Baixo", category_id: 1, sub_category: "Farmácia", address: "Rua 5, 800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7310, longitude: -49.0695, rating: 4.4, whatsapp: "63992445566", phone: "6333127766", description: "Medicamentos e perfumaria com os melhores preços da cidade.", status: 'approved' },
   { id: "e7", name: "Supermercado Araguaia", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Goiás, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7260, longitude: -49.0650, rating: 4.3, whatsapp: "63992556677", phone: "6333126655", description: "Variedade em hortifruti, açougue e mercearia para sua família.", status: 'approved' },
-  { id: "e8", name: "Barbearia do Zé", category_id: 4, sub_category: "Salão de Beleza / Barbearia", address: "Rua 3, 450, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0680, rating: 4.9, whatsapp: "63992667788", phone: "6333125544", description: "Corte de cabelo e barba com estilo e atendimento personalizado.", status: 'approved' },
+  { id: "e8", name: "Barbearia do Zé", category_id: 4, sub_category: "Salão de Beleza / Barbearia", address: "Rua 3, 450, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0680, rating: 4.9, whatsapp: "63992667788", phone: "6333125544", description: "Corte de cabelo e barba com estilo e atendimento personalizado.", status: 'approved', is_featured: true, is_verified: true, is_premium: false },
   { id: "e9", name: "Clínica Veterinária Vida", category_id: 5, sub_category: "Clínica Veterinária", address: "Av. Maranhão, 3000, Gurupi - TO", city_id: 1, latitude: -11.7380, longitude: -49.0750, rating: 4.8, whatsapp: "63992778899", phone: "6333124433", description: "Cuidado completo para a saúde do seu animal de estimação.", status: 'approved' },
   { id: "e10", name: "Posto Central", category_id: 6, sub_category: "Posto de Combustível", address: "Av. Goiás, 500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7250, longitude: -49.0640, rating: 4.2, whatsapp: "63992889900", phone: "6333123322", description: "Combustível de qualidade e conveniência 24 horas.", status: 'approved' },
   { id: "e11", name: "Restaurante Popular", category_id: 1, sub_category: "Restaurante", address: "Av. Maranhão, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0680, rating: 4.5, whatsapp: "63992990011", phone: "6333122211", description: "Almoço self-service com grande variedade e preço justo.", status: 'approved' },
@@ -137,6 +140,39 @@ let establishments: Establishment[] = [
   { id: "e36", name: "Ponto de Táxi Rodoviária", category_id: 11, sub_category: "Táxi / Motorista de Aplicativo", address: "Rodoviária de Gurupi, Gurupi - TO", city_id: 1, latitude: -11.7420, longitude: -49.0780, rating: 4.3, description: "Serviço de táxi disponível 24h na rodoviária.", status: 'approved' },
   { id: "e37", name: "Lojas Novo Mundo", category_id: 12, sub_category: "Móveis / Eletrodomésticos / Eletrônicos", address: "Av. Goiás, 1300, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0670, rating: 4.2, phone: "6333125050", description: "Eletrodomésticos, móveis e tecnologia para sua casa.", status: 'approved' },
   { id: "e38", name: "Magazine Luiza", category_id: 12, sub_category: "Shopping / Loja de Departamento / Outlet", address: "Av. Goiás, 1400, Centro, Gurupi - TO", city_id: 1, latitude: -11.7290, longitude: -49.0680, rating: 4.4, phone: "6333126060", description: "Vem ser feliz no Magalu de Gurupi.", status: 'approved' },
+  { id: "e39", name: "Supermercado Quartetto", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Goiás, 1800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7315, longitude: -49.0685, rating: 4.7, phone: "6333154400", description: "Qualidade e variedade no coração de Gurupi.", status: 'approved' },
+  { id: "e40", name: "Drogaria Globo", category_id: 1, sub_category: "Farmácia", address: "Av. Goiás, 1250, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0665, rating: 4.6, phone: "6333122030", description: "Atendimento farmacêutico completo e preços competitivos.", status: 'approved' },
+  { id: "e41", name: "Mercado Municipal de Gurupi", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Goiás, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7255, longitude: -49.0645, rating: 4.4, phone: "6333150000", description: "Produtos regionais frescos e tradicionais.", status: 'approved' },
+  { id: "e42", name: "Supermercado Campelo", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Maranhão, 2200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7335, longitude: -49.0705, rating: 4.8, phone: "6333124400", description: "Tradição em servir bem a família gurupiense.", status: 'approved' },
+  { id: "e43", name: "Farmácia Biofórmula", category_id: 1, sub_category: "Farmácia", address: "Av. Maranhão, 1300, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0670, rating: 4.9, phone: "6333121100", description: "Manipulação e medicamentos com rigor técnico.", status: 'approved' },
+  { id: "e44", name: "Açougue Central", category_id: 1, sub_category: "Açougue", address: "Av. Maranhão, 1100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7265, longitude: -49.0655, rating: 4.5, phone: "6333123300", description: "Carnes frescas e selecionadas diariamente.", status: 'approved' },
+  { id: "e45", name: "Hospital Unimed Gurupi", category_id: 3, sub_category: "Hospital / Clínica / UPA", address: "Av. Pará, 2500, Gurupi - TO", city_id: 1, latitude: -11.7345, longitude: -49.0735, rating: 4.7, phone: "6333112000", description: "Atendimento médico hospitalar de alta qualidade.", status: 'approved' },
+  { id: "e46", name: "Drogaria Rosário", category_id: 1, sub_category: "Farmácia", address: "Av. Pará, 1800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7310, longitude: -49.0695, rating: 4.5, phone: "6333125500", description: "Sua saúde em boas mãos com a Drogaria Rosário.", status: 'approved' },
+  { id: "e47", name: "Supermercado Supercom", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Pará, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0665, rating: 4.3, phone: "6333126600", description: "Preço baixo e economia para o seu dia a dia.", status: 'approved' },
+  { id: "e48", name: "Farmácia do Trabalhador", category_id: 1, sub_category: "Farmácia", address: "Av. Piauí, 1400, Centro, Gurupi - TO", city_id: 1, latitude: -11.7295, longitude: -49.0685, rating: 4.6, phone: "6333127700", description: "Medicamentos éticos e genéricos com o melhor preço.", status: 'approved' },
+  { id: "e49", name: "Mini Mercado Piauí", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Piauí, 1600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7305, longitude: -49.0695, rating: 4.2, phone: "6333128800", description: "Conveniência e rapidez nas suas compras.", status: 'approved' },
+  { id: "e50", name: "Drogaria Popular", category_id: 1, sub_category: "Farmácia", address: "Av. Mato Grosso, 1100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0655, rating: 4.4, phone: "6333129900", description: "Atendimento humanizado e variedade em perfumaria.", status: 'approved' },
+  { id: "e51", name: "Mercearia Mato Grosso", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Mato Grosso, 1300, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0665, rating: 4.1, phone: "6333120011", description: "Produtos de mercearia e utilidades domésticas.", status: 'approved' },
+  // Alimentação
+  { id: "e52", name: "Churrascaria do Gaúcho", category_id: 1, sub_category: "Restaurante", address: "Av. Goiás, 2200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7330, longitude: -49.0695, rating: 4.7, phone: "6333121515", description: "O melhor rodízio de carnes de Gurupi.", status: 'approved' },
+  { id: "e53", name: "Lanchonete do Ponto", category_id: 1, sub_category: "Lanchonete", address: "Av. Maranhão, 1400, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0675, rating: 4.5, phone: "6333122525", description: "Salgados fritos e assados na hora.", status: 'approved' },
+  { id: "e54", name: "Pizzaria Di Napoli", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 1600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7305, longitude: -49.0685, rating: 4.8, phone: "6333123535", description: "Pizzas tradicionais com borda recheada.", status: 'approved' },
+  { id: "e55", name: "Restaurante Sabor de Minas", category_id: 1, sub_category: "Restaurante", address: "Av. Piauí, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0665, rating: 4.6, phone: "6333124545", description: "Comida mineira autêntica no fogão a lenha.", status: 'approved' },
+  // Serviços Automotivos
+  { id: "e56", name: "Posto Petrobras", category_id: 6, sub_category: "Posto de Combustível", address: "Av. Goiás, 2800, Gurupi - TO", city_id: 1, latitude: -11.7380, longitude: -49.0720, rating: 4.4, phone: "6333125656", description: "Combustível de confiança e troca de óleo.", status: 'approved' },
+  { id: "e57", name: "Oficina do Alemão", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Maranhão, 2800, Setor Industrial, Gurupi - TO", city_id: 1, latitude: -11.7370, longitude: -49.0740, rating: 4.7, phone: "6333126767", description: "Especialista em injeção eletrônica e mecânica geral.", status: 'approved' },
+  { id: "e58", name: "Gurupi Autopeças", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Pará, 3000, Gurupi - TO", city_id: 1, latitude: -11.7420, longitude: -49.0780, rating: 4.5, phone: "6333127878", description: "Peças para veículos nacionais e importados.", status: 'approved' },
+  { id: "e59", name: "Posto Ipiranga", category_id: 6, sub_category: "Posto de Combustível", address: "Av. Piauí, 2000, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0710, rating: 4.3, phone: "6333128989", description: "Conveniência AM/PM e combustível de qualidade.", status: 'approved' },
+  // Lazer e Bem-estar
+  { id: "e60", name: "Academia Corpo e Mente", category_id: 9, sub_category: "Clube / Academia / Quadra", address: "Av. Goiás, 3200, Gurupi - TO", city_id: 1, latitude: -11.7410, longitude: -49.0740, rating: 4.8, phone: "6333129090", description: "Musculação, funcional e artes marciais.", status: 'approved' },
+  { id: "e61", name: "Parque Mutuca", category_id: 9, sub_category: "Parques", address: "Av. Beira Rio, Gurupi - TO", city_id: 1, latitude: -11.7300, longitude: -49.0600, rating: 4.9, description: "O principal ponto de encontro e lazer de Gurupi.", status: 'approved' },
+  { id: "e62", name: "Igreja Presbiteriana de Gurupi", category_id: 9, sub_category: "Igrejas / Templos / Comunidades Religiosas", address: "Av. Maranhão, 1600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7305, longitude: -49.0685, rating: 4.7, phone: "6333120101", description: "Comunidade cristã reformada.", status: 'approved' },
+  { id: "e63", name: "Clube da OAB Gurupi", category_id: 9, sub_category: "Clube / Academia / Quadra", address: "Av. Mato Grosso, Gurupi - TO", city_id: 1, latitude: -11.7450, longitude: -49.0800, rating: 4.6, description: "Lazer e esportes para advogados e convidados.", status: 'approved' },
+  // Educação
+  { id: "e64", name: "Colégio Objetivo Gurupi", category_id: 10, sub_category: "Escola (infantil ao médio)", address: "Av. Goiás, 1100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0660, rating: 4.8, phone: "6333121212", description: "Ensino de qualidade do infantil ao pré-vestibular.", status: 'approved' },
+  { id: "e65", name: "Faculdade Unicamps", category_id: 10, sub_category: "Universidade / Instituto Federal", address: "Av. Maranhão, 2000, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0700, rating: 4.5, phone: "6333122323", description: "Cursos superiores e pós-graduação.", status: 'approved' },
+  { id: "e66", name: "Escola Estadual Costa e Silva", category_id: 10, sub_category: "Escola (infantil ao médio)", address: "Av. Pará, Centro, Gurupi - TO", city_id: 1, latitude: -11.7330, longitude: -49.0720, rating: 4.3, phone: "6333123434", description: "Educação pública tradicional em Gurupi.", status: 'approved' },
+  { id: "e67", name: "CNA Inglês e Espanhol", category_id: 10, sub_category: "Escola de Idiomas", address: "Av. Piauí, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7300, longitude: -49.0690, rating: 4.9, phone: "6333124545", description: "Aprenda um novo idioma com metodologia dinâmica.", status: 'approved' },
   // Palmas Establishments
   { id: "p1", name: "Hospital Geral de Palmas (HGP)", category_id: 3, sub_category: "Hospital / Clínica / UPA", address: "NS 01, Qd. 201 Sul, Palmas - TO", city_id: 2, latitude: -10.1950, longitude: -48.3330, rating: 4.2, phone: "6332187800", description: "Principal hospital público do estado do Tocantins.", status: 'approved' },
   { id: "p2", name: "Capim Dourado Shopping", category_id: 12, sub_category: "Shopping / Loja de Departamento / Outlet", address: "Qd. 107 Norte, NS 05, Palmas - TO", city_id: 2, latitude: -10.1750, longitude: -48.3350, rating: 4.7, phone: "6332129500", description: "O maior shopping center do Tocantins com cinema e praça de alimentação.", status: 'approved' },
@@ -144,6 +180,10 @@ let establishments: Establishment[] = [
   { id: "p4", name: "Palácio Araguaia", category_id: 3, sub_category: "Prefeitura / Câmara / Secretarias", address: "Praça dos Girassóis, Palmas - TO", city_id: 2, latitude: -10.1840, longitude: -48.3330, rating: 4.8, description: "Sede do Governo do Estado do Tocantins.", status: 'approved' },
   { id: "p5", name: "Supermercado Quartetto", category_id: 1, sub_category: "Supermercado / Mercado", address: "Qd. 204 Sul, Av. LO 05, Palmas - TO", city_id: 2, latitude: -10.1980, longitude: -48.3300, rating: 4.5, phone: "6332154400", description: "Rede de supermercados tocantinense com produtos de qualidade.", status: 'approved' },
   { id: "p6", name: "Praia da Graciosa", category_id: 9, sub_category: "Parques", address: "Orla de Palmas, Palmas - TO", city_id: 2, latitude: -10.1850, longitude: -48.3650, rating: 4.7, description: "Principal ponto turístico e de lazer de Palmas às margens do Lago.", status: 'approved' },
+  { id: "p7", name: "Palmas Shopping", category_id: 12, sub_category: "Shopping / Loja de Departamento / Outlet", address: "Qd. 101 Sul, Av. LO 01, Palmas - TO", city_id: 2, latitude: -10.1880, longitude: -48.3300, rating: 4.5, phone: "6332212000", description: "Shopping center tradicional no centro de Palmas.", status: 'approved' },
+  { id: "p8", name: "Restaurante Cabana do Lago", category_id: 1, sub_category: "Restaurante", address: "Qd. 103 Sul, Rua LO 01, Palmas - TO", city_id: 2, latitude: -10.1860, longitude: -48.3310, rating: 4.8, phone: "6332154321", description: "Culinária regional e peixes do Tocantins.", status: 'approved' },
+  { id: "p9", name: "Farmácia Pague Menos", category_id: 1, sub_category: "Farmácia", address: "Av. JK, Qd. 104 Sul, Palmas - TO", city_id: 2, latitude: -10.1830, longitude: -48.3340, rating: 4.6, phone: "6332151010", description: "Farmácia com grande variedade e atendimento 24h.", status: 'approved' },
+  { id: "p10", name: "Hotel Girassol Plaza", category_id: 1, sub_category: "Hospedagem (hotel, pousada, temporada)", address: "Qd. 101 Norte, NS 01, Palmas - TO", city_id: 2, latitude: -10.1760, longitude: -48.3320, rating: 4.7, phone: "6332120700", description: "Hotel de alto padrão no centro de Palmas.", status: 'approved' },
   // Araguaína Establishments
   { id: "a1", name: "Hospital Regional de Araguaína", category_id: 3, sub_category: "Hospital / Clínica / UPA", address: "Av. Dom Emanuel, Araguaína - TO", city_id: 3, latitude: -7.1900, longitude: -48.2050, rating: 4.0, phone: "6334112600", description: "Atendimento hospitalar de referência no norte do estado.", status: 'approved' },
   { id: "a2", name: "Via Lago", category_id: 9, sub_category: "Parques", address: "Av. Via Lago, Araguaína - TO", city_id: 3, latitude: -7.1850, longitude: -48.1950, rating: 4.9, description: "Cartão postal de Araguaína, ideal para caminhadas e lazer.", status: 'approved' },
@@ -151,6 +191,9 @@ let establishments: Establishment[] = [
   { id: "a4", name: "Araguaína Park Shopping", category_id: 12, sub_category: "Shopping / Loja de Departamento / Outlet", address: "Av. Bernardo Sayão, Araguaína - TO", city_id: 3, latitude: -7.2100, longitude: -48.2250, rating: 4.6, phone: "6334115500", description: "Shopping center com diversas lojas e opções de lazer.", status: 'approved' },
   { id: "a5", name: "Supermercado Campelo", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Filadélfia, Araguaína - TO", city_id: 3, latitude: -7.1880, longitude: -48.2020, rating: 4.7, phone: "6334117000", description: "Tradição e qualidade em supermercado em Araguaína.", status: 'approved' },
   { id: "a6", name: "Rodoviária de Araguaína", category_id: 11, sub_category: "Transporte Público (ônibus)", address: "Av. Filadélfia, Araguaína - TO", city_id: 3, latitude: -7.1920, longitude: -48.2080, rating: 4.1, description: "Terminal rodoviário de passageiros de Araguaína.", status: 'approved' },
+  { id: "a7", name: "Restaurante Tio Patinhas", category_id: 1, sub_category: "Restaurante", address: "Av. Prefeito João de Sousa Lima, Araguaína - TO", city_id: 3, latitude: -7.1890, longitude: -48.2060, rating: 4.5, phone: "6334141234", description: "Restaurante tradicional com buffet variado.", status: 'approved' },
+  { id: "a8", name: "Premier Hotel", category_id: 1, sub_category: "Hospedagem (hotel, pousada, temporada)", address: "Av. Bernardo Sayão, Araguaína - TO", city_id: 3, latitude: -7.2050, longitude: -48.2200, rating: 4.6, phone: "6334113000", description: "Conforto e praticidade para sua estadia em Araguaína.", status: 'approved' },
+  { id: "a9", name: "Colégio Santa Cruz", category_id: 10, sub_category: "Escola (infantil ao médio)", address: "Av. Dom Emanuel, Araguaína - TO", city_id: 3, latitude: -7.1910, longitude: -48.2040, rating: 4.8, phone: "6334114455", description: "Instituição de ensino tradicional em Araguaína.", status: 'approved' },
 ];
 
 app.get("/api/debug-supabase", async (req, res) => {
@@ -192,6 +235,97 @@ app.get("/api/ping", (req, res) => {
 });
 
 // API Routes
+app.get("/api/admin/sync-mock-data", async (req, res) => {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return res.status(500).json({ error: "Supabase admin client not available" });
+  }
+
+  const results: any = {
+    states: [],
+    cities: [],
+    establishments: []
+  };
+
+  try {
+    // 1. Sync States
+    const { data: stateData, error: stateErr } = await supabase
+      .from('states')
+      .upsert([{ name: 'Tocantins', uf: 'TO' }], { onConflict: 'uf' })
+      .select();
+    
+    if (stateErr) throw stateErr;
+    const toId = stateData[0].id;
+    results.states = { count: stateData.length, status: 'synced' };
+
+    // 2. Sync Cities
+    const citiesToSync = [
+      { state_id: toId, name: 'Gurupi', slug: 'gurupi', active: true, latitude: -11.7298, longitude: -49.0678, population: 87593 },
+      { state_id: toId, name: 'Palmas', slug: 'palmas', active: true, latitude: -10.1844, longitude: -48.3336, population: 306296 },
+      { state_id: toId, name: 'Araguaína', slug: 'araguaina', active: true, latitude: -7.1925, longitude: -48.2078, population: 183381 }
+    ];
+
+    for (const city of citiesToSync) {
+      const { data: cityData, error: cityErr } = await supabase
+        .from('cities')
+        .upsert([city], { onConflict: 'slug' })
+        .select();
+      results.cities.push({ name: city.name, status: cityErr ? 'error' : 'synced', error: cityErr?.message });
+    }
+
+    // 3. Sync Establishments
+    const { data: allCities } = await supabase.from('cities').select('id, slug');
+    const cityMap: any = {};
+    allCities?.forEach(c => cityMap[c.slug] = c.id);
+
+    const mockCityMap: any = {
+      1: 'gurupi',
+      2: 'palmas',
+      3: 'araguaina'
+    };
+
+    for (const est of establishments) {
+      const { id, ...rest } = est;
+      const supabaseCityId = cityMap[mockCityMap[est.city_id]];
+      
+      if (!supabaseCityId) {
+        results.establishments.push({ name: est.name, status: 'error', error: 'City not found' });
+        continue;
+      }
+
+      const estToInsert = {
+        ...rest,
+        city_id: supabaseCityId,
+        status: 'approved',
+        is_featured: est.is_featured || false,
+        is_verified: est.is_verified || false,
+        is_premium: est.is_premium || false
+      };
+
+      // Check if exists
+      const { data: existing } = await supabase
+        .from('establishments')
+        .select('id')
+        .eq('name', est.name)
+        .eq('city_id', supabaseCityId)
+        .maybeSingle();
+
+      if (!existing) {
+        const { error: estErr } = await supabase
+          .from('establishments')
+          .insert([estToInsert]);
+        results.establishments.push({ name: est.name, status: estErr ? 'error' : 'inserted', error: estErr?.message });
+      } else {
+        results.establishments.push({ name: est.name, status: 'already_exists' });
+      }
+    }
+
+    res.json({ success: true, results });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message, results });
+  }
+});
+
 app.get("/api/health", async (req, res) => {
   const sUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -467,6 +601,42 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+app.get("/api/establishments/category/:categoryId", async (req, res) => {
+  const { categoryId } = req.params;
+  const { city_id } = req.query;
+
+  console.log(`[API] Fetching establishments for category: ${categoryId}, city: ${city_id}`);
+
+  try {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      let query = supabase.from('establishments').select('*').eq('category_id', categoryId);
+      if (city_id) {
+        query = query.eq('city_id', city_id);
+      }
+      
+      const { data, error } = await query.order('rating', { ascending: false }).limit(10);
+      
+      if (error) {
+        console.error("[Supabase Error] Fetching category establishments:", error);
+      } else if (data && data.length > 0) {
+        return res.json(data);
+      }
+    }
+
+    // Fallback to mock data
+    const results = establishments.filter(e => 
+      e.category_id === Number(categoryId) && 
+      (!city_id || e.city_id === Number(city_id))
+    ).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 10);
+
+    res.json(results);
+  } catch (error) {
+    console.error("[API Error] Fetching category establishments:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 app.get("/api/establishments/featured", async (req, res) => {
   const { city_id } = req.query;
   const supabase = getSupabaseAdmin();
@@ -492,25 +662,41 @@ app.get("/api/establishments/featured", async (req, res) => {
       }
 
       // Try fetching with status approved first
-      const fetchFromSupabase = async (withStatus: boolean) => {
+      const fetchFromSupabase = async (withStatus: boolean, onlyFeatured: boolean = false) => {
         try {
           let query = supabase.from('establishments').select('*');
           if (withStatus) query = query.eq('status', 'approved');
+          if (onlyFeatured) query = query.eq('is_featured', true);
           if (targetCityIds.length > 0) {
             query = query.in('city_id', targetCityIds);
           }
-          return await query.limit(8);
+          
+          // Order by premium first, then rating
+          return await query
+            .order('is_premium', { ascending: false })
+            .order('rating', { ascending: false })
+            .limit(8);
         } catch (e: any) {
           console.error("[Supabase Featured Exception]:", e.message);
           return { data: null, error: e };
         }
       };
 
-      let { data, error } = await fetchFromSupabase(true);
+      // 1. Try fetching ONLY featured + approved
+      let { data, error } = await fetchFromSupabase(true, true);
       
+      // 2. If no featured found, try fetching ANY approved
+      if (!data || data.length === 0) {
+        console.log("[API Featured] No featured found, trying any approved...");
+        const retry = await fetchFromSupabase(true, false);
+        data = retry.data;
+        error = retry.error;
+      }
+
+      // 3. If still no approved found, try without status filter
       if (!data || data.length === 0) {
         console.log("[API Featured] No approved found, trying without status filter...");
-        const retry = await fetchFromSupabase(false);
+        const retry = await fetchFromSupabase(false, false);
         data = retry.data;
         error = retry.error;
       }
@@ -862,10 +1048,14 @@ app.get("/api/establishments/user/:userId", async (req, res) => {
 app.put("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
   const registration = req.body;
+  console.log(`[API] Updating establishment ${id}:`, JSON.stringify(registration, null, 2));
   
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
+      // Try to use numeric ID if possible for Supabase
+      const targetId = isNaN(Number(id)) ? id : Number(id);
+      
       const { data, error } = await supabase
         .from('establishments')
         .update({
@@ -881,15 +1071,41 @@ app.put("/api/establishments/:id", async (req, res) => {
           latitude: registration.latitude,
           longitude: registration.longitude,
           maps_link: registration.mapsLink,
-          city_id: registration.cityId
+          city_id: registration.cityId,
+          is_featured: registration.is_featured,
+          is_verified: registration.is_verified,
+          is_premium: registration.is_premium
         })
-        .eq('id', id)
+        .eq('id', targetId)
         .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error(`[Supabase Error] Updating establishment ${id}:`, JSON.stringify(error, null, 2));
+        
+        let userMessage = "Erro ao atualizar no banco de dados";
+        if (error.code === '42703') {
+          userMessage = "Erro de esquema: Uma ou mais colunas não foram encontradas na tabela 'establishments'.";
+        } else if (error.message) {
+          userMessage = `Erro no Supabase: ${error.message}`;
+        }
+
+        return res.status(400).json({ 
+          error: userMessage, 
+          message: error.message,
+          code: error.code
+        });
+      }
+      
+      if (!data || data.length === 0) {
+        console.warn(`[API] No establishment found with ID ${id} in Supabase`);
+        return res.status(404).json({ error: "Estabelecimento não encontrado no banco de dados" });
+      }
+
+      console.log(`[API] Establishment ${id} updated successfully in Supabase`);
       return res.json(data?.[0]);
     } else {
-      const index = establishments.findIndex(e => e.id === id);
+      // Local fallback - fix ID comparison
+      const index = establishments.findIndex(e => String(e.id) === String(id));
       if (index !== -1) {
         establishments[index] = {
           ...establishments[index],
@@ -904,15 +1120,22 @@ app.put("/api/establishments/:id", async (req, res) => {
           description: registration.description,
           latitude: registration.latitude || establishments[index].latitude,
           longitude: registration.longitude || establishments[index].longitude,
-          city_id: Number(registration.cityId)
+          city_id: Number(registration.cityId),
+          is_featured: registration.is_featured,
+          is_verified: registration.is_verified,
+          is_premium: registration.is_premium
         };
+        console.log(`[API] Establishment ${id} updated successfully in local memory`);
         return res.json(establishments[index]);
       }
-      return res.status(404).json({ error: "Estabelecimento não encontrado" });
+      return res.status(404).json({ error: "Estabelecimento não encontrado na memória local" });
     }
   } catch (error: any) {
-    console.error("[API Error] Updating establishment:", error);
-    res.status(500).json({ error: "Erro ao atualizar estabelecimento", message: error.message });
+    console.error(`[API Error] Updating establishment ${id}:`, error);
+    res.status(500).json({ 
+      error: "Erro interno ao atualizar estabelecimento", 
+      message: error.message || "Erro interno no servidor" 
+    });
   }
 });
 
@@ -1007,7 +1230,10 @@ app.post("/api/establishments/register", async (req, res) => {
         maps_link: registration.mapsLink,
         city_id: targetCityId,
         user_id: registration.userId,
-        status: 'approved'
+        status: 'approved',
+        is_featured: registration.is_featured || false,
+        is_verified: registration.is_verified || false,
+        is_premium: registration.is_premium || false
       }]).select();
 
       if (error) {
@@ -1057,6 +1283,9 @@ app.post("/api/establishments/register", async (req, res) => {
         user_id: registration.userId,
         rating: 5.0,
         status: 'approved',
+        is_featured: registration.is_featured || false,
+        is_verified: registration.is_verified || false,
+        is_premium: registration.is_premium || false,
         created_at: new Date().toISOString()
       };
       establishments.push(newEstablishment);

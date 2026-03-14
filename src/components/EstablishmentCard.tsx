@@ -13,7 +13,8 @@ import {
   Share2,
   Printer,
   Edit,
-  Trash2
+  Trash2,
+  Crown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GroundingChunk } from '../services/geminiService';
@@ -161,8 +162,20 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
               </div>
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-bold text-zinc-900 text-sm group-hover:text-emerald-700 transition-colors">{title}</h3>
+                {chunk.maps?.is_premium && (
+                  <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-500 text-white text-[9px] font-bold rounded-full shadow-sm">
+                    <Crown className="w-2.5 h-2.5" />
+                    Premium
+                  </div>
+                )}
+                {chunk.maps?.is_verified && (
+                  <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500 text-white text-[9px] font-bold rounded-full shadow-sm">
+                    <CheckCircle2 className="w-2.5 h-2.5" />
+                    Verificado
+                  </div>
+                )}
               </div>
               {rawPhone && (
                 <p className="text-[10px] font-bold text-emerald-600 mt-0.5 flex items-center gap-1">

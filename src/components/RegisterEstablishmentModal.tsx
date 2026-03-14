@@ -11,7 +11,10 @@ import {
   CheckCircle2, 
   Loader2,
   Image as ImageIcon,
-  Plus
+  Plus,
+  ShieldCheck,
+  Sparkles,
+  Crown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
@@ -32,7 +35,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   onSuccess 
 }) => {
   const { currentCity } = useCity();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isAdmin = user && role === 'admin';
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +52,10 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     description: '',
     latitude: null as number | null,
     longitude: null as number | null,
-    mapsLink: ''
+    mapsLink: '',
+    is_featured: false,
+    is_verified: false,
+    is_premium: false
   });
 
   React.useEffect(() => {
@@ -65,7 +72,10 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         description: initialData.description || '',
         latitude: initialData.location?.latitude || null,
         longitude: initialData.location?.longitude || null,
-        mapsLink: initialData.uri || ''
+        mapsLink: initialData.uri || '',
+        is_featured: initialData.is_featured || false,
+        is_verified: initialData.is_verified || false,
+        is_premium: initialData.is_premium || false
       });
     } else if (!initialData && isOpen) {
       setFormData({
@@ -80,7 +90,10 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         description: '',
         latitude: null,
         longitude: null,
-        mapsLink: ''
+        mapsLink: '',
+        is_featured: false,
+        is_verified: false,
+        is_premium: false
       });
     }
   }, [initialData, isOpen]);
@@ -128,11 +141,11 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     try {
       const payload = {
         ...formData,
-        cityId: currentCity.id,
-        cityName: currentCity.name,
-        cityUf: currentCity.uf,
-        cityLat: currentCity.latitude,
-        cityLng: currentCity.longitude,
+        cityId: initialData?.cityId || currentCity.id,
+        cityName: initialData?.cityName || currentCity.name,
+        cityUf: initialData?.cityUf || currentCity.uf,
+        cityLat: initialData?.cityLat || currentCity.latitude,
+        cityLng: initialData?.cityLng || currentCity.longitude,
         userId: user.id,
         userEmail: user.email
       };
@@ -176,7 +189,10 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             description: '',
             latitude: null,
             longitude: null,
-            mapsLink: ''
+            mapsLink: '',
+            is_featured: false,
+            is_verified: false,
+            is_premium: false
           });
         }, 3000);
       } else {
@@ -200,27 +216,24 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         className="bg-white w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
       >
         {/* Header */}
-        <div className="p-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#00897b] flex items-center justify-center text-white">
-              <Plus className="w-5 h-5" />
+        <div className="p-6 border-b border-zinc-100 flex items-center justify-between bg-white">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-[#00897b] flex items-center justify-center text-white shadow-lg shadow-[#00897b]/20">
+              <Plus className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-zinc-900">
-                {initialData ? 'Editar Estabelecimento' : 'Cadastrar Estabelecimento'}
+              <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-tight">
+                {initialData ? 'Atualizar informações do local' : 'Cadastrar novo local'}
               </h2>
-              <p className="text-[10px] text-zinc-500">
-                {initialData ? 'Atualizar informações do local' : `Sugerir novo local em ${currentCity.name} - ${currentCity.uf}`}
-              </p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
-            <X className="w-4 h-4 text-zinc-400" />
+            <X className="w-5 h-5 text-zinc-400" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-8">
           {isSubmitted ? (
             <div className="py-12 flex flex-col items-center justify-center text-center">
               <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-6">
@@ -242,210 +255,242 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
               </button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-8">
               {error && (
-                <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-4 text-red-600 text-sm mb-6">
-                  <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center shrink-0 shadow-sm shadow-red-200">
-                    <X className="w-3.5 h-3.5 text-white stroke-[3px]" />
+                <div className="p-6 bg-red-50/50 border border-red-100 rounded-3xl flex items-center gap-6 text-red-600 mb-8">
+                  <div className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center shrink-0 shadow-lg shadow-red-200">
+                    <X className="w-6 h-6 text-white stroke-[3px]" />
                   </div>
-                  <p className="font-bold">{error}</p>
+                  <p className="font-bold text-lg leading-tight">{error}</p>
                 </div>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              <div className="space-y-8">
                 {/* Basic Info */}
-                <div className="space-y-4">
-                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Informações Básicas</h4>
+                <div className="space-y-6">
+                  <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Informações Básicas</h4>
                   
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">Nome do Estabelecimento *</label>
-                    <div className="relative">
-                      <Store className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Nome do Estabelecimento *</label>
                       <input 
                         required
                         type="text"
                         value={formData.name}
                         onChange={e => setFormData({...formData, name: e.target.value})}
-                        placeholder="Ex: Pizzaria Bella Italia"
-                        className="w-full pl-11 pr-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                        placeholder="Ex: SOS Borracharia"
+                        className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                       />
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">Categoria *</label>
-                      <select 
-                        required
-                        value={formData.categoryId}
-                        onChange={e => setFormData({...formData, categoryId: e.target.value, subCategory: ''})}
-                        className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm appearance-none"
-                      >
-                        <option value="">Selecione...</option>
-                        {CATEGORIES.map(cat => (
-                          <option key={cat.id} value={cat.id}>{cat.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">Tipo *</label>
-                      <select 
-                        required
-                        disabled={!formData.categoryId}
-                        value={formData.subCategory}
-                        onChange={e => setFormData({...formData, subCategory: e.target.value})}
-                        className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm appearance-none disabled:opacity-50"
-                      >
-                        <option value="">Selecione...</option>
-                        {filteredSubCategories.map(sc => (
-                          <option key={sc.name} value={sc.name}>{sc.name}</option>
-                        ))}
-                      </select>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Categoria *</label>
+                        <select 
+                          required
+                          value={formData.categoryId}
+                          onChange={e => setFormData({...formData, categoryId: e.target.value, subCategory: ''})}
+                          className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base appearance-none"
+                        >
+                          <option value="">Selecione...</option>
+                          {CATEGORIES.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Tipo *</label>
+                        <select 
+                          required
+                          disabled={!formData.categoryId}
+                          value={formData.subCategory}
+                          onChange={e => setFormData({...formData, subCategory: e.target.value})}
+                          className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base appearance-none disabled:opacity-50"
+                        >
+                          <option value="">Selecione...</option>
+                          {filteredSubCategories.map(sc => (
+                            <option key={sc.name} value={sc.name}>{sc.name}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Contact & Location */}
-                <div className="space-y-4">
-                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Contato e Localização</h4>
+                <div className="space-y-6">
+                  <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Contato e Localização</h4>
                   
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">Endereço Completo</label>
-                    <div className="relative">
-                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Endereço Completo</label>
                       <input 
                         type="text"
                         value={formData.address}
                         onChange={e => setFormData({...formData, address: e.target.value})}
-                        placeholder="Rua, Número, Bairro"
-                        className="w-full pl-11 pr-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                        placeholder="Av. Maranhão, 2404"
+                        className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                       />
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">Telefone</label>
-                      <div className="relative">
-                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Telefone</label>
                         <input 
                           type="tel"
                           value={formData.phone}
                           onChange={e => setFormData({...formData, phone: e.target.value})}
                           placeholder="(00) 00000-0000"
-                          className="w-full pl-11 pr-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                         />
                       </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">WhatsApp</label>
-                      <div className="relative">
-                        <MessageCircle className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                      <div>
+                        <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">WhatsApp</label>
                         <input 
                           type="tel"
                           value={formData.whatsapp}
                           onChange={e => setFormData({...formData, whatsapp: e.target.value})}
                           placeholder="(00) 00000-0000"
-                          className="w-full pl-11 pr-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                         />
                       </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">Website</label>
-                    <div className="relative">
-                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                    <div>
+                      <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Website</label>
                       <input 
                         type="url"
                         value={formData.website}
                         onChange={e => setFormData({...formData, website: e.target.value})}
                         placeholder="https://..."
-                        className="w-full pl-11 pr-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                        className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Localização no Mapa</h4>
-                <div className="space-y-3">
+              <div className="space-y-8">
+                <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Localização no Mapa</h4>
+                <div className="space-y-4">
                   <button 
                     type="button"
                     onClick={handleGetCurrentLocation}
                     disabled={isLocating}
-                    className="w-full flex items-center justify-center gap-3 p-2.5 bg-white border border-zinc-200 rounded-xl text-xs font-bold text-zinc-700 hover:bg-zinc-50 transition-all disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-white border border-zinc-200 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-50 transition-all disabled:opacity-50"
                   >
-                    {isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
+                    {isLocating ? <Loader2 className="w-5 h-5 animate-spin" /> : <MapPin className="w-5 h-5" />}
                     Obter Localização Atual
                   </button>
                   
                   <div className="relative">
-                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                     <input 
                       type="url"
                       value={formData.mapsLink}
                       onChange={e => setFormData({...formData, mapsLink: e.target.value})}
                       placeholder="Inserir Link do Google Maps"
-                      className="w-full pl-11 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                      className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                     />
                   </div>
                   
                   {formData.latitude && (
-                    <p className="text-[10px] text-emerald-600 font-medium text-center">
+                    <p className="text-xs text-emerald-600 font-medium text-center">
                       Coordenadas capturadas: {formData.latitude.toFixed(4)}, {formData.longitude?.toFixed(4)}
                     </p>
                   )}
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detalhes Adicionais</h4>
+              <div className="space-y-8">
+                <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Detalhes Adicionais</h4>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">Horário de Funcionamento</label>
-                    <div className="relative">
-                      <Clock className="absolute left-4 top-4 w-4 h-4 text-zinc-400" />
-                      <textarea 
-                        value={formData.hours}
-                        onChange={e => setFormData({...formData, hours: e.target.value})}
-                        placeholder="Ex: Seg-Sex: 08h às 18h"
-                        className="w-full pl-11 pr-4 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm h-24 resize-none"
-                      />
-                    </div>
+                    <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Horário de Funcionamento</label>
+                    <textarea 
+                      value={formData.hours}
+                      onChange={e => setFormData({...formData, hours: e.target.value})}
+                      placeholder="Ex: Seg-Sex: 08h às 18h"
+                      className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base h-32 resize-none"
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-zinc-700 mb-1.5 ml-1">Descrição do Local</label>
+                    <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Descrição do Local</label>
                     <textarea 
                       value={formData.description}
                       onChange={e => setFormData({...formData, description: e.target.value})}
                       placeholder="Conte um pouco sobre o que o estabelecimento oferece..."
-                      className="w-full px-4 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm h-24 resize-none"
+                      className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base h-32 resize-none"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="pt-6 border-t border-zinc-100 bg-zinc-50/50 -mx-6 -mb-6 p-6 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-zinc-400">
-                  <ImageIcon className="w-4 h-4" />
-                  <span className="text-[10px] font-medium uppercase">Fotos poderão ser adicionadas após validação</span>
+              {isAdmin && (
+                <div className="space-y-6 p-8 bg-zinc-50 rounded-[32px] border border-zinc-100">
+                  <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Configurações de Administrador</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <label className="flex items-center gap-4 p-4 bg-white border border-zinc-200 rounded-2xl cursor-pointer hover:border-emerald-200 transition-all">
+                      <input 
+                        type="checkbox"
+                        checked={formData.is_verified}
+                        onChange={e => setFormData({...formData, is_verified: e.target.checked})}
+                        className="w-5 h-5 text-emerald-600 rounded-lg focus:ring-emerald-500"
+                      />
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                        <span className="text-sm font-bold text-zinc-700">Verificado</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-4 p-4 bg-white border border-zinc-200 rounded-2xl cursor-pointer hover:border-orange-200 transition-all">
+                      <input 
+                        type="checkbox"
+                        checked={formData.is_featured}
+                        onChange={e => setFormData({...formData, is_featured: e.target.checked})}
+                        className="w-5 h-5 text-orange-500 rounded-lg focus:ring-orange-500"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-orange-500" />
+                        <span className="text-sm font-bold text-zinc-700">Destaque</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-4 p-4 bg-white border border-zinc-200 rounded-2xl cursor-pointer hover:border-yellow-200 transition-all">
+                      <input 
+                        type="checkbox"
+                        checked={formData.is_premium}
+                        onChange={e => setFormData({...formData, is_premium: e.target.checked})}
+                        className="w-5 h-5 text-yellow-600 rounded-lg focus:ring-yellow-500"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Crown className="w-5 h-5 text-yellow-500" />
+                        <span className="text-sm font-bold text-zinc-700">Premium</span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
-                <div className="flex gap-4">
+              )}
+
+              <div className="pt-8 border-t border-zinc-100 bg-white -mx-8 -mb-8 p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-3 text-zinc-400">
+                  <ImageIcon className="w-5 h-5" />
+                  <span className="text-xs font-medium uppercase tracking-wider">Fotos poderão ser adicionadas após validação</span>
+                </div>
+                <div className="flex gap-4 w-full sm:w-auto">
                   <button 
                     type="button"
                     onClick={onClose}
-                    className="px-4 py-2 text-xs font-bold text-zinc-500 hover:text-zinc-900 transition-colors"
+                    className="flex-1 sm:flex-none px-6 py-3 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors"
                   >
                     Cancelar
                   </button>
                   <button 
                     type="submit"
                     disabled={isLoading}
-                    className="px-8 py-3 bg-[#00897b] text-white rounded-2xl text-xs font-bold hover:bg-[#00796b] transition-all shadow-lg shadow-[#00897b]/20 disabled:opacity-50 flex items-center gap-2 active:scale-95"
+                    className="flex-1 sm:flex-none px-10 py-4 bg-[#00897b] text-white rounded-2xl text-sm font-bold hover:bg-[#00796b] transition-all shadow-xl shadow-[#00897b]/20 disabled:opacity-50 flex items-center justify-center gap-3 active:scale-95"
                   >
-                    {isLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                    {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                     {initialData ? 'Salvar Alterações' : 'Publicar Agora'}
                   </button>
                 </div>
