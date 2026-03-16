@@ -894,6 +894,7 @@ export default function App() {
                               whatsapp: est.whatsapp,
                               rating: est.rating,
                               address: est.address,
+                              hours: est.hours,
                               categoryId: est.category_id,
                               subCategory: est.sub_category,
                               cityId: est.city_id,

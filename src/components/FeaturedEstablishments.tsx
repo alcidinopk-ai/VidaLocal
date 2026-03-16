@@ -148,6 +148,11 @@ export const FeaturedEstablishments = () => {
                     <Clock className="w-2.5 h-2.5" />
                     {statusInfo.label}
                   </div>
+                  {est.hours && (
+                    <p className="text-[9px] text-zinc-500 font-medium">
+                      {est.hours}
+                    </p>
+                  )}
                 </div>
               </div>
 

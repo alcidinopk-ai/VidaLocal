@@ -16,7 +16,8 @@ import {
   ShieldCheck,
   Sparkles,
   Crown,
-  Wand2
+  Wand2,
+  Compass
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
@@ -102,6 +103,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
 
   const [isLocating, setIsLocating] = useState(false);
   const [isSuggestingHours, setIsSuggestingHours] = useState(false);
+  const [showManualCoords, setShowManualCoords] = useState(false);
 
   const handleSuggestHours = async () => {
     if (!formData.name) {
@@ -424,8 +426,48 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                       className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                     />
                   </div>
+
+                  <button 
+                    type="button"
+                    onClick={() => setShowManualCoords(!showManualCoords)}
+                    className={`w-full flex items-center justify-center gap-3 px-6 py-4 border rounded-2xl text-sm font-bold transition-all ${
+                      showManualCoords 
+                        ? "bg-zinc-900 text-white border-zinc-900" 
+                        : "bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50"
+                    }`}
+                  >
+                    <Compass className="w-5 h-5" />
+                    Inserir Coordenadas Manualmente
+                  </button>
+
+                  {showManualCoords && (
+                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 ml-1">Latitude</label>
+                        <input 
+                          type="number"
+                          step="any"
+                          value={formData.latitude || ''}
+                          onChange={e => setFormData({...formData, latitude: e.target.value ? parseFloat(e.target.value) : null})}
+                          placeholder="-23.5505"
+                          className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 ml-1">Longitude</label>
+                        <input 
+                          type="number"
+                          step="any"
+                          value={formData.longitude || ''}
+                          onChange={e => setFormData({...formData, longitude: e.target.value ? parseFloat(e.target.value) : null})}
+                          placeholder="-46.6333"
+                          className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
+                        />
+                      </div>
+                    </div>
+                  )}
                   
-                  {formData.latitude && (
+                  {formData.latitude && !showManualCoords && (
                     <p className="text-xs text-emerald-600 font-medium text-center">
                       Coordenadas capturadas: {formData.latitude.toFixed(4)}, {formData.longitude?.toFixed(4)}
                     </p>
