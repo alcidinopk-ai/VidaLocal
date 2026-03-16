@@ -43,6 +43,7 @@ import { AuthModal } from './components/AuthModal';
 import { FeaturedEstablishments } from './components/FeaturedEstablishments';
 
 import { MaintenanceTools } from './components/MaintenanceTools';
+import { ExportTools } from './components/ExportTools';
 import { CATEGORIES, SUB_CATEGORIES } from './constants/taxonomy';
 
 const PREDEFINED_LOCATIONS = [
@@ -621,7 +622,10 @@ export default function App() {
                     <ChevronDown className="w-4 h-4 rotate-90" />
                     Voltar para o Início
                   </button>
-                  <MaintenanceTools />
+                  <div className="grid grid-cols-1 gap-6">
+                    <ExportTools />
+                    <MaintenanceTools />
+                  </div>
                 </div>
               </motion.div>
             ) : view === 'home' ? (

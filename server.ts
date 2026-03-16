@@ -1093,6 +1093,55 @@ app.delete("/api/establishments/:id", async (req, res) => {
   }
 });
 
+app.get("/api/admin/establishments/export", async (req, res) => {
+  const { category_id, sub_category, city_id, state_uf } = req.query;
+  
+  try {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      let query = supabase.from('establishments').select('*, cities(*, states(*))');
+      
+      if (category_id) query = query.eq('category_id', Number(category_id));
+      if (sub_category) query = query.eq('sub_category', String(sub_category));
+      if (city_id) query = query.eq('city_id', Number(city_id));
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      let filteredData = data || [];
+      
+      // Filter by state UF if provided (since it's nested)
+      if (state_uf) {
+        filteredData = filteredData.filter((e: any) => 
+          e.cities?.states?.uf === String(state_uf).toUpperCase()
+        );
+      }
+      
+      return res.json(filteredData);
+    }
+    
+    // Fallback for mock data
+    let filtered = [...establishments];
+    if (category_id) filtered = filtered.filter(e => e.category_id === Number(category_id));
+    if (sub_category) filtered = filtered.filter(e => e.sub_category === String(sub_category));
+    if (city_id) filtered = filtered.filter(e => e.city_id === Number(city_id));
+    
+    // For mock data, we'd need to join with cities/states to filter by UF
+    if (state_uf) {
+      filtered = filtered.filter(e => {
+        const city = cities.find(c => c.id === e.city_id);
+        const state = states.find(s => s.id === city?.state_id);
+        return state?.uf === String(state_uf).toUpperCase();
+      });
+    }
+    
+    res.json(filtered);
+  } catch (error: any) {
+    console.error("[API Error] Exporting establishments:", error);
+    res.status(500).json({ error: "Erro ao exportar estabelecimentos", message: error.message });
+  }
+});
+
 app.get("/api/admin/establishments/missing-hours", async (req, res) => {
   try {
     const supabase = getSupabaseAdmin();
