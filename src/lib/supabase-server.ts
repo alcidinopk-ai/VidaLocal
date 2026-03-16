@@ -6,7 +6,11 @@ const getSupabaseConfig = () => {
   return { url, key };
 };
 
+let cachedAdminClient: any = null;
+
 export const getSupabaseAdmin = () => {
+  if (cachedAdminClient) return cachedAdminClient;
+
   const { url, key } = getSupabaseConfig();
   
   if (!url || !key || url.includes('placeholder')) {
@@ -14,7 +18,8 @@ export const getSupabaseAdmin = () => {
   }
   
   try {
-    return createClient(url, key);
+    cachedAdminClient = createClient(url, key);
+    return cachedAdminClient;
   } catch (e) {
     console.error('Error creating Supabase admin client:', e);
     return null;

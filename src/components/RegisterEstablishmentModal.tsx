@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { suggestBusinessHours } from '../services/geminiService';
 import { 
   X, 
   Store, 
@@ -14,7 +15,8 @@ import {
   Plus,
   ShieldCheck,
   Sparkles,
-  Crown
+  Crown,
+  Wand2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
@@ -99,6 +101,36 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   }, [initialData, isOpen]);
 
   const [isLocating, setIsLocating] = useState(false);
+  const [isSuggestingHours, setIsSuggestingHours] = useState(false);
+
+  const handleSuggestHours = async () => {
+    if (!formData.name) {
+      setError("Por favor, informe o nome do estabelecimento primeiro.");
+      return;
+    }
+    
+    setIsSuggestingHours(true);
+    setError(null);
+    
+    try {
+      const suggested = await suggestBusinessHours(
+        formData.name, 
+        currentCity.name, 
+        formData.address
+      );
+      
+      if (suggested) {
+        setFormData(prev => ({ ...prev, hours: suggested }));
+      } else {
+        setError("Não consegui encontrar os horários automaticamente. Por favor, preencha manualmente.");
+      }
+    } catch (err) {
+      console.error("Error suggesting hours:", err);
+      setError("Erro ao buscar horários. Tente preencher manualmente.");
+    } finally {
+      setIsSuggestingHours(false);
+    }
+  };
 
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) return;
@@ -406,7 +438,22 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Horário de Funcionamento</label>
+                    <div className="flex items-center justify-between mb-2 ml-1">
+                      <label className="block text-sm font-bold text-zinc-700">Horário de Funcionamento</label>
+                      <button
+                        type="button"
+                        onClick={handleSuggestHours}
+                        disabled={isSuggestingHours || !formData.name}
+                        className="flex items-center gap-1.5 text-xs font-bold text-[#00897b] hover:text-[#00796b] transition-colors disabled:opacity-50"
+                      >
+                        {isSuggestingHours ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Wand2 className="w-3 h-3" />
+                        )}
+                        Sugerir via IA
+                      </button>
+                    </div>
                     <textarea 
                       value={formData.hours}
                       onChange={e => setFormData({...formData, hours: e.target.value})}

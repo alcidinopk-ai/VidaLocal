@@ -10,6 +10,7 @@ interface MapDisplayProps {
   isRealLocation?: boolean;
   isLoading?: boolean;
   onClose?: () => void;
+  onRefresh?: () => void;
 }
 
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -25,7 +26,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return d;
 };
 
-export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, isRealLocation, isLoading, onClose }) => {
+export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, isRealLocation, isLoading, onClose, onRefresh }) => {
   const mapChunks = chunks.filter(c => c.maps);
 
   const getDistanceString = (chunk: GroundingChunk) => {
@@ -90,6 +91,7 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, is
               distance={getDistanceString(chunk)}
               userLocation={userLocation}
               isRealLocation={isRealLocation}
+              onRefresh={onRefresh}
             />
           ))
         ) : (

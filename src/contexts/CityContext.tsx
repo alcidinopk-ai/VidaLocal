@@ -13,6 +13,7 @@ interface CityContextType {
   currentCity: City;
   setCity: (city: City) => void;
   isLoading: boolean;
+  skipLoading: () => void;
 }
 
 const DEFAULT_CITY: City = {
@@ -41,6 +42,7 @@ export const CityProvider = ({ children }: { children: ReactNode }) => {
         const city = await res.json();
         if (city && city.active) {
           setCurrentCity(city);
+          localStorage.setItem('vida360_city', JSON.stringify(city));
           console.log(`Auto-detected city: ${city.name}`);
         }
       }
@@ -49,11 +51,32 @@ export const CityProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const skipLoading = () => setIsLoading(false);
+
   useEffect(() => {
     const initCity = async () => {
-      setIsLoading(true);
-      
-      // 1. Try Geolocation first (Automatic detection)
+      // 1. Check localStorage first for instant load
+      const saved = localStorage.getItem('vida360_city');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.active) {
+            setCurrentCity(parsed);
+            setIsLoading(false);
+            // Still try to update location in background if possible
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => resolveCityByGeo(pos.coords.latitude, pos.coords.longitude),
+                () => {},
+                { timeout: 3000, enableHighAccuracy: false }
+              );
+            }
+            return;
+          }
+        } catch (e) {}
+      }
+
+      // 2. If no saved city, try Geolocation (Automatic detection)
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
@@ -61,28 +84,12 @@ export const CityProvider = ({ children }: { children: ReactNode }) => {
             setIsLoading(false);
           },
           (error) => {
-            console.warn("Geolocation denied or failed, falling back to default/saved city:", error);
-            // 2. Fallback to saved city or default
-            const saved = localStorage.getItem('vida360_city');
-            if (saved) {
-              try {
-                const parsed = JSON.parse(saved);
-                if (parsed.active) setCurrentCity(parsed);
-              } catch (e) {}
-            }
+            console.warn("Geolocation denied or failed, using default city:", error);
             setIsLoading(false);
           },
-          { timeout: 5000 }
+          { timeout: 3000, enableHighAccuracy: false }
         );
       } else {
-        // Geolocation not supported
-        const saved = localStorage.getItem('vida360_city');
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (parsed.active) setCurrentCity(parsed);
-          } catch (e) {}
-        }
         setIsLoading(false);
       }
     };
@@ -100,7 +107,7 @@ export const CityProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <CityContext.Provider value={{ currentCity, setCity, isLoading }}>
+    <CityContext.Provider value={{ currentCity, setCity, isLoading, skipLoading }}>
       {children}
     </CityContext.Provider>
   );

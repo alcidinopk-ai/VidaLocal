@@ -17,20 +17,29 @@ import {
   Crown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Clock } from 'lucide-react';
 import { GroundingChunk } from '../services/geminiService';
 import { useAuth } from '../contexts/AuthContext';
 import { RegisterEstablishmentModal } from './RegisterEstablishmentModal';
+import { getBusinessStatus } from '../utils/hours';
 
 interface EstablishmentCardProps {
   chunk: GroundingChunk;
   distance: string;
   userLocation?: { latitude: number; longitude: number };
   isRealLocation?: boolean;
+  onRefresh?: () => void;
 }
 
 type ModalType = 'avaliar' | 'reclamar' | 'indicar' | 'corrigir' | null;
 
-export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, distance, userLocation, isRealLocation }) => {
+export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ 
+  chunk, 
+  distance, 
+  userLocation, 
+  isRealLocation,
+  onRefresh
+}) => {
   const { user, role } = useAuth();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -62,6 +71,8 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
     : uri;
   const shareText = `Confira ${title} no VidaLocal: ${uri}`;
 
+  const statusInfo = getBusinessStatus(chunk.maps?.hours);
+
   const isAdmin = user && role === 'admin';
 
   const handleDelete = async () => {
@@ -75,8 +86,10 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
       });
       if (response.ok) {
         alert("Estabelecimento excluído com sucesso!");
-        window.location.reload(); // Simple way to refresh the list
-      } else {
+        if (onRefresh) onRefresh();
+        else window.location.reload();
+      }
+ else {
         alert("Erro ao excluir estabelecimento.");
       }
     } catch (err) {
@@ -177,12 +190,25 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
                   </div>
                 )}
               </div>
-              {rawPhone && (
-                <p className="text-[10px] font-bold text-emerald-600 mt-0.5 flex items-center gap-1">
-                  <Phone className="w-2.5 h-2.5" />
-                  {rawPhone}
-                </p>
-              )}
+              <div className="flex items-center gap-3 mt-1 flex-wrap">
+                {rawPhone && (
+                  <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                    <Phone className="w-2.5 h-2.5" />
+                    {rawPhone}
+                  </p>
+                )}
+                <div className="flex flex-col gap-0.5">
+                  <div className={`flex items-center gap-1 text-[10px] font-bold ${statusInfo.color}`}>
+                    <Clock className="w-2.5 h-2.5" />
+                    {statusInfo.label}
+                  </div>
+                  {chunk.maps?.hours && (
+                    <p className="text-[9px] text-zinc-500 font-medium">
+                      {chunk.maps.hours}
+                    </p>
+                  )}
+                </div>
+              </div>
               <p className="text-xs text-zinc-500 mt-1 line-clamp-2 leading-relaxed">
                 {location && isRealLocation 
                   ? `Localizado a ${distance} de sua posição atual.` 
@@ -305,7 +331,8 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ chunk, dis
         onClose={() => setIsEditModalOpen(false)}
         initialData={chunk.maps}
         onSuccess={() => {
-          setTimeout(() => window.location.reload(), 2000);
+          if (onRefresh) onRefresh();
+          else setTimeout(() => window.location.reload(), 2000);
         }}
       />
 

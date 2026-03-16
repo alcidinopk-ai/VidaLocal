@@ -1,3 +1,4 @@
+import { GoogleGenAI } from "@google/genai";
 import { CATEGORIES, SUB_CATEGORIES } from "../constants/taxonomy";
 
 const TAXONOMY_CONTEXT = `
@@ -43,6 +44,15 @@ export interface ChatMessage {
 
 const responseCache = new Map<string, ChatMessage>();
 
+// Initialize Gemini on the frontend
+const getAI = () => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY não configurada.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
+
 export async function chatWithMaps(
   message: string,
   city: { name: string; uf: string; latitude: number; longitude: number },
@@ -57,54 +67,80 @@ export async function chatWithMaps(
   }
 
   try {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message,
-        city,
-        userLocation,
-        localContext,
-        taxonomyContext: TAXONOMY_CONTEXT,
-        categoryFilter,
-        subCategoryFilter
-      })
+    const ai = getAI();
+    const lat = userLocation?.latitude || city.latitude;
+    const lng = userLocation?.longitude || city.longitude;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: message,
+      config: {
+        systemInstruction: `Você é VidaLocal, um guia para ${city.name}. Ajude o usuário a encontrar locais.
+        ${TAXONOMY_CONTEXT}
+        Contexto local (estabelecimentos já cadastrados): ${localContext || 'Nenhum'}
+        ${categoryFilter ? `Filtro de categoria: ${categoryFilter}` : ''}
+        ${subCategoryFilter ? `Filtro de tipo: ${subCategoryFilter}` : ''}
+        `,
+        tools: [{ googleMaps: {} }],
+        toolConfig: {
+          retrievalConfig: {
+            latLng: { latitude: lat, longitude: lng },
+          },
+        },
+      },
     });
 
-    if (!response.ok) {
-      let errorText = "Desculpe, ocorreu um erro no servidor ao processar sua busca.";
-      try {
-        const errorData = await response.json();
-        errorText = errorData.text || errorText;
-      } catch (e) {
-        // If response is not JSON (e.g. Vercel timeout page), use a more descriptive message
-        if (response.status === 504) {
-          errorText = "O servidor demorou muito para responder (Timeout). Isso geralmente acontece em buscas complexas no plano gratuito da Vercel. Por favor, tente uma pergunta mais simples ou tente novamente.";
-        } else {
-          errorText = `Erro do servidor (${response.status}): Não foi possível processar a resposta.`;
-        }
-      }
-      return {
-        role: "model",
-        text: errorText
-      };
-    }
+    const text = response.text || "Sem resposta textual.";
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
+      maps: chunk.maps ? { 
+        uri: chunk.maps.uri, 
+        title: chunk.maps.title,
+        location: chunk.maps.location
+      } : undefined,
+      web: chunk.web ? { uri: chunk.web.uri, title: chunk.web.title } : undefined,
+    })).filter((c: any) => c.maps || c.web) || [];
 
-    const result: ChatMessage = await response.json();
-
-    // Cache the successful result
+    const result: ChatMessage = { role: "model", text, groundingChunks };
     responseCache.set(cacheKey, result);
-    if (responseCache.size > 50) {
-      const firstKey = responseCache.keys().next().value;
-      if (firstKey) responseCache.delete(firstKey);
-    }
-
     return result;
   } catch (error: any) {
     console.error("Chat API Error:", error);
     return {
       role: "model",
-      text: "Desculpe, não consegui me conectar ao servidor. Verifique sua conexão e tente novamente.",
+      text: "Desculpe, não consegui processar sua busca agora. Verifique sua conexão ou tente novamente mais tarde.",
     };
+  }
+}
+
+/**
+ * Uses Gemini with Maps grounding to suggest business hours for a given establishment.
+ */
+export async function suggestBusinessHours(
+  name: string,
+  city: string,
+  address?: string
+): Promise<string | null> {
+  try {
+    const ai = getAI();
+    const prompt = `Quais são os horários de funcionamento de "${name}" em ${city}${address ? `, no endereço ${address}` : ''}? 
+    Responda APENAS os horários em uma única linha, formatado como "Seg-Sex: 08h às 18h, Sáb: 08h às 12h". 
+    Se não encontrar, responda "Não encontrado".`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        tools: [{ googleMaps: {} }],
+      },
+    });
+
+    const text = response.text?.trim();
+    if (text && !text.toLowerCase().includes("não encontrado")) {
+      return text;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error suggesting hours:", error);
+    return null;
   }
 }

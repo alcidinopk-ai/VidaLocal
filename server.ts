@@ -8,6 +8,28 @@ import { getSupabaseAdmin } from "./src/lib/supabase-server.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Simple in-memory cache
+const apiCache = new Map<string, { data: any, expiry: number }>();
+const cityIdCache = new Map<number, number[]>();
+const CACHE_TTL = 60 * 1000; // 1 minute
+
+const getCached = (key: string) => {
+  const cached = apiCache.get(key);
+  if (cached && cached.expiry > Date.now()) {
+    return cached.data;
+  }
+  return null;
+};
+
+const setCache = (key: string, data: any) => {
+  apiCache.set(key, { data, expiry: Date.now() + CACHE_TTL });
+};
+
+const clearCache = () => {
+  apiCache.clear();
+  console.log('[Cache] API cache cleared due to data mutation');
+};
+
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[Process] Unhandled Rejection:', reason);
 });
@@ -492,118 +514,18 @@ const sanitizeSupabaseQuery = (text: string) => {
   return text.replace(/[()[\],]/g, ' ').replace(/\s+/g, ' ').trim();
 };
 
+// API chat moved to frontend service
 app.post("/api/chat", async (req, res) => {
-  try {
-    console.log("[Chat] Request started");
-    
-    const { message, city, userLocation } = req.body || {};
-    
-    // Diagnostic ping test
-    if (message === "ping") {
-      console.log("[Chat] Ping received");
-      return res.json({ role: "model", text: "pong" });
-    }
-
-    if (!message) {
-      return res.status(400).json({ error: "Mensagem ausente" });
-    }
-
-    const rawKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
-    const apiKey = rawKey.trim();
-    
-    if (!apiKey || apiKey.length < 10 || apiKey.includes("YOUR_API_KEY") || apiKey.includes("MY_GEMINI_API_KEY")) {
-      console.error("[Chat] Invalid or missing API Key:", apiKey ? "Present but invalid format" : "Missing");
-      return res.json({ 
-        role: "model", 
-        text: "Chave API Gemini não configurada corretamente nos Secrets do projeto. Por favor, configure a GEMINI_API_KEY." 
-      });
-    }
-
-    console.log("[Chat] Initializing Gemini with key (length):", apiKey.length);
-    const ai = new GoogleGenAI({ apiKey });
-    
-    const lat = Number(userLocation?.latitude || city?.latitude || -11.7298);
-    const lng = Number(userLocation?.longitude || city?.longitude || -49.0678);
-
-    console.log(`[Chat] Calling Gemini 3 Flash with lat=${lat}, lng=${lng}`);
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: message,
-      config: {
-        systemInstruction: `Você é VidaLocal, um guia para ${city?.name || 'sua cidade'}. Ajude o usuário a encontrar locais.`,
-        tools: [{ googleMaps: {} }],
-        toolConfig: {
-          retrievalConfig: {
-            latLng: { latitude: lat, longitude: lng },
-          },
-        },
-      },
-    });
-
-    console.log("[Chat] Response received");
-
-    let text = "";
-    try {
-      text = response.text || "Sem resposta textual.";
-    } catch (e: any) {
-      console.warn("[Chat] Text extraction failed:", e.message);
-      text = "Resposta bloqueada ou vazia.";
-    }
-
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-      maps: chunk.maps ? { 
-        uri: chunk.maps.uri, 
-        title: chunk.maps.title,
-        location: chunk.maps.location
-      } : undefined,
-      web: chunk.web ? { uri: chunk.web.uri, title: chunk.web.title } : undefined,
-    })).filter((c: any) => c.maps || c.web) || [];
-
-    console.log("[Chat] Success");
-    return res.json({ role: "model", text, groundingChunks });
-
-  } catch (error: any) {
-    console.error("[Chat] ERROR:", error);
-    
-    let userMessage = "Desculpe, ocorreu um erro ao processar sua busca.";
-    let fallbackResults: any[] = [];
-
-    // Attempt a local search fallback if AI fails
-    const message = req.body?.message || "";
-    const q = normalize(message);
-    fallbackResults = establishments.filter(e => {
-      const normName = normalize(e.name);
-      const normSub = normalize(e.sub_category);
-      return normName.includes(q) || normSub.includes(q) || q.includes(normName) || q.includes(normSub);
-    }).slice(0, 3);
-    
-    if (error.message && (error.message.includes("429") || error.message.includes("quota") || error.message.includes("RESOURCE_EXHAUSTED"))) {
-      userMessage = `O limite de buscas gratuitas da IA foi atingido para hoje. `;
-      if (fallbackResults.length > 0) {
-        userMessage += `Não consegui usar a IA, mas encontrei estes locais que podem te interessar: ${fallbackResults.map(f => f.name).join(", ")}. `;
-      } else {
-        userMessage += `Tente usar as categorias acima ou a busca manual enquanto restabelecemos o serviço. `;
-      }
-    } else if (error.message && (error.message.includes("500") || error.message.includes("Internal Server Error"))) {
-      userMessage = "O servidor da IA está temporariamente instável. Por favor, tente novamente em alguns segundos.";
-    } else if (error.message && error.message.includes("API key")) {
-      userMessage = "Erro de configuração: Chave de API inválida ou não encontrada no Vercel.";
-    }
-
-    return res.json({ 
-      role: "model", 
-      text: userMessage,
-      groundingChunks: fallbackResults.map(f => ({
-        maps: { title: f.name, uri: `https://www.google.com/maps/search/?api=1&query=${f.latitude},${f.longitude}` }
-      }))
-    });
-  }
+  return res.status(410).json({ error: "Endpoint movido para o frontend." });
 });
 
 app.get("/api/establishments/category/:categoryId", async (req, res) => {
   const { categoryId } = req.params;
   const { city_id } = req.query;
+  const cacheKey = `category-${categoryId}-${city_id}`;
+
+  const cached = getCached(cacheKey);
+  if (cached) return res.json(cached);
 
   console.log(`[API] Fetching establishments for category: ${categoryId}, city: ${city_id}`);
 
@@ -620,6 +542,7 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
       if (error) {
         console.error("[Supabase Error] Fetching category establishments:", error);
       } else if (data && data.length > 0) {
+        setCache(cacheKey, data);
         return res.json(data);
       }
     }
@@ -639,6 +562,11 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
 
 app.get("/api/establishments/featured", async (req, res) => {
   const { city_id } = req.query;
+  const cacheKey = `featured-${city_id}`;
+
+  const cached = getCached(cacheKey);
+  if (cached) return res.json(cached);
+
   const supabase = getSupabaseAdmin();
 
   console.log(`[API] Fetching featured for city_id: ${city_id}. Supabase available: ${!!supabase}`);
@@ -661,49 +589,23 @@ app.get("/api/establishments/featured", async (req, res) => {
         console.log(`[API Featured] Searching for "${cityName}" using IDs: ${targetCityIds.join(', ')}`);
       }
 
-      // Try fetching with status approved first
-      const fetchFromSupabase = async (withStatus: boolean, onlyFeatured: boolean = false) => {
-        try {
-          let query = supabase.from('establishments').select('*');
-          if (withStatus) query = query.eq('status', 'approved');
-          if (onlyFeatured) query = query.eq('is_featured', true);
-          if (targetCityIds.length > 0) {
-            query = query.in('city_id', targetCityIds);
-          }
-          
-          // Order by premium first, then rating
-          return await query
-            .order('is_premium', { ascending: false })
-            .order('rating', { ascending: false })
-            .limit(8);
-        } catch (e: any) {
-          console.error("[Supabase Featured Exception]:", e.message);
-          return { data: null, error: e };
-        }
-      };
-
-      // 1. Try fetching ONLY featured + approved
-      let { data, error } = await fetchFromSupabase(true, true);
-      
-      // 2. If no featured found, try fetching ANY approved
-      if (!data || data.length === 0) {
-        console.log("[API Featured] No featured found, trying any approved...");
-        const retry = await fetchFromSupabase(true, false);
-        data = retry.data;
-        error = retry.error;
-      }
-
-      // 3. If still no approved found, try without status filter
-      if (!data || data.length === 0) {
-        console.log("[API Featured] No approved found, trying without status filter...");
-        const retry = await fetchFromSupabase(false, false);
-        data = retry.data;
-        error = retry.error;
-      }
+      // Optimized single query for all featured/approved establishments
+      const { data, error } = await supabase
+        .from('establishments')
+        .select('*')
+        .in('city_id', targetCityIds)
+        .order('is_featured', { ascending: false })
+        .order('is_premium', { ascending: false })
+        .order('rating', { ascending: false })
+        .limit(20);
 
       if (data && data.length > 0) {
-        console.log(`[API Featured] Found ${data.length} establishments in Supabase`);
-        return res.json(data);
+        // Filter to ensure we have at least some approved if possible, 
+        // but the query already orders them well.
+        const finalResults = data.slice(0, 8);
+        console.log(`[API Featured] Found ${finalResults.length} establishments in Supabase`);
+        setCache(cacheKey, finalResults);
+        return res.json(finalResults);
       }
 
       if (error) {
@@ -743,6 +645,10 @@ app.get("/api/search/suggest", async (req, res) => {
   const q = normalize(rawQ);
   if (!q) return res.json({ intents: [], types: [] });
   
+  const cacheKey = `suggest-${q}`;
+  const cached = getCached(cacheKey);
+  if (cached) return res.json(cached);
+
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
@@ -778,7 +684,9 @@ app.get("/api/search/suggest", async (req, res) => {
       });
 
       const types = Array.from(new Set(typesData?.map(e => e.sub_category) || [])).slice(0, 5);
-      return res.json({ intents: combinedIntents.slice(0, 5), types });
+      const result = { intents: combinedIntents.slice(0, 5), types };
+      setCache(cacheKey, result);
+      return res.json(result);
     }
 
     // Fallback dictionary for Intentional Search
@@ -819,6 +727,11 @@ app.get("/api/search", async (req, res) => {
   const rawQ = String(req.query.q || "");
   const q = cleanQuery(rawQ);
   const { city_id, category_id, sub_category } = req.query;
+  
+  const cacheKey = `search-${q}-${city_id}-${category_id}-${sub_category}`;
+  const cached = getCached(cacheKey);
+  if (cached) return res.json(cached);
+
   const supabase = getSupabaseAdmin();
   
   console.log(`[API Search] Query: "${rawQ}" -> Cleaned: "${q}". City: ${city_id}, Category: ${category_id}. Supabase: ${!!supabase}`);
@@ -831,15 +744,22 @@ app.get("/api/search", async (req, res) => {
       const mockCity = cities.find(c => c.id === Number(city_id));
       const cityName = mockCity ? mockCity.name : "Gurupi";
 
-      const { data: matchingCities } = await supabase
-        .from('cities')
-        .select('id')
-        .ilike('name', cityName);
-      
-      if (matchingCities && matchingCities.length > 0) {
-        targetCityIds = matchingCities.map(c => c.id);
-        console.log(`[API Search] Searching for "${cityName}" using IDs: ${targetCityIds.join(', ')}`);
+      if (cityIdCache.has(Number(city_id))) {
+        targetCityIds = cityIdCache.get(Number(city_id))!;
+      } else {
+        const { data: matchingCities } = await supabase
+          .from('cities')
+          .select('id')
+          .ilike('name', cityName);
+        
+        if (matchingCities && matchingCities.length > 0) {
+          targetCityIds = matchingCities.map(c => c.id);
+          cityIdCache.set(Number(city_id), targetCityIds);
+          console.log(`[API Search] Cached IDs for "${cityName}": ${targetCityIds.join(', ')}`);
+        }
       }
+      
+      console.log(`[API Search] Searching for "${cityName}" using IDs: ${targetCityIds.join(', ')}`);
 
       // Try fetching with status approved first, then fallback to any status
       const fetchFromSupabase = async (withStatus: boolean) => {
@@ -932,6 +852,7 @@ app.get("/api/search", async (req, res) => {
       }
       
       if (data && data.length > 0) {
+        setCache(cacheKey, data);
         return res.json(data);
       }
 
@@ -944,7 +865,9 @@ app.get("/api/search", async (req, res) => {
           .eq('active', true);
         
         if (cityData && cityData.length > 0) {
-          return res.json(cityResultsMap(cityData));
+          const results = cityResultsMap(cityData);
+          setCache(cacheKey, results);
+          return res.json(results);
         }
       }
     }
@@ -1102,6 +1025,7 @@ app.put("/api/establishments/:id", async (req, res) => {
       }
 
       console.log(`[API] Establishment ${id} updated successfully in Supabase`);
+      clearCache();
       return res.json(data?.[0]);
     } else {
       // Local fallback - fix ID comparison
@@ -1126,6 +1050,7 @@ app.put("/api/establishments/:id", async (req, res) => {
           is_premium: registration.is_premium
         };
         console.log(`[API] Establishment ${id} updated successfully in local memory`);
+        clearCache();
         return res.json(establishments[index]);
       }
       return res.status(404).json({ error: "Estabelecimento não encontrado na memória local" });
@@ -1151,11 +1076,13 @@ app.delete("/api/establishments/:id", async (req, res) => {
         .eq('id', id);
 
       if (error) throw error;
+      clearCache();
       return res.json({ success: true });
     } else {
       const index = establishments.findIndex(e => e.id === id);
       if (index !== -1) {
         establishments.splice(index, 1);
+        clearCache();
         return res.json({ success: true });
       }
       return res.status(404).json({ error: "Estabelecimento não encontrado" });
@@ -1163,6 +1090,63 @@ app.delete("/api/establishments/:id", async (req, res) => {
   } catch (error: any) {
     console.error("[API Error] Deleting establishment:", error);
     res.status(500).json({ error: "Erro ao excluir estabelecimento", message: error.message });
+  }
+});
+
+app.get("/api/admin/establishments/missing-hours", async (req, res) => {
+  try {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('establishments')
+        .select('*')
+        .or('hours.is.null,hours.eq.Horário não informado,hours.eq.Não informado,hours.eq.')
+        .limit(50);
+
+      if (error) throw error;
+      return res.json(data || []);
+    }
+    
+    const missing = establishments.filter(e => !e.hours || e.hours.includes("não informado") || e.hours === "");
+    res.json(missing.slice(0, 50));
+  } catch (error: any) {
+    console.error("[API Error] Fetching missing hours:", error);
+    res.status(500).json({ error: "Erro ao buscar estabelecimentos", message: error.message });
+  }
+});
+
+app.patch("/api/establishments/:id", async (req, res) => {
+  const { id } = req.params;
+  const { hours } = req.body;
+  
+  console.log(`[API] Updating hours for establishment ${id}: ${hours}`);
+
+  try {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('establishments')
+        .update({ hours })
+        .eq('id', id)
+        .select();
+
+      if (error) throw error;
+      
+      clearCache();
+      return res.json({ success: true, data: data?.[0] });
+    }
+
+    // Fallback for mock data (session only)
+    const index = establishments.findIndex(e => e.id === id);
+    if (index !== -1) {
+      establishments[index].hours = hours;
+      return res.json({ success: true, data: establishments[index] });
+    }
+
+    res.status(404).json({ error: "Establishment not found" });
+  } catch (error: any) {
+    console.error("[API Error] Updating establishment hours:", error);
+    res.status(500).json({ error: "Erro ao atualizar horário", message: error.message });
   }
 });
 
@@ -1258,6 +1242,7 @@ app.post("/api/establishments/register", async (req, res) => {
       }
       
       console.log("[API] Establishment registered successfully in Supabase");
+      clearCache();
       return res.json({ 
         status: "approved", 
         message: "Seu estabelecimento foi cadastrado e já está visível!",
@@ -1290,6 +1275,7 @@ app.post("/api/establishments/register", async (req, res) => {
       };
       establishments.push(newEstablishment);
       console.log("[API] New establishment registered locally for user:", registration.userId, newEstablishment.name);
+      clearCache();
       
       return res.json({ 
         status: "approved", 

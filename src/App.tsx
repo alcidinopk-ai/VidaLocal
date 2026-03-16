@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Send, 
   MapPin, 
@@ -26,6 +26,7 @@ import {
   Store,
   Plus,
   Printer,
+  RefreshCw,
   User as UserIcon
 } from 'lucide-react';
 import Markdown from 'react-markdown';
@@ -41,6 +42,7 @@ import { UserEstablishmentsModal } from './components/UserEstablishmentsModal';
 import { AuthModal } from './components/AuthModal';
 import { FeaturedEstablishments } from './components/FeaturedEstablishments';
 
+import { MaintenanceTools } from './components/MaintenanceTools';
 import { CATEGORIES, SUB_CATEGORIES } from './constants/taxonomy';
 
 const PREDEFINED_LOCATIONS = [
@@ -81,8 +83,17 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 };
 
 export default function App() {
-  const { currentCity, isLoading: isCityLoading } = useCity();
+  const { currentCity, isLoading: isCityLoading, skipLoading } = useCity();
   const { user, signOut } = useAuth();
+  const [showSkip, setShowSkip] = useState(false);
+
+  useEffect(() => {
+    if (isCityLoading) {
+      const timer = setTimeout(() => setShowSkip(true), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [isCityLoading]);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'model',
@@ -106,7 +117,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<{ intents: any[], types: string[] }>({ intents: [], types: [] });
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [view, setView] = useState<'home' | 'subcategories' | 'chat'>('home');
+  const [view, setView] = useState<'home' | 'subcategories' | 'chat' | 'maintenance'>('home');
   
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -119,17 +130,16 @@ export default function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const detectLocation = () => {
+  const [isDetecting, setIsDetecting] = useState(false);
+
+  const detectLocation = useCallback(() => {
+    setIsDetecting(true);
     // Default to city center
     const defaultLoc = {
       latitude: currentCity.latitude,
       longitude: currentCity.longitude,
     };
     
-    setLocation(defaultLoc);
-    setIsRealLocation(false);
-    setLocationName(`${currentCity.name} – ${currentCity.uf}`);
-
     // Try to get real location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -140,17 +150,36 @@ export default function App() {
           };
           setLocation(realLoc);
           setIsRealLocation(true);
-          // We keep the city name as the location name for the UI header, 
-          // but the coordinates are now real.
+          setIsDetecting(false);
           console.log("Real location detected:", realLoc);
         },
         (error) => {
           console.warn("Error detecting real location, using city defaults:", error);
+          setIsDetecting(false);
+          // Use functional update to check current location state without dependency
+          setLocation(prev => {
+            if (!prev) {
+              setIsRealLocation(false);
+              setLocationName(`${currentCity.name} – ${currentCity.uf}`);
+              return defaultLoc;
+            }
+            return prev;
+          });
         },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
+    } else {
+      setIsDetecting(false);
+      setLocation(prev => {
+        if (!prev) {
+          setIsRealLocation(false);
+          setLocationName(`${currentCity.name} – ${currentCity.uf}`);
+          return defaultLoc;
+        }
+        return prev;
+      });
     }
-  };
+  }, [currentCity]);
 
   useEffect(() => {
     detectLocation();
@@ -198,22 +227,33 @@ export default function App() {
     setLocationName(loc.name);
   };
 
+  const fetchCategoryEstablishments = useCallback(async (categoryId: number) => {
+    setIsCategoryLoading(true);
+    try {
+      const res = await fetch(`/api/establishments/category/${categoryId}?city_id=${currentCity.id}`);
+      let data = await res.json();
+      
+      if (location && Array.isArray(data)) {
+        data.sort((a, b) => {
+          const distA = calculateDistance(location.latitude, location.longitude, a.latitude, a.longitude);
+          const distB = calculateDistance(location.latitude, location.longitude, b.latitude, b.longitude);
+          return distA - distB;
+        });
+      }
+      
+      setCategoryEstablishments(data);
+    } catch (err) {
+      console.error("Error fetching category establishments:", err);
+    } finally {
+      setIsCategoryLoading(false);
+    }
+  }, [currentCity.id]);
+
   const handleCategoryClick = (categoryId: number) => {
     setActiveCategoryId(categoryId);
     setSelectedSubCategory(null);
     setView('subcategories');
-    setIsCategoryLoading(true);
-    
-    fetch(`/api/establishments/category/${categoryId}?city_id=${currentCity.id}`)
-      .then(res => res.json())
-      .then(data => {
-        setCategoryEstablishments(data);
-        setIsCategoryLoading(false);
-      })
-      .catch(err => {
-        console.error("Error fetching category establishments:", err);
-        setIsCategoryLoading(false);
-      });
+    fetchCategoryEstablishments(categoryId);
   };
 
   useEffect(() => {
@@ -253,13 +293,13 @@ export default function App() {
     performSearch(query, true, activeCategoryId || undefined, subCategoryName);
   };
 
-  const performSearch = async (
+  const performSearch = useCallback(async (
     query: string, 
     clearPrevious: boolean = false, 
     categoryId?: number, 
     subCategory?: string
   ) => {
-    if (isLoading) return;
+    if (isLoading || !query.trim()) return;
 
     // Direct to chat view if not already there
     if (view !== 'chat') {
@@ -270,7 +310,7 @@ export default function App() {
     }
 
     const userMsg: ChatMessage = { role: 'user', text: query };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages(prev => clearPrevious ? [userMsg] : [...prev, userMsg]);
     setIsLoading(true);
     
     if (clearPrevious) {
@@ -289,22 +329,6 @@ export default function App() {
       const localResults = await fetch(`/api/search?${searchParams.toString()}`)
         .then(res => res.json())
         .catch(() => []);
-
-      // Create context string for Gemini
-      const localContext = localResults
-        .filter((item: any) => item.id && item.name && item.latitude)
-        .map((est: any) => `- ${est.name}: ${est.address} (${est.sub_category})`)
-        .join("\n");
-
-      const categoryName = CATEGORIES.find(c => c.id === (categoryId || activeCategoryId))?.name;
-      const response = await chatWithMaps(
-        query, 
-        currentCity, 
-        location, 
-        localContext, 
-        categoryName, 
-        subCategory || selectedSubCategory || undefined
-      );
 
       // Convert local results to GroundingChunks
       const localChunks: GroundingChunk[] = localResults
@@ -333,6 +357,47 @@ export default function App() {
           }
         }));
 
+      // Show local results immediately for better responsiveness
+      if (localChunks.length > 0) {
+        setAllGroundingChunks(prev => {
+          const newChunks = localChunks.filter(
+            nc => !prev.some(pc => pc.maps?.id === nc.maps?.id)
+          );
+          let combined = [...newChunks, ...prev];
+          
+          // Sort by distance if location is available
+          if (location) {
+            combined.sort((a, b) => {
+              const locA = a.maps?.location;
+              const locB = b.maps?.location;
+              if (!locA || !locB) return 0;
+              const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
+              const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
+              return distA - distB;
+            });
+          }
+          
+          return combined.slice(0, 20);
+        });
+        setIsMapOpen(true);
+      }
+
+      // Create context string for Gemini
+      const localContext = localResults
+        .filter((item: any) => item.id && item.name && item.latitude)
+        .map((est: any) => `- ${est.name}: ${est.address} (${est.sub_category})`)
+        .join("\n");
+
+      const categoryName = CATEGORIES.find(c => c.id === (categoryId || activeCategoryId))?.name;
+      const response = await chatWithMaps(
+        query, 
+        currentCity, 
+        location, 
+        localContext, 
+        categoryName, 
+        subCategory || selectedSubCategory || undefined
+      );
+
       // If AI failed but we have local results, add a helpful message
       const aiFailed = 
         response.text.includes("chave da API Gemini") || 
@@ -357,25 +422,71 @@ export default function App() {
 
       setMessages(prev => [...prev, response]);
       
-      const allNewChunks = [...localChunks, ...(response.groundingChunks || [])];
+      const geminiChunks = response.groundingChunks || [];
       
-      if (allNewChunks.length > 0) {
+      if (geminiChunks.length > 0) {
         setAllGroundingChunks(prev => {
-          const newChunks = allNewChunks.filter(
-            nc => !prev.some(pc => pc.maps?.uri === nc.maps?.uri)
+          const newChunks = geminiChunks.filter(
+            nc => !prev.some(pc => pc.maps?.title === nc.maps?.title)
           );
-          return [...newChunks, ...prev].slice(0, 20);
+          let combined = [...newChunks, ...prev];
+          
+          // Sort by distance if location is available
+          if (location) {
+            combined.sort((a, b) => {
+              const locA = a.maps?.location;
+              const locB = b.maps?.location;
+              if (!locA || !locB) return 0;
+              const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
+              const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
+              return distA - distB;
+            });
+          }
+          
+          return combined.slice(0, 20);
         });
-        // Auto-open map panel when results are found
-        setIsMapOpen(true);
       }
     } catch (err) {
       console.error("Search error:", err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isLoading, view, selectedSubCategory, currentCity, location, activeCategoryId]);
 
+  const findNearbyEstablishments = useCallback(async () => {
+    if (!location) {
+      detectLocation();
+      return;
+    }
+    
+    setView('chat');
+    setSelectedSubCategory('Estabelecimentos mais próximos');
+    const query = `estabelecimentos mais próximos de mim em ${currentCity.name}`;
+    performSearch(query, true);
+  }, [location, detectLocation, currentCity, performSearch]);
+
+
+  const refreshData = useCallback(() => {
+    // Refresh featured
+    fetch(`/api/establishments/featured?city_id=${currentCity.id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          // This will trigger re-render of FeaturedEstablishments if it was listening to a global state,
+          // but here it's local to that component. We might need a global refresh trigger.
+          window.dispatchEvent(new CustomEvent('vida360:refresh-featured'));
+        }
+      });
+    
+    // Refresh category list if active
+    if (activeCategoryId) {
+      fetchCategoryEstablishments(activeCategoryId);
+    }
+    
+    // If in chat view with results, we might want to re-run the last search
+    // but that could be annoying. For now, let's just clear the API cache on server
+    // which we already do.
+  }, [currentCity.id, activeCategoryId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -392,6 +503,15 @@ export default function App() {
         </div>
         <h1 className="text-2xl font-bold text-zinc-900">VidaLocal</h1>
         <p className="text-sm text-zinc-400 mt-2 animate-bounce">Detectando sua localização...</p>
+        
+        {showSkip && (
+          <button 
+            onClick={skipLoading}
+            className="mt-8 px-6 py-2 text-sm font-medium text-zinc-500 hover:text-[#00897b] transition-colors border border-zinc-200 rounded-full"
+          >
+            Pular detecção
+          </button>
+        )}
       </div>
     );
   }
@@ -432,6 +552,14 @@ export default function App() {
                     >
                       Meus Cadastros
                     </button>
+                    {user.email === 'alcidinopk@gmail.com' && (
+                      <button 
+                        onClick={() => setView('maintenance')}
+                        className="text-[10px] font-bold text-[#f57c00] hover:underline transition-colors uppercase tracking-widest"
+                      >
+                        Manutenção
+                      </button>
+                    )}
                     <button 
                       onClick={() => signOut()}
                       className="text-[10px] font-bold text-zinc-400 hover:text-red-500 transition-colors uppercase tracking-widest"
@@ -477,7 +605,26 @@ export default function App() {
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto relative bg-white">
           <AnimatePresence mode="wait">
-            {view === 'home' ? (
+            {view === 'maintenance' ? (
+              <motion.div
+                key="maintenance"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="min-h-full bg-zinc-50 p-6"
+              >
+                <div className="max-w-4xl mx-auto space-y-6">
+                  <button 
+                    onClick={() => setView('home')}
+                    className="flex items-center gap-2 text-sm font-bold text-zinc-500 hover:text-zinc-800 transition-colors"
+                  >
+                    <ChevronDown className="w-4 h-4 rotate-90" />
+                    Voltar para o Início
+                  </button>
+                  <MaintenanceTools />
+                </div>
+              </motion.div>
+            ) : view === 'home' ? (
               /* Home Screen: Hero + Categories */
               <motion.div
                 key="home"
@@ -493,7 +640,18 @@ export default function App() {
                   <div className="absolute inset-0 bg-[url('https://picsum.photos/seed/city/1920/1080?blur=10')] bg-cover bg-center mix-blend-overlay opacity-30 z-0" />
                   
                   <div className="relative z-10 max-w-4xl mx-auto w-full">
-                    <CitySelectorButton />
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2 mb-4">
+                      <CitySelectorButton />
+                      <button 
+                        onClick={detectLocation}
+                        disabled={isDetecting}
+                        className={`px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all border border-white/20 flex items-center gap-2 text-xs font-bold backdrop-blur-sm ${isDetecting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        title="Atualizar minha localização real"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isDetecting ? 'animate-spin' : ''}`} />
+                        {isRealLocation ? 'Localização Real Ativa' : 'Detectar Localização Real'}
+                      </button>
+                    </div>
 
                     <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white tracking-tight mb-2 leading-[1.1]">
                       VidaLocal
@@ -520,9 +678,17 @@ export default function App() {
                         </div>
                         <button 
                           onClick={() => performSearch(input, true)}
-                          className="px-6 py-2.5 bg-[#f57c00] text-white text-sm font-bold rounded-xl hover:bg-[#e65100] transition-all shadow-lg active:scale-95"
+                          disabled={isLoading}
+                          className="px-6 py-2.5 bg-[#f57c00] text-white text-sm font-bold rounded-xl hover:bg-[#e65100] transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
-                          Buscar
+                          {isLoading ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              <span>Buscando...</span>
+                            </>
+                          ) : (
+                            "Buscar"
+                          )}
                         </button>
                       </div>
 
@@ -543,6 +709,13 @@ export default function App() {
                               <div>
                                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 block">Buscas Populares</span>
                                 <div className="flex flex-wrap gap-2">
+                                  <button 
+                                    onClick={findNearbyEstablishments}
+                                    className="px-3 py-2 bg-emerald-50 text-[#00897b] rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all border border-emerald-100 flex items-center gap-2"
+                                  >
+                                    <MapPin className="w-3 h-3" />
+                                    Perto de Mim
+                                  </button>
                                   {["Restaurante", "Farmácia", "Açougue", "Padaria", "Oficina"].map(term => (
                                     <button 
                                       key={term}
@@ -744,6 +917,7 @@ export default function App() {
                               distance={distStr}
                               userLocation={location}
                               isRealLocation={isRealLocation}
+                              onRefresh={refreshData}
                             />
                           );
                         })
@@ -798,6 +972,15 @@ export default function App() {
                           : `${selectedSubCategory} em ${currentCity.name}${currentCity.uf ? ` - ${currentCity.uf}` : ''}`}
                       </h3>
                     </div>
+                    <button 
+                      onClick={detectLocation}
+                      disabled={isDetecting}
+                      className={`ml-4 p-2 rounded-xl border border-zinc-200 text-zinc-500 hover:text-zinc-900 transition-all flex items-center gap-2 text-[10px] font-bold ${isDetecting ? 'opacity-50' : ''}`}
+                      title="Atualizar minha localização real"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isDetecting ? 'animate-spin' : ''}`} />
+                      <span className="hidden sm:inline">{isRealLocation ? 'Localização Real' : 'Detectar Localização'}</span>
+                    </button>
                   </div>
                   
                   <div className="flex items-center gap-2">
@@ -936,6 +1119,7 @@ export default function App() {
             isRealLocation={isRealLocation} 
             isLoading={isLoading} 
             onClose={() => setIsMapOpen(false)}
+            onRefresh={refreshData}
           />
         </div>
       </motion.div>

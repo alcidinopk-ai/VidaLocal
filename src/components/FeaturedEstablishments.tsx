@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Star, MapPin, Share2, ExternalLink, MessageCircle, Navigation2, Crown, CheckCircle2 } from 'lucide-react';
+import { Star, MapPin, Share2, ExternalLink, MessageCircle, Navigation2, Crown, CheckCircle2, Clock } from 'lucide-react';
 import { useCity } from '../contexts/CityContext';
+import { getBusinessStatus } from '../utils/hours';
 
 interface Establishment {
   id: string;
@@ -12,6 +13,7 @@ interface Establishment {
   whatsapp: string;
   latitude: number;
   longitude: number;
+  hours?: string;
   user_id?: string;
   is_premium?: boolean;
   is_verified?: boolean;
@@ -41,15 +43,30 @@ export const FeaturedEstablishments = () => {
         setIsLoading(false);
       }
     };
+    
     fetchFeatured();
+
+    // Listen for global refresh events
+    window.addEventListener('vida360:refresh-featured', fetchFeatured);
+    return () => window.removeEventListener('vida360:refresh-featured', fetchFeatured);
   }, [currentCity.id]);
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="h-48 bg-zinc-100 animate-pulse rounded-3xl" />
-        ))}
+      <div className="mt-12 px-6 max-w-7xl mx-auto w-full pb-12">
+        <div className="flex items-center justify-between mb-6">
+          <div className="h-8 w-48 bg-zinc-100 animate-pulse rounded-lg" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-64 bg-zinc-50 animate-pulse rounded-[32px] border border-zinc-100" />
+          ))}
+        </div>
+        <div className="mt-4 text-center">
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest animate-pulse">
+            Carregando melhores locais em {currentCity.name}...
+          </p>
+        </div>
       </div>
     );
   }
@@ -83,6 +100,8 @@ export const FeaturedEstablishments = () => {
             ? (whatsappNumber.startsWith('55') ? whatsappNumber : `55${whatsappNumber}`)
             : "";
           const whatsappUrl = formattedWhatsapp ? `https://wa.me/${formattedWhatsapp}` : "#";
+          
+          const statusInfo = getBusinessStatus(est.hours);
           
           return (
             <motion.div 
@@ -118,12 +137,18 @@ export const FeaturedEstablishments = () => {
                 </div>
                 <p className="text-[10px] font-bold text-[#00897b] uppercase tracking-wider mb-2">{est.sub_category}</p>
                 <p className="text-xs text-zinc-400 line-clamp-1">{est.address}</p>
-                {est.whatsapp && (
-                  <p className="text-[10px] font-bold text-emerald-600 mt-2 flex items-center gap-1">
-                    <MessageCircle className="w-2.5 h-2.5" />
-                    {est.whatsapp}
-                  </p>
-                )}
+                <div className="flex items-center gap-3 mt-2">
+                  {est.whatsapp && (
+                    <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                      <MessageCircle className="w-2.5 h-2.5" />
+                      {est.whatsapp}
+                    </p>
+                  )}
+                  <div className={`flex items-center gap-1 text-[10px] font-bold ${statusInfo.color}`}>
+                    <Clock className="w-2.5 h-2.5" />
+                    {statusInfo.label}
+                  </div>
+                </div>
               </div>
 
               <div className="flex flex-col gap-2 mt-6 pt-4 border-t border-zinc-50">
