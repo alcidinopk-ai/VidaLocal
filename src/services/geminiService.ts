@@ -105,6 +105,19 @@ export async function chatWithMaps(
     return result;
   } catch (error: any) {
     console.error("Chat API Error:", error);
+    
+    const errorMessage = error?.message || String(error);
+    const isQuotaExceeded = errorMessage.includes("429") || 
+                           errorMessage.includes("RESOURCE_EXHAUSTED") || 
+                           errorMessage.includes("quota");
+
+    if (isQuotaExceeded) {
+      return {
+        role: "model",
+        text: "Desculpe, o limite de buscas gratuitas da IA foi atingido para este período. Por favor, tente novamente em alguns minutos ou utilize as categorias para navegar pelos estabelecimentos já cadastrados.",
+      };
+    }
+
     return {
       role: "model",
       text: "Desculpe, não consegui processar sua busca agora. Verifique sua conexão ou tente novamente mais tarde.",
