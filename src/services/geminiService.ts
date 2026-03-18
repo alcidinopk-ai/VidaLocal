@@ -96,14 +96,24 @@ export async function chatWithMaps(
     });
 
     const text = response.text || "Sem resposta textual.";
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-      maps: chunk.maps ? { 
-        uri: chunk.maps.uri, 
-        title: chunk.maps.title,
-        location: chunk.maps.location
-      } : undefined,
-      web: chunk.web ? { uri: chunk.web.uri, title: chunk.web.title } : undefined,
-    })).filter((c: any) => c.maps || c.web) || [];
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => {
+      const categoryId = CATEGORIES.find(c => c.name === categoryFilter)?.id;
+      
+      return {
+        maps: chunk.maps ? { 
+          uri: chunk.maps.uri, 
+          title: chunk.maps.title,
+          location: chunk.maps.location,
+          address: chunk.maps.address,
+          phone: chunk.maps.phone,
+          rating: chunk.maps.rating,
+          categoryId: categoryId,
+          subCategory: subCategoryFilter,
+          // Description is usually not in the maps chunk itself but in the response text
+        } : undefined,
+        web: chunk.web ? { uri: chunk.web.uri, title: chunk.web.title } : undefined,
+      };
+    }).filter((c: any) => c.maps || c.web) || [];
 
     const result: ChatMessage = { role: "model", text, groundingChunks };
     responseCache.set(cacheKey, result);

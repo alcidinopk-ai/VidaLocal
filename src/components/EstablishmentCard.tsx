@@ -14,7 +14,8 @@ import {
   Printer,
   Edit,
   Trash2,
-  Crown
+  Crown,
+  Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock } from 'lucide-react';
@@ -41,6 +42,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   onRefresh
 }) => {
   const { user, role } = useAuth();
+  const isAdmin = user && role === 'admin';
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
@@ -72,8 +74,6 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   const shareText = `Confira ${title} no VidaLocal: ${uri}`;
 
   const statusInfo = getBusinessStatus(chunk.maps?.hours);
-
-  const isAdmin = user && role === 'admin';
 
   const handleDelete = async () => {
     if (!chunk.maps?.id) return;
@@ -220,6 +220,11 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                   ? `Localizado a ${distance} de sua posição atual.` 
                   : `Localizado em sua cidade. A aproximadamente ${distance} de você.`}
               </p>
+              {chunk.maps?.description && (
+                <p className="text-xs text-zinc-600 mt-2 italic leading-relaxed border-l-2 border-emerald-100 pl-3">
+                  {chunk.maps.description}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -315,18 +320,20 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
               <button 
                 onClick={() => setIsEditModalOpen(true)}
                 className="p-2 rounded-xl bg-emerald-50 border border-emerald-100 text-[#00897b] hover:bg-emerald-100 transition-all"
-                title="Editar"
+                title={chunk.maps?.id ? "Editar" : "Cadastrar no VidaLocal"}
               >
-                <Edit className="w-3.5 h-3.5" />
+                {chunk.maps?.id ? <Edit className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
               </button>
-              <button 
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="p-2 rounded-xl bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 transition-all disabled:opacity-50"
-                title="Excluir"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {chunk.maps?.id && (
+                <button 
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="p-2 rounded-xl bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 transition-all disabled:opacity-50"
+                  title="Excluir"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           )}
         </div>

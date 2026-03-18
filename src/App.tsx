@@ -425,9 +425,54 @@ export default function App() {
       
       const geminiChunks = response.groundingChunks || [];
       
-      if (geminiChunks.length > 0) {
+      // Try to extract descriptions from the response text for each chunk
+      const chunksWithDescriptions = geminiChunks.map(chunk => {
+        if (!chunk.maps) return chunk;
+        
+        const title = chunk.maps.title;
+
+        // Check if this establishment is already in our local results
+        const localMatch = localResults.find((lr: any) => 
+          lr.name.toLowerCase().trim() === title.toLowerCase().trim()
+        );
+
+        let enrichedMaps = { ...chunk.maps };
+
+        if (localMatch) {
+          enrichedMaps = {
+            ...enrichedMaps,
+            id: localMatch.id,
+            categoryId: localMatch.category_id,
+            subCategory: localMatch.sub_category,
+            address: localMatch.address,
+            hours: localMatch.hours,
+            description: localMatch.description || enrichedMaps.description,
+            phone: localMatch.phone,
+            whatsapp: localMatch.whatsapp,
+            is_featured: localMatch.is_featured,
+            is_verified: localMatch.is_verified,
+            is_premium: localMatch.is_premium
+          };
+        }
+        
+        // Search for the title in the text and extract the following sentence/paragraph
+        const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`\\*\\*${escapedTitle}\\*\\*:?\\s*([^\\n*]+)`, 'i');
+        const match = response.text.match(regex);
+        
+        if (match && match[1]) {
+          enrichedMaps.description = enrichedMaps.description || match[1].trim();
+        }
+
+        return {
+          ...chunk,
+          maps: enrichedMaps
+        };
+      });
+      
+      if (chunksWithDescriptions.length > 0) {
         setAllGroundingChunks(prev => {
-          const newChunks = geminiChunks.filter(
+          const newChunks = chunksWithDescriptions.filter(
             nc => !prev.some(pc => pc.maps?.title === nc.maps?.title)
           );
           let combined = [...newChunks, ...prev];

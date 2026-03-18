@@ -197,12 +197,13 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
       
       console.log("[Register] Sending payload:", payload);
 
-      const url = initialData 
+      const isUpdate = initialData && initialData.id;
+      const url = isUpdate 
         ? `/api/establishments/${initialData.id}` 
         : '/api/establishments/register';
       
       const response = await fetch(url, {
-        method: initialData ? 'PUT' : 'POST',
+        method: isUpdate ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
