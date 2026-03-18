@@ -220,6 +220,12 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                   ? `Localizado a ${distance} de sua posição atual.` 
                   : `Localizado em sua cidade. A aproximadamente ${distance} de você.`}
               </p>
+              {chunk.maps?.address && (
+                <p className="text-[10px] text-zinc-400 mt-1 flex items-center gap-1">
+                  <MapPin className="w-2.5 h-2.5" />
+                  {chunk.maps.address}
+                </p>
+              )}
               {chunk.maps?.description && (
                 <p className="text-xs text-zinc-600 mt-2 italic leading-relaxed border-l-2 border-emerald-100 pl-3">
                   {chunk.maps.description}

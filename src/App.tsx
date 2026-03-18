@@ -444,10 +444,10 @@ export default function App() {
             id: localMatch.id,
             categoryId: localMatch.category_id,
             subCategory: localMatch.sub_category,
-            address: localMatch.address,
-            hours: localMatch.hours,
+            address: localMatch.address || enrichedMaps.address,
+            hours: localMatch.hours || enrichedMaps.hours,
             description: localMatch.description || enrichedMaps.description,
-            phone: localMatch.phone,
+            phone: localMatch.phone || enrichedMaps.phone,
             whatsapp: localMatch.whatsapp,
             is_featured: localMatch.is_featured,
             is_verified: localMatch.is_verified,
@@ -461,7 +461,15 @@ export default function App() {
         const match = response.text.match(regex);
         
         if (match && match[1]) {
-          enrichedMaps.description = enrichedMaps.description || match[1].trim();
+          const content = match[1].trim();
+          // Often the first part before a period or a long space is the address
+          if (!enrichedMaps.address) {
+            const addressMatch = content.match(/^([^.]{10,100})[.]/);
+            if (addressMatch) {
+              enrichedMaps.address = addressMatch[1].trim();
+            }
+          }
+          enrichedMaps.description = enrichedMaps.description || content;
         }
 
         return {
