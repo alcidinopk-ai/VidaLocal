@@ -446,6 +446,7 @@ export default function App() {
           
           return combined.slice(0, 20);
         });
+        setIsMapOpen(true);
       }
     } catch (err) {
       console.error("Search error:", err);
@@ -492,7 +493,7 @@ export default function App() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
-    performSearch(input, false);
+    performSearch(input, true);
     setInput('');
   };
 

@@ -24,6 +24,7 @@ export interface GroundingChunk {
     is_featured?: boolean;
     is_verified?: boolean;
     is_premium?: boolean;
+    is_open_24_hours?: boolean;
     location?: {
       latitude: number;
       longitude: number;
@@ -80,6 +81,10 @@ export async function chatWithMaps(
         Contexto local (estabelecimentos já cadastrados): ${localContext || 'Nenhum'}
         ${categoryFilter ? `Filtro de categoria: ${categoryFilter}` : ''}
         ${subCategoryFilter ? `Filtro de tipo: ${subCategoryFilter}` : ''}
+        
+        Sempre use a ferramenta Google Maps para encontrar e confirmar a localização de todos os estabelecimentos que você mencionar na resposta.
+        Ao listar estabelecimentos, use SEMPRE o formato de lista (usando asteriscos *) para que cada local apareça em um box separado no chat.
+        Para cada local, coloque o nome em negrito e descreva brevemente o endereço e o que o local oferece.
         `,
         tools: [{ googleMaps: {} }],
         toolConfig: {
