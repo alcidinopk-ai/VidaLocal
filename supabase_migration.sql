@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS establishments (
   is_featured BOOLEAN DEFAULT FALSE,
   is_verified BOOLEAN DEFAULT FALSE,
   is_premium BOOLEAN DEFAULT FALSE,
+  is_open_24_hours BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

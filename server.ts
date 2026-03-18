@@ -114,6 +114,7 @@ interface Establishment {
   phone?: string;
   website?: string;
   hours?: string;
+  is_open_24_hours?: boolean;
   description?: string;
   user_id?: string;
   status?: string;
@@ -990,6 +991,7 @@ app.put("/api/establishments/:id", async (req, res) => {
           whatsapp: registration.whatsapp,
           website: registration.website,
           hours: registration.hours,
+          is_open_24_hours: registration.is_open_24_hours,
           description: registration.description,
           latitude: registration.latitude,
           longitude: registration.longitude,
@@ -1008,6 +1010,9 @@ app.put("/api/establishments/:id", async (req, res) => {
         let userMessage = "Erro ao atualizar no banco de dados";
         if (error.code === '42703') {
           userMessage = "Erro de esquema: Uma ou mais colunas não foram encontradas na tabela 'establishments'.";
+          if (error.message && error.message.includes('is_open_24_hours')) {
+            userMessage = "Erro de esquema: A coluna 'is_open_24_hours' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN is_open_24_hours BOOLEAN DEFAULT FALSE;";
+          }
         } else if (error.message) {
           userMessage = `Erro no Supabase: ${error.message}`;
         }
@@ -1041,6 +1046,7 @@ app.put("/api/establishments/:id", async (req, res) => {
           whatsapp: registration.whatsapp,
           website: registration.website,
           hours: registration.hours,
+          is_open_24_hours: registration.is_open_24_hours,
           description: registration.description,
           latitude: registration.latitude || establishments[index].latitude,
           longitude: registration.longitude || establishments[index].longitude,
@@ -1216,6 +1222,7 @@ app.post("/api/establishments/register", async (req, res) => {
       whatsapp TEXT,
       website TEXT,
       hours TEXT,
+      is_open_24_hours BOOLEAN DEFAULT FALSE,
       description TEXT,
       latitude DOUBLE PRECISION,
       longitude DOUBLE PRECISION,
@@ -1257,6 +1264,7 @@ app.post("/api/establishments/register", async (req, res) => {
         whatsapp: registration.whatsapp,
         website: registration.website,
         hours: registration.hours,
+        is_open_24_hours: registration.is_open_24_hours || false,
         description: registration.description,
         latitude: registration.latitude || registration.cityLat || -11.7298,
         longitude: registration.longitude || registration.cityLng || -49.0678,
@@ -1279,6 +1287,8 @@ app.post("/api/establishments/register", async (req, res) => {
           userMessage = "Erro de esquema: A coluna 'user_id' não foi encontrada na tabela 'establishments'. Certifique-se de que ela existe e é do tipo UUID.";
         } else if (error.code === '42703' && error.message && error.message.includes('maps_link')) {
           userMessage = "Erro de esquema: Coluna 'maps_link' não encontrada na tabela 'establishments'. Verifique se ela existe.";
+        } else if (error.code === '42703' && error.message && error.message.includes('is_open_24_hours')) {
+          userMessage = "Erro de esquema: A coluna 'is_open_24_hours' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN is_open_24_hours BOOLEAN DEFAULT FALSE;";
         } else if (error.message) {
           userMessage = `Erro no Supabase: ${error.message}`;
         }
@@ -1310,6 +1320,7 @@ app.post("/api/establishments/register", async (req, res) => {
         whatsapp: registration.whatsapp,
         website: registration.website,
         hours: registration.hours,
+        is_open_24_hours: registration.is_open_24_hours || false,
         description: registration.description,
         latitude: registration.latitude || -11.7298,
         longitude: registration.longitude || -49.0678,

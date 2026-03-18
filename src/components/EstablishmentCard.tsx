@@ -189,6 +189,12 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                     Verificado
                   </div>
                 )}
+                {chunk.maps?.is_open_24_hours && (
+                  <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full shadow-sm">
+                    <Clock className="w-2.5 h-2.5" />
+                    24 Horas
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-3 mt-1 flex-wrap">
                 {rawPhone && (

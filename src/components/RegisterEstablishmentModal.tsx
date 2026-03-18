@@ -52,6 +52,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     whatsapp: '',
     website: '',
     hours: '',
+    is_open_24_hours: false,
     description: '',
     latitude: null as number | null,
     longitude: null as number | null,
@@ -72,6 +73,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         whatsapp: initialData.whatsapp || '',
         website: initialData.website || '',
         hours: initialData.hours || '',
+        is_open_24_hours: initialData.is_open_24_hours || false,
         description: initialData.description || '',
         latitude: initialData.location?.latitude || null,
         longitude: initialData.location?.longitude || null,
@@ -90,6 +92,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         whatsapp: '',
         website: '',
         hours: '',
+        is_open_24_hours: false,
         description: '',
         latitude: null,
         longitude: null,
@@ -122,7 +125,15 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
       );
       
       if (suggested) {
-        setFormData(prev => ({ ...prev, hours: suggested }));
+        const is24h = suggested.toLowerCase().includes('24 horas') || 
+                     suggested.toLowerCase().includes('24h') ||
+                     suggested.toLowerCase().includes('24 h');
+        
+        setFormData(prev => ({ 
+          ...prev, 
+          hours: suggested,
+          is_open_24_hours: is24h
+        }));
       } else {
         setError("Não consegui encontrar os horários automaticamente. Por favor, preencha manualmente.");
       }
@@ -220,6 +231,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             whatsapp: '',
             website: '',
             hours: '',
+            is_open_24_hours: false,
             description: '',
             latitude: null,
             longitude: null,
@@ -479,30 +491,50 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                 <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Detalhes Adicionais</h4>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <div className="flex items-center justify-between mb-2 ml-1">
-                      <label className="block text-sm font-bold text-zinc-700">Horário de Funcionamento</label>
-                      <button
-                        type="button"
-                        onClick={handleSuggestHours}
-                        disabled={isSuggestingHours || !formData.name}
-                        className="flex items-center gap-1.5 text-xs font-bold text-[#00897b] hover:text-[#00796b] transition-colors disabled:opacity-50"
-                      >
-                        {isSuggestingHours ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Wand2 className="w-3 h-3" />
-                        )}
-                        Sugerir via IA
-                      </button>
+                    <div>
+                      <div className="flex items-center justify-between mb-2 ml-1">
+                        <label className="block text-sm font-bold text-zinc-700">Horário de Funcionamento</label>
+                        <button
+                          type="button"
+                          onClick={handleSuggestHours}
+                          disabled={isSuggestingHours || !formData.name || formData.is_open_24_hours}
+                          className="flex items-center gap-1.5 text-xs font-bold text-[#00897b] hover:text-[#00796b] transition-colors disabled:opacity-50"
+                        >
+                          {isSuggestingHours ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Wand2 className="w-3 h-3" />
+                          )}
+                          Sugerir via IA
+                        </button>
+                      </div>
+                      <textarea 
+                        value={formData.hours}
+                        onChange={e => setFormData({...formData, hours: e.target.value})}
+                        disabled={formData.is_open_24_hours}
+                        placeholder={formData.is_open_24_hours ? "Aberto 24 horas" : "Ex: Seg-Sex: 08h às 18h"}
+                        className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base h-32 resize-none disabled:opacity-50"
+                      />
+                      <label className="flex items-center gap-3 mt-3 ml-1 cursor-pointer group">
+                        <div className="relative flex items-center">
+                          <input 
+                            type="checkbox"
+                            checked={formData.is_open_24_hours}
+                            onChange={e => {
+                              const checked = e.target.checked;
+                              setFormData({
+                                ...formData, 
+                                is_open_24_hours: checked,
+                                hours: checked ? 'Aberto 24 horas' : (formData.hours === 'Aberto 24 horas' ? '' : formData.hours)
+                              });
+                            }}
+                            className="peer appearance-none w-5 h-5 border-2 border-zinc-200 rounded-lg checked:bg-[#00897b] checked:border-[#00897b] transition-all cursor-pointer"
+                          />
+                          <CheckCircle2 className="w-3 h-3 text-white absolute left-1 opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" />
+                        </div>
+                        <span className="text-sm font-bold text-zinc-600 group-hover:text-zinc-900 transition-colors">Aberto 24 horas</span>
+                      </label>
                     </div>
-                    <textarea 
-                      value={formData.hours}
-                      onChange={e => setFormData({...formData, hours: e.target.value})}
-                      placeholder="Ex: Seg-Sex: 08h às 18h"
-                      className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base h-32 resize-none"
-                    />
-                  </div>
                   <div>
                     <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Descrição do Local</label>
                     <textarea 
