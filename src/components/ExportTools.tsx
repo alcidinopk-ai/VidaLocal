@@ -60,10 +60,13 @@ export const ExportTools: React.FC = () => {
         Categoria: CATEGORIES.find(c => c.id === e.category_id)?.name || e.category_id,
         Tipo: e.sub_category,
         Endereço: e.address,
+        Latitude: e.latitude,
+        Longitude: e.longitude,
         Telefone: e.phone || '',
         WhatsApp: e.whatsapp || '',
         Cidade: e.cities?.name || '',
         Estado: e.cities?.states?.uf || '',
+        Verificado: e.is_verified ? 'Sim' : 'Não',
         Status: e.status,
         Data_Cadastro: e.created_at
       })));
@@ -96,11 +99,14 @@ export const ExportTools: React.FC = () => {
         CATEGORIES.find(c => c.id === e.category_id)?.name || e.category_id,
         e.sub_category,
         e.cities?.name || '',
+        e.latitude?.toString() || '',
+        e.longitude?.toString() || '',
+        e.is_verified ? 'Sim' : 'Não',
         e.phone || e.whatsapp || ''
       ]);
 
       (doc as any).autoTable({
-        head: [['Nome', 'Categoria', 'Tipo', 'Cidade', 'Contato']],
+        head: [['Nome', 'Categoria', 'Tipo', 'Cidade', 'Lat', 'Long', 'Verif.', 'Contato']],
         body: tableData,
         startY: 20,
         theme: 'grid',

@@ -348,7 +348,11 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
       <RegisterEstablishmentModal 
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        initialData={chunk.maps}
+        initialData={{
+          ...chunk.maps,
+          phone: chunk.maps?.phone || rawPhone,
+          whatsapp: chunk.maps?.whatsapp || rawWhatsapp
+        }}
         onSuccess={() => {
           if (onRefresh) onRefresh();
           else setTimeout(() => window.location.reload(), 2000);

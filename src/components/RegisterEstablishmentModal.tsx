@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { suggestBusinessHours } from '../services/geminiService';
+import { OpenLocationCode } from 'open-location-code';
 import { 
   X, 
   Store, 
@@ -17,7 +18,8 @@ import {
   Sparkles,
   Crown,
   Wand2,
-  Compass
+  Compass,
+  Hash
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
@@ -57,6 +59,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     latitude: null as number | null,
     longitude: null as number | null,
     mapsLink: '',
+    plusCode: '',
     is_featured: false,
     is_verified: false,
     is_premium: false
@@ -78,6 +81,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         latitude: initialData.location?.latitude || null,
         longitude: initialData.location?.longitude || null,
         mapsLink: initialData.uri || '',
+        plusCode: initialData.plusCode || '',
         is_featured: initialData.is_featured || false,
         is_verified: initialData.is_verified || false,
         is_premium: initialData.is_premium || false
@@ -97,6 +101,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         latitude: null,
         longitude: null,
         mapsLink: '',
+        plusCode: '',
         is_featured: false,
         is_verified: false,
         is_premium: false
@@ -164,6 +169,27 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         alert("Não foi possível obter sua localização.");
       }
     );
+  };
+
+  const handleResolvePlusCode = () => {
+    if (!formData.plusCode.trim()) {
+      alert("Por favor, insira um Plus Code.");
+      return;
+    }
+
+    try {
+      const olc = new OpenLocationCode();
+      const decoded = olc.decode(formData.plusCode.trim());
+      setFormData(prev => ({
+        ...prev,
+        latitude: decoded.latitudeCenter,
+        longitude: decoded.longitudeCenter
+      }));
+      alert("Plus Code resolvido com sucesso!");
+    } catch (err) {
+      console.error("Plus Code resolution error:", err);
+      alert("Plus Code inválido. Certifique-se de que é um código completo (ex: 8FVC9G8F+6X).");
+    }
   };
 
   const filteredSubCategories = SUB_CATEGORIES.filter(
@@ -239,7 +265,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             mapsLink: '',
             is_featured: false,
             is_verified: false,
-            is_premium: false
+            is_premium: false,
+            plusCode: ''
           });
         }, 3000);
       } else {
@@ -438,6 +465,26 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                       placeholder="Inserir Link do Google Maps"
                       className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                     />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input 
+                        type="text"
+                        value={formData.plusCode}
+                        onChange={e => setFormData({...formData, plusCode: e.target.value})}
+                        placeholder="Inserir Plus Code (ex: 8FVC9G8F+6X)"
+                        className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
+                      />
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={handleResolvePlusCode}
+                      className="px-6 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all flex items-center gap-2"
+                    >
+                      <Hash className="w-4 h-4" />
+                      Resolver
+                    </button>
                   </div>
 
                   <button 

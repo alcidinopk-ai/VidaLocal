@@ -151,6 +151,7 @@ export default function App() {
           };
           setLocation(realLoc);
           setIsRealLocation(true);
+          setLocationName("Minha Localização (GPS)");
           setIsDetecting(false);
           console.log("Real location detected:", realLoc);
         },
@@ -248,7 +249,35 @@ export default function App() {
     } finally {
       setIsCategoryLoading(false);
     }
-  }, [currentCity.id]);
+  }, [currentCity.id, location]);
+
+  // Re-sort when location changes
+  useEffect(() => {
+    if (location) {
+      setCategoryEstablishments(prev => {
+        if (!Array.isArray(prev) || prev.length === 0) return prev;
+        const sorted = [...prev].sort((a, b) => {
+          const distA = calculateDistance(location.latitude, location.longitude, a.latitude, a.longitude);
+          const distB = calculateDistance(location.latitude, location.longitude, b.latitude, b.longitude);
+          return distA - distB;
+        });
+        return sorted;
+      });
+
+      setAllGroundingChunks(prev => {
+        if (!Array.isArray(prev) || prev.length === 0) return prev;
+        const sorted = [...prev].sort((a, b) => {
+          const locA = a.maps?.location;
+          const locB = b.maps?.location;
+          if (!locA || !locB) return 0;
+          const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
+          const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
+          return distA - distB;
+        });
+        return sorted;
+      });
+    }
+  }, [location]);
 
   const handleCategoryClick = (categoryId: number) => {
     setActiveCategoryId(categoryId);
@@ -448,10 +477,11 @@ export default function App() {
             hours: localMatch.hours || enrichedMaps.hours,
             description: localMatch.description || enrichedMaps.description,
             phone: localMatch.phone || enrichedMaps.phone,
-            whatsapp: localMatch.whatsapp,
+            whatsapp: localMatch.whatsapp || enrichedMaps.whatsapp,
             is_featured: localMatch.is_featured,
             is_verified: localMatch.is_verified,
-            is_premium: localMatch.is_premium
+            is_premium: localMatch.is_premium,
+            plusCode: localMatch.plus_code || enrichedMaps.plusCode
           };
         }
         
@@ -701,13 +731,27 @@ export default function App() {
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-2 mb-4">
                       <CitySelectorButton />
                       <button 
-                        onClick={detectLocation}
+                        onClick={isRealLocation ? () => {
+                          setIsRealLocation(false);
+                          setLocation({ latitude: currentCity.latitude, longitude: currentCity.longitude });
+                          setLocationName(`${currentCity.name} – ${currentCity.uf}`);
+                        } : detectLocation}
                         disabled={isDetecting}
-                        className={`px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all border border-white/20 flex items-center gap-2 text-xs font-bold backdrop-blur-sm ${isDetecting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        title="Atualizar minha localização real"
+                        className={`px-4 py-2 rounded-xl transition-all border flex items-center gap-2 text-xs font-bold backdrop-blur-sm ${
+                          isRealLocation 
+                            ? 'bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20' 
+                            : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+                        } ${isDetecting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        title={isRealLocation ? "Desativar GPS e usar centro da cidade" : "Ativar minha localização real via GPS"}
                       >
-                        <RefreshCw className={`w-3 h-3 ${isDetecting ? 'animate-spin' : ''}`} />
-                        {isRealLocation ? 'Localização Real Ativa' : 'Detectar Localização Real'}
+                        {isDetecting ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : isRealLocation ? (
+                          <CheckCircle2 className="w-3 h-3" />
+                        ) : (
+                          <Compass className="w-3 h-3" />
+                        )}
+                        {isRealLocation ? 'GPS Ativo' : 'Usar meu GPS'}
                       </button>
                     </div>
 
@@ -870,7 +914,7 @@ export default function App() {
                 </div>
 
                 {/* Featured Section */}
-                <FeaturedEstablishments />
+                <FeaturedEstablishments userLocation={location} />
               </motion.div>
             ) : view === 'subcategories' ? (
               /* Subcategories Screen */
@@ -1032,13 +1076,27 @@ export default function App() {
                       </h3>
                     </div>
                     <button 
-                      onClick={detectLocation}
+                      onClick={isRealLocation ? () => {
+                        setIsRealLocation(false);
+                        setLocation({ latitude: currentCity.latitude, longitude: currentCity.longitude });
+                        setLocationName(`${currentCity.name} – ${currentCity.uf}`);
+                      } : detectLocation}
                       disabled={isDetecting}
-                      className={`ml-4 p-2 rounded-xl border border-zinc-200 text-zinc-500 hover:text-zinc-900 transition-all flex items-center gap-2 text-[10px] font-bold ${isDetecting ? 'opacity-50' : ''}`}
-                      title="Atualizar minha localização real"
+                      className={`ml-4 p-2 rounded-xl border transition-all flex items-center gap-2 text-[10px] font-bold ${
+                        isRealLocation 
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
+                          : 'border-zinc-200 text-zinc-500 hover:text-zinc-900'
+                      } ${isDetecting ? 'opacity-50' : ''}`}
+                      title={isRealLocation ? "Desativar GPS" : "Ativar minha localização real via GPS"}
                     >
-                      <RefreshCw className={`w-3 h-3 ${isDetecting ? 'animate-spin' : ''}`} />
-                      <span className="hidden sm:inline">{isRealLocation ? 'Localização Real' : 'Detectar Localização'}</span>
+                      {isDetecting ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : isRealLocation ? (
+                        <CheckCircle2 className="w-3 h-3" />
+                      ) : (
+                        <Compass className="w-3 h-3" />
+                      )}
+                      <span className="hidden sm:inline">{isRealLocation ? 'GPS Ativo' : 'Usar meu GPS'}</span>
                     </button>
                   </div>
                   

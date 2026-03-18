@@ -121,6 +121,7 @@ interface Establishment {
   is_featured?: boolean;
   is_verified?: boolean;
   is_premium?: boolean;
+  plus_code?: string;
   created_at?: string;
 }
 
@@ -996,6 +997,7 @@ app.put("/api/establishments/:id", async (req, res) => {
           latitude: registration.latitude,
           longitude: registration.longitude,
           maps_link: registration.mapsLink,
+          plus_code: registration.plusCode,
           city_id: registration.cityId,
           is_featured: registration.is_featured,
           is_verified: registration.is_verified,
@@ -1012,6 +1014,8 @@ app.put("/api/establishments/:id", async (req, res) => {
           userMessage = "Erro de esquema: Uma ou mais colunas não foram encontradas na tabela 'establishments'.";
           if (error.message && error.message.includes('is_open_24_hours')) {
             userMessage = "Erro de esquema: A coluna 'is_open_24_hours' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN is_open_24_hours BOOLEAN DEFAULT FALSE;";
+          } else if (error.message && error.message.includes('plus_code')) {
+            userMessage = "Erro de esquema: A coluna 'plus_code' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN plus_code TEXT;";
           }
         } else if (error.message) {
           userMessage = `Erro no Supabase: ${error.message}`;
@@ -1269,6 +1273,7 @@ app.post("/api/establishments/register", async (req, res) => {
         latitude: registration.latitude || registration.cityLat || -11.7298,
         longitude: registration.longitude || registration.cityLng || -49.0678,
         maps_link: registration.mapsLink,
+        plus_code: registration.plusCode,
         city_id: targetCityId,
         user_id: registration.userId,
         status: 'approved',
@@ -1289,6 +1294,8 @@ app.post("/api/establishments/register", async (req, res) => {
           userMessage = "Erro de esquema: Coluna 'maps_link' não encontrada na tabela 'establishments'. Verifique se ela existe.";
         } else if (error.code === '42703' && error.message && error.message.includes('is_open_24_hours')) {
           userMessage = "Erro de esquema: A coluna 'is_open_24_hours' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN is_open_24_hours BOOLEAN DEFAULT FALSE;";
+        } else if (error.code === '42703' && error.message && error.message.includes('plus_code')) {
+          userMessage = "Erro de esquema: A coluna 'plus_code' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN plus_code TEXT;";
         } else if (error.message) {
           userMessage = `Erro no Supabase: ${error.message}`;
         }

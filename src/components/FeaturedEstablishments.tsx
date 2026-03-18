@@ -19,7 +19,20 @@ interface Establishment {
   is_verified?: boolean;
 }
 
-export const FeaturedEstablishments = () => {
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c; // Distance in km
+  return d;
+};
+
+export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { latitude: number; longitude: number } }) => {
   const { currentCity } = useCity();
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +45,15 @@ export const FeaturedEstablishments = () => {
         if (!res.ok) throw new Error('Failed to fetch featured');
         const data = await res.json();
         if (Array.isArray(data)) {
-          setEstablishments(data);
+          let sortedData = [...data];
+          if (userLocation) {
+            sortedData.sort((a, b) => {
+              const distA = calculateDistance(userLocation.latitude, userLocation.longitude, a.latitude, a.longitude);
+              const distB = calculateDistance(userLocation.latitude, userLocation.longitude, b.latitude, b.longitude);
+              return distA - distB;
+            });
+          }
+          setEstablishments(sortedData);
         } else {
           console.error("Featured API returned non-array data:", data);
           setEstablishments([]);
@@ -49,7 +70,7 @@ export const FeaturedEstablishments = () => {
     // Listen for global refresh events
     window.addEventListener('vida360:refresh-featured', fetchFeatured);
     return () => window.removeEventListener('vida360:refresh-featured', fetchFeatured);
-  }, [currentCity.id]);
+  }, [currentCity.id, userLocation]);
 
   if (isLoading) {
     return (

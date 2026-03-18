@@ -25,6 +25,7 @@ export interface GroundingChunk {
     is_verified?: boolean;
     is_premium?: boolean;
     is_open_24_hours?: boolean;
+    plusCode?: string;
     location?: {
       latitude: number;
       longitude: number;
@@ -106,6 +107,8 @@ export async function chatWithMaps(
           location: chunk.maps.location,
           address: chunk.maps.address || chunk.maps.formattedAddress || chunk.maps.formatted_address,
           phone: chunk.maps.phone || chunk.maps.phoneNumber || chunk.maps.phone_number,
+          whatsapp: chunk.maps.whatsapp || chunk.maps.whatsappNumber || chunk.maps.whatsapp_number,
+          plusCode: chunk.maps.plusCode || chunk.maps.plus_code || chunk.maps.plusCodeGlobalCode || chunk.maps.globalCode,
           rating: chunk.maps.rating,
           categoryId: categoryId,
           subCategory: subCategoryFilter,
