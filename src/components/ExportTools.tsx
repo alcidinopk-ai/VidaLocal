@@ -57,11 +57,11 @@ export const ExportTools: React.FC = () => {
       const worksheet = XLSX.utils.json_to_sheet(data.map((e: any) => ({
         ID: e.id,
         Nome: e.name,
+        Latitude: e.latitude,
+        Longitude: e.longitude,
         Categoria: CATEGORIES.find(c => c.id === e.category_id)?.name || e.category_id,
         Tipo: e.sub_category,
         Endereço: e.address,
-        Latitude: e.latitude,
-        Longitude: e.longitude,
         Telefone: e.phone || '',
         WhatsApp: e.whatsapp || '',
         Cidade: e.cities?.name || '',
@@ -96,17 +96,17 @@ export const ExportTools: React.FC = () => {
       
       const tableData = data.map((e: any) => [
         e.name,
+        e.latitude?.toString() || '',
+        e.longitude?.toString() || '',
         CATEGORIES.find(c => c.id === e.category_id)?.name || e.category_id,
         e.sub_category,
         e.cities?.name || '',
-        e.latitude?.toString() || '',
-        e.longitude?.toString() || '',
         e.is_verified ? 'Sim' : 'Não',
         e.phone || e.whatsapp || ''
       ]);
 
       (doc as any).autoTable({
-        head: [['Nome', 'Categoria', 'Tipo', 'Cidade', 'Lat', 'Long', 'Verif.', 'Contato']],
+        head: [['Nome', 'Lat', 'Long', 'Categoria', 'Tipo', 'Cidade', 'Verif.', 'Contato']],
         body: tableData,
         startY: 20,
         theme: 'grid',

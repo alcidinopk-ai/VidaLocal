@@ -429,24 +429,29 @@ export default function App() {
       );
 
       // If AI failed but we have local results, add a helpful message
-      const aiFailed = 
+      const aiFailed = response.isError || 
         response.text.includes("chave da API Gemini") || 
         response.text.includes("API_KEY") ||
         response.text.includes("limite de buscas gratuitas") ||
-        response.text.includes("servidor da IA está temporariamente instável");
+        response.text.includes("servidor da IA está temporariamente instável") ||
+        response.text.includes("não consegui processar sua busca agora") ||
+        response.text.includes("probleminha técnico");
 
       if (aiFailed) {
         if (localChunks.length > 0) {
-          let reason = "o assistente de IA está temporariamente indisponível";
+          let reason = "nosso assistente de IA está descansando um pouquinho";
           if (response.text.includes("limite de buscas gratuitas")) reason = "o limite de buscas da IA foi atingido";
-          if (response.text.includes("servidor da IA está temporariamente instável")) reason = "o servidor da IA está instável";
+          if (response.text.includes("servidor da IA está temporariamente instável") || response.text.includes("probleminha técnico")) reason = "estamos resolvendo um pequeno probleminha técnico";
 
-          response.text = `Encontrei **${localChunks.length} estabelecimentos** em nossa base de dados local para sua busca. \n\nEmbora ${reason}, você pode ver os locais encontrados no mapa ao lado ou na lista abaixo:\n\n` + 
+          response.text = `Encontrei **${localChunks.length} estabelecimentos** em nossa base de dados local para sua busca! ✨ \n\nEmbora ${reason}, você pode ver os locais encontrados no mapa ao lado ou na lista abaixo:\n\n` + 
             localResults.map((est: any) => `* **${est.name}**: ${est.address}`).join("\n") +
-            `\n\n*(Dica: Tente novamente em alguns instantes ou use as categorias para navegar)*`;
+            `\n\n*(Dica: Já estamos trabalhando para resolver! Tente novamente em alguns instantes ou use as categorias)*`;
+          
+          // Clear error flag if we're providing a useful response with local results
+          response.isError = false;
         } else {
           // No local results and AI failed
-          response.text = `Não encontramos estabelecimentos para **"${query}"** em nossa base de dados local no momento. \n\nAlém disso, o assistente de IA está temporariamente indisponível (limite de uso). \n\n**Sugestões:**\n1. Verifique se a cidade selecionada está correta.\n2. Tente uma busca mais simples (ex: apenas "Táxi" em vez de uma frase longa).\n3. Explore as categorias acima.`;
+          response.text = `Puxa, não encontrei estabelecimentos para **"${query}"** em nossa base de dados local no momento. \n\nAlém disso, nosso assistente de IA está descansando um pouquinho (limite de uso). Já estamos trabalhando para que ele fique disponível o tempo todo! \n\n**Enquanto isso, que tal tentar:**\n1. Verifique se a cidade selecionada está correta.\n2. Tente uma busca mais simples (ex: apenas "Padaria").\n3. Explore as categorias acima. \n\nObrigado por sua paciência! 😊`;
         }
       }
 

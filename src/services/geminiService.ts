@@ -42,6 +42,7 @@ export interface ChatMessage {
   role: "user" | "model";
   text: string;
   groundingChunks?: GroundingChunk[];
+  isError?: boolean;
 }
 
 const responseCache = new Map<string, ChatMessage>();
@@ -132,13 +133,15 @@ export async function chatWithMaps(
     if (isQuotaExceeded) {
       return {
         role: "model",
-        text: "Desculpe, o limite de buscas gratuitas da IA foi atingido para este período. Por favor, tente novamente em alguns minutos ou utilize as categorias para navegar pelos estabelecimentos já cadastrados.",
+        text: "Puxa, parece que atingimos o limite de buscas gratuitas da nossa inteligência artificial por agora. Já estamos trabalhando para ampliar isso! Enquanto isso, você pode navegar pelas categorias ou tentar novamente em alguns minutinhos. Agradecemos sua paciência! 😊",
+        isError: true
       };
     }
 
     return {
       role: "model",
-      text: "Desculpe, não consegui processar sua busca agora. Verifique sua conexão ou tente novamente mais tarde.",
+      text: "Ops! Tivemos um pequeno probleminha técnico ao processar sua busca. Nossa equipe já foi avisada e está trabalhando para resolver o quanto antes. Por favor, tente novamente em instantes ou explore as categorias locais. Obrigado por compreender! ✨",
+      isError: true
     };
   }
 }
