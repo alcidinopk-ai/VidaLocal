@@ -84,6 +84,8 @@ export async function chatWithMaps(
         ${categoryFilter ? `Filtro de categoria: ${categoryFilter}` : ''}
         ${subCategoryFilter ? `Filtro de tipo: ${subCategoryFilter}` : ''}
         
+        Comece sua resposta sempre com uma frase clara como: "Em ${city.name} - ${city.uf}, você pode encontrar os seguintes estabelecimentos que oferecem serviços de [Busca]:"
+        
         Sempre use a ferramenta Google Maps para encontrar e confirmar a localização de todos os estabelecimentos que você mencionar na resposta.
         Ao listar estabelecimentos, use SEMPRE o formato de lista (usando asteriscos *) para que cada local apareça em um box separado no chat.
         Para cada local, coloque o nome em negrito e descreva brevemente o endereço e o que o local oferece.

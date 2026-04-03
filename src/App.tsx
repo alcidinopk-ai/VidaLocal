@@ -443,9 +443,9 @@ export default function App() {
           if (response.text.includes("limite de buscas gratuitas")) reason = "o limite de buscas da IA foi atingido";
           if (response.text.includes("servidor da IA está temporariamente instável") || response.text.includes("probleminha técnico")) reason = "estamos resolvendo um pequeno probleminha técnico";
 
-          response.text = `Encontrei **${localChunks.length} estabelecimentos** em nossa base de dados local para sua busca! ✨ \n\nEmbora ${reason}, você pode ver os locais encontrados no mapa ao lado ou na lista abaixo:\n\n` + 
+          response.text = `Em **${currentCity.name} - ${currentCity.uf}**, você pode encontrar os seguintes estabelecimentos que oferecem serviços de **${query}**:\n\n` + 
             localResults.map((est: any) => `* **${est.name}**: ${est.address}`).join("\n") +
-            `\n\n*(Dica: Já estamos trabalhando para resolver! Tente novamente em alguns instantes ou use as categorias)*`;
+            `\n\n*(Nota: ${reason}. Já estamos trabalhando para resolver!)*`;
           
           // Clear error flag if we're providing a useful response with local results
           response.isError = false;
