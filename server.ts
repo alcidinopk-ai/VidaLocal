@@ -3,7 +3,8 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
-import { getSupabaseAdmin } from "./src/lib/supabase-server.js";
+import { getSupabaseAdmin } from "./src/lib/supabase-server.ts";
+import Fuse from "fuse.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -508,7 +509,54 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
 const normalize = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 const cleanQuery = (text: string) => {
-  return normalize(text).replace(/[()[\],.-]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Remove all punctuation and special characters, keep only letters, numbers and spaces
+  return normalize(text).replace(/[^\w\s]/gi, ' ').replace(/\s+/g, ' ').trim();
+};
+
+// Fuzzy search dictionary for "smart" matching
+let fuseInstance: Fuse<string> | null = null;
+const getFuseInstance = () => {
+  if (fuseInstance) return fuseInstance;
+  
+  // Collect all unique sub-categories and some common terms
+  const subCategories = Array.from(new Set(establishments.map(e => e.sub_category)));
+  const commonTerms = [
+    "restaurante", "lanchonete", "pizzaria", "farmácia", "supermercado", "açougue", 
+    "oficina", "pet shop", "academia", "escola", "hospital", "clínica", 
+    "posto de combustível", "barbearia", "salão de beleza", "padaria", "confeitaria",
+    "mecânica", "borracharia", "dentista", "médico", "advogado", "contabilidade",
+    "igreja", "templo", "parque", "praça", "prefeitura", "câmara municipal",
+    "delegacia", "polícia", "bombeiros", "táxi", "uber", "transporte",
+    "hotel", "pousada", "motel", "shopping", "loja", "vestuário", "calçados",
+    "eletrônicos", "móveis", "eletrodomésticos", "informática", "internet",
+    "papelaria", "livraria", "brinquedos", "presentes", "floricultura",
+    "sorveteria", "açaí", "cafeteria", "bar", "pub", "boate", "cervejaria",
+    "espetinho", "churrascaria", "japonês", "sushi", "chinês", "italiano",
+    "hamburgueria", "pastelaria", "lanche", "comida caseira", "marmitex"
+  ];
+  const dictionary = Array.from(new Set([...subCategories, ...commonTerms]));
+  
+  fuseInstance = new Fuse(dictionary, {
+    includeScore: true,
+    threshold: 0.4,
+    distance: 100,
+    ignoreLocation: true
+  });
+  return fuseInstance;
+};
+
+const smartCorrectQuery = (q: string) => {
+  if (!q || q.length < 3) return q;
+  
+  const fuse = getFuseInstance();
+  const results = fuse.search(q);
+  
+  if (results.length > 0 && results[0].score && results[0].score < 0.3) {
+    console.log(`[Smart Search] Corrected "${q}" to "${results[0].item}" (score: ${results[0].score})`);
+    return results[0].item;
+  }
+  
+  return q;
 };
 
 const sanitizeSupabaseQuery = (text: string) => {
@@ -727,7 +775,8 @@ app.get("/api/search/suggest", async (req, res) => {
 
 app.get("/api/search", async (req, res) => {
   const rawQ = String(req.query.q || "");
-  const q = cleanQuery(rawQ);
+  const originalQ = cleanQuery(rawQ);
+  let q = originalQ;
   const { city_id, category_id, sub_category } = req.query;
   
   const cacheKey = `search-${q}-${city_id}-${category_id}-${sub_category}`;
@@ -764,7 +813,7 @@ app.get("/api/search", async (req, res) => {
       console.log(`[API Search] Searching for "${cityName}" using IDs: ${targetCityIds.join(', ')}`);
 
       // Try fetching with status approved first, then fallback to any status
-      const fetchFromSupabase = async (withStatus: boolean) => {
+      const fetchFromSupabase = async (withStatus: boolean, currentQ: string) => {
         try {
           let query = supabase.from('establishments').select('*');
           
@@ -776,9 +825,6 @@ app.get("/api/search", async (req, res) => {
             query = query.in('city_id', targetCityIds);
           }
 
-          // Only apply these filters if we suspect the columns exist
-          // We can't easily check columns per query without overhead, 
-          // but we can catch the error if they are missing.
           if (category_id) {
             query = query.eq('category_id', Number(category_id));
           }
@@ -794,9 +840,8 @@ app.get("/api/search", async (req, res) => {
             }
           }
 
-          if (q) {
-            const sanitizedQ = sanitizeSupabaseQuery(q);
-            // Remove common words like "em", "no", "na", and the city name to focus on the business type
+          if (currentQ) {
+            const sanitizedQ = sanitizeSupabaseQuery(currentQ);
             const cityNames = [cityName, "Gurupi", "Palmas", "Araguaína"];
             let searchTerms = sanitizedQ;
             cityNames.forEach(cn => {
@@ -806,11 +851,7 @@ app.get("/api/search", async (req, res) => {
 
             const queryWords = searchTerms.split(/\s+/).filter(w => w.length > 2);
             
-            let orConditions = `name.ilike.%${sanitizedQ}%,description.ilike.%${sanitizedQ}%,address.ilike.%${sanitizedQ}%`;
-            
-            // Only add sub_category to OR if it's likely to exist
-            // For now, we'll try to include it and see if it fails
-            orConditions += `,sub_category.ilike.%${sanitizedQ}%`;
+            let orConditions = `name.ilike.%${sanitizedQ}%,description.ilike.%${sanitizedQ}%,address.ilike.%${sanitizedQ}%,sub_category.ilike.%${sanitizedQ}%`;
             
             if (queryWords.length > 0) {
               const wordConditions = queryWords.map(w => 
@@ -824,9 +865,7 @@ app.get("/api/search", async (req, res) => {
           const result = await query.limit(20);
           if (result.error) {
             console.error(`[Supabase Query Error] Status ${withStatus}:`, result.error.message);
-            // If error is about missing column, we could try a simpler query here
             if (result.error.message.includes('column') && result.error.message.includes('does not exist')) {
-              console.log("[Supabase] Attempting simplified query without category/sub_category filters...");
               let simpleQuery = supabase.from('establishments').select('*');
               if (withStatus) simpleQuery = simpleQuery.eq('status', 'approved');
               if (targetCityIds.length > 0) simpleQuery = simpleQuery.in('city_id', targetCityIds);
@@ -840,11 +879,25 @@ app.get("/api/search", async (req, res) => {
         }
       };
 
-      let { data, error } = await fetchFromSupabase(true);
+      let { data, error } = await fetchFromSupabase(true, q);
+      
+      // If no results, try fuzzy correction
+      if ((!data || data.length === 0) && q && !category_id && !sub_category) {
+        const corrected = smartCorrectQuery(q);
+        if (corrected !== q) {
+          console.log(`[Smart Search] No results for "${q}", trying corrected query: "${corrected}"`);
+          const retry = await fetchFromSupabase(true, corrected);
+          if (retry.data && retry.data.length > 0) {
+            data = retry.data;
+            error = retry.error;
+            q = corrected; // Update q so cache uses corrected term
+          }
+        }
+      }
       
       if (!data || data.length === 0) {
         console.log("[API Search] No approved results, trying without status filter...");
-        const retry = await fetchFromSupabase(false);
+        const retry = await fetchFromSupabase(false, q);
         data = retry.data;
         error = retry.error;
       }
@@ -910,6 +963,22 @@ app.get("/api/search", async (req, res) => {
 
       return matchCity && matchCategory && matchSub && matchText;
     });
+
+    // If no mock results, try fuzzy correction for mock data too
+    if (mockResults.length === 0 && q && !category_id && !sub_category) {
+      const corrected = smartCorrectQuery(q);
+      if (corrected !== q) {
+        console.log(`[Smart Search] No mock results for "${q}", trying corrected query: "${corrected}"`);
+        mockResults = establishments.filter(e => {
+          const eCity = cities.find(c => c.id === e.city_id);
+          const matchCity = city_id ? (e.city_id === Number(city_id) || (cityName && eCity && normalize(eCity.name) === normalize(cityName))) : true;
+          const normName = normalize(e.name);
+          const normSub = normalize(e.sub_category);
+          const normDesc = normalize(e.description || "");
+          return matchCity && (normName.includes(corrected) || normSub.includes(corrected) || normDesc.includes(corrected));
+        });
+      }
+    }
 
     if (mockResults.length === 0 && q && !category_id && !sub_category) {
       const cityResults = cities.filter(c => {

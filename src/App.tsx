@@ -625,7 +625,7 @@ export default function App() {
           <div className="flex items-center gap-4">
             <button 
               onClick={() => user ? setIsRegisterModalOpen(true) : setIsAuthModalOpen(true)}
-              className="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-50 text-[#00897b] text-xs font-bold rounded-xl hover:bg-emerald-100 transition-all border border-emerald-100"
+              className="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 transition-all border border-emerald-500 shadow-md active:scale-95"
             >
               <Plus className="w-4 h-4" />
               Sugira um Local
@@ -810,26 +810,26 @@ export default function App() {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 10 }}
-                            className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-zinc-100 overflow-hidden z-[60] p-4"
+                            className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-zinc-200 overflow-hidden z-[60] p-6"
                           >
                             {input.length < 2 ? (
                               <div>
-                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 block">Buscas Populares</span>
+                                <span className="text-xs font-black text-zinc-800 uppercase tracking-wider mb-4 block">Buscas Populares</span>
                                 <div className="flex flex-wrap gap-2">
                                   <button 
                                     onClick={findNearbyEstablishments}
-                                    className="px-3 py-2 bg-emerald-50 text-[#00897b] rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all border border-emerald-100 flex items-center gap-2"
+                                    className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all border border-emerald-500 flex items-center gap-2 shadow-md active:scale-95"
                                   >
-                                    <MapPin className="w-3 h-3" />
+                                    <MapPin className="w-3.5 h-3.5" />
                                     Perto de Mim
                                   </button>
                                   {["Restaurante", "Farmácia", "Açougue", "Padaria", "Oficina"].map(term => (
                                     <button 
                                       key={term}
                                       onClick={() => handleSelectSuggestion(term)}
-                                      className="px-3 py-2 bg-zinc-50 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-100 transition-all border border-zinc-100 flex items-center gap-2"
+                                      className="px-4 py-2.5 bg-zinc-800 text-white rounded-xl text-xs font-bold hover:bg-zinc-900 transition-all border border-zinc-700 flex items-center gap-2 shadow-md active:scale-95"
                                     >
-                                      <Sparkles className="w-3 h-3 text-[#f57c00]" />
+                                      <Sparkles className="w-3.5 h-3.5 text-[#f57c00]" />
                                       {term}
                                     </button>
                                   ))}
@@ -838,17 +838,17 @@ export default function App() {
                             ) : (
                               <>
                                 {suggestions.intents.length > 0 && (
-                                  <div className="mb-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <div className="w-1 h-3 bg-[#f57c00] rounded-full" />
-                                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Intenções Detectadas</span>
+                                  <div className="mb-6">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <div className="w-1.5 h-4 bg-[#f57c00] rounded-full" />
+                                      <span className="text-xs font-black text-zinc-800 uppercase tracking-wider">Intenções Detectadas</span>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                       {suggestions.intents.map(intent => (
                                         <button 
                                           key={intent.id}
                                           onClick={() => handleSelectSuggestion(intent.name)}
-                                          className="px-3 py-1.5 bg-orange-50 text-[#f57c00] rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors border border-orange-100"
+                                          className="px-4 py-2.5 bg-orange-600 text-white rounded-xl text-xs font-bold hover:bg-orange-700 transition-all border border-orange-500 shadow-md active:scale-95"
                                         >
                                           {intent.name}
                                         </button>
@@ -858,18 +858,18 @@ export default function App() {
                                 )}
                                 {suggestions.types.length > 0 && (
                                   <div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <div className="w-1 h-3 bg-[#00897b] rounded-full" />
-                                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Sugestões de Filtro</span>
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <div className="w-1.5 h-4 bg-[#00897b] rounded-full" />
+                                      <span className="text-xs font-black text-zinc-800 uppercase tracking-wider">Sugestões de Filtro</span>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                       {suggestions.types.map(type => (
                                         <button 
                                           key={type}
                                           onClick={() => handleSelectSuggestion(type)}
-                                          className="px-3 py-1.5 bg-emerald-50 text-[#00897b] rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-100 flex items-center gap-1.5"
+                                          className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all border border-emerald-500 flex items-center gap-2 shadow-md active:scale-95"
                                         >
-                                          <Search className="w-3 h-3" />
+                                          <Search className="w-3.5 h-3.5" />
                                           {type}
                                         </button>
                                       ))}
@@ -878,7 +878,7 @@ export default function App() {
                                 )}
                                 {suggestions.intents.length === 0 && suggestions.types.length === 0 && (
                                   <div className="py-4 text-center">
-                                    <p className="text-xs text-zinc-400 italic">Continue digitando para ver sugestões...</p>
+                                    <p className="text-xs text-zinc-500 italic">Continue digitando para ver sugestões...</p>
                                   </div>
                                 )}
                               </>
@@ -960,7 +960,7 @@ export default function App() {
                           <button
                             key={sub.id}
                             onClick={() => handleSubCategoryClick(sub.name)}
-                            className="px-4 py-1.5 bg-white border border-zinc-200 rounded-full text-xs font-medium text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50 transition-all"
+                            className="px-5 py-2.5 bg-white border-2 border-zinc-200 rounded-2xl text-xs font-black text-zinc-800 hover:border-[#00897b] hover:text-[#00897b] hover:bg-emerald-50 transition-all shadow-sm active:scale-95"
                           >
                             {sub.name}
                           </button>
