@@ -191,13 +191,26 @@ export default function App() {
     }
   }, [currentCity]);
 
+  const [initialFetchError, setInitialFetchError] = useState<string | null>(null);
+
   useEffect(() => {
     detectLocation();
     
     // Pre-populate map with featured establishments
+    setInitialFetchError(null);
     fetch(`/api/establishments/featured?city_id=${currentCity.id}`)
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`API error (${res.status}): ${text.substring(0, 50)}`);
+        }
+        return res.json();
+      })
       .then(data => {
+        if (!Array.isArray(data)) {
+          console.warn("Featured data is not an array:", data);
+          return;
+        }
         const initialChunks: GroundingChunk[] = data.map((est: any) => ({
           maps: {
             id: est.id,
@@ -224,7 +237,10 @@ export default function App() {
         }));
         setAllGroundingChunks(initialChunks);
       })
-      .catch(err => console.error("Error fetching initial establishments:", err));
+      .catch(err => {
+        console.error("Error fetching initial establishments:", err);
+        setInitialFetchError("Não foi possível carregar os estabelecimentos. Verifique sua conexão.");
+      });
   }, [currentCity]);
 
   useEffect(() => {
@@ -737,6 +753,14 @@ export default function App() {
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto relative bg-white">
+          {initialFetchError && (
+            <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="bg-red-500 text-white px-6 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-medium">
+                <X className="w-4 h-4 cursor-pointer" onClick={() => setInitialFetchError(null)} />
+                {initialFetchError}
+              </div>
+            </div>
+          )}
           <AnimatePresence mode="wait">
             {view === 'maintenance' ? (
               <motion.div

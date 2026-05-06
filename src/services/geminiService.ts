@@ -53,15 +53,6 @@ export interface ChatMessage {
 
 const responseCache = new Map<string, ChatMessage>();
 
-// Initialize Gemini on the frontend
-const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY não configurada.");
-  }
-  return new GoogleGenAI({ apiKey });
-};
-
 export async function chatWithMaps(
   message: string,
   city: { name: string; uf: string; latitude: number; longitude: number },
@@ -121,7 +112,7 @@ export async function chatWithMaps(
 }
 
 /**
- * Uses Gemini with Maps grounding to suggest business hours for a given establishment.
+ * NEW: Uses the backend proxy to suggest business hours.
  */
 export async function suggestBusinessHours(
   name: string,
@@ -133,38 +124,19 @@ export async function suggestBusinessHours(
   structured?: { day: number; closed: boolean; slots: { open: string; close: string }[] }[] 
 } | null> {
   try {
-    const ai = getAI();
-    const prompt = `Quais são os horários de funcionamento de "${name}" em ${city}${address ? `, no endereço ${address}` : ''}? 
-    Responda em formato JSON com os seguintes campos:
-    - summary: uma string curta resumindo os horários (ex: "Seg-Sex: 08h às 18h, Sáb: 08h às 12h")
-    - is24h: booleano indicando se funciona 24 horas
-    - structured: um array de 7 objetos (um para cada dia, 0=Domingo a 6=Sábado) com:
-      - day: número do dia (0-6)
-      - closed: booleano indicando se está fechado no dia
-      - slots: um array de objetos com { open: "HH:MM", close: "HH:MM" }. Se fechado, o array deve ser vazio.
-    
-    Se houver fechamento para almoço, inclua dois slots no array.
-    Se não encontrar, responda apenas null.`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        tools: [{ googleMaps: {} }],
-        responseMimeType: "application/json"
-      },
+    const response = await fetch("/api/suggest-hours", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, city, address }),
     });
 
-    const result = JSON.parse(response.text || "null");
-    return result;
-  } catch (error: any) {
-    console.error("Error suggesting hours:", error);
-    
-    const errorMessage = error?.message || String(error);
-    if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("quota")) {
-      throw new Error("QUOTA_EXCEEDED");
+    if (!response.ok) {
+      throw new Error("Erro ao sugerir horários");
     }
-    
+
+    return await response.json();
+  } catch (error: any) {
+    console.error("Error suggesting hours via proxy:", error);
     return null;
   }
 }

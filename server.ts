@@ -463,7 +463,11 @@ app.get("/api/cities", async (req, res) => {
       }
       const { data, error } = await query.order('name');
       if (error) throw error;
-      return res.json(data || []);
+      if (data && data.length > 0) {
+        return res.json(data);
+      }
+      // If Supabase is connected but table is empty, fallback to mock data
+      console.warn("[API] Supabase cities table is empty, falling back to mock data");
     }
     
     if (state_uf) {
@@ -559,15 +563,30 @@ async function resolveCityIdsByName(supabase: any, cityId: any): Promise<number[
   const cityName = mockCity ? mockCity.name : "Gurupi";
 
   try {
-    const { data: matchingCities } = await supabase
-      .from('cities')
-      .select('id')
-      .ilike('name', cityName);
-    
-    if (matchingCities && matchingCities.length > 0) {
-      const ids = matchingCities.map((c: any) => c.id);
-      cityIdCache.set(cityIdNum, ids);
-      return ids;
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      // Add a timeout to the supabase request
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Supabase timeout (15s)")), 15000)
+      );
+
+      const fetchPromise = (async () => {
+        const { data: matchingCities, error: queryError } = await supabase
+          .from('cities')
+          .select('id')
+          .ilike('name', cityName);
+        
+        if (queryError) throw queryError;
+        
+        if (matchingCities && matchingCities.length > 0) {
+          const ids = matchingCities.map((c: any) => c.id);
+          cityIdCache.set(cityIdNum, ids);
+          return ids;
+        }
+        return [cityIdNum];
+      })();
+
+      return await Promise.race([fetchPromise, timeoutPromise]) as number[];
     }
   } catch (err: any) {
     console.warn(`[Supabase] City resolution failed for ${cityName}:`, err.message);
@@ -648,15 +667,13 @@ app.post("/api/chat", async (req, res) => {
       return res.status(500).json({ error: "GEMINI_API_KEY não configurada no servidor." });
     }
 
-    const ai = new GoogleGenAI({ apiKey });
+    const genAI = new GoogleGenAI(apiKey);
     const lat = userLocation?.latitude || city.latitude;
     const lng = userLocation?.longitude || city.longitude;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [{ role: "user", parts: [{ text: message }] }],
-      config: {
-        systemInstruction: `Você é VidaLocal, um guia para ${city.name}. Ajude o usuário a encontrar locais.
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash", // Use a stable model
+      systemInstruction: `Você é VidaLocal, um guia para ${city.name}. Ajude o usuário a encontrar locais.
         ${TAXONOMY_CONTEXT}
         Contexto local (estabelecimentos já cadastrados): ${localContext || 'Nenhum'}
         ${categoryFilter ? `Filtro de categoria: ${categoryFilter}` : ''}
@@ -667,16 +684,17 @@ app.post("/api/chat", async (req, res) => {
         Sempre use a ferramenta Google Maps para encontrar e confirmar a localização de todos os estabelecimentos que você mencionar na resposta.
         Ao listar estabelecimentos, use SEMPRE o formato de lista (usando asteriscos *) para que cada local apareça em um box separado no chat.
         Para cada local, coloque o nome em negrito e descreva brevemente o endereço e o que o local oferece.`,
-        tools: [{ googleMaps: {} } as any],
-        toolConfig: {
-          retrievalConfig: {
-            latLng: { latitude: lat, longitude: lng },
-          },
-        } as any,
-      },
+      tools: [{ googleMaps: {} } as any],
+      toolConfig: {
+        retrievalConfig: {
+          latLng: { latitude: lat, longitude: lng },
+        },
+      } as any,
     });
 
-    const text = response.text || "Sem resposta textual.";
+    const result = await model.generateContent(message);
+    const response = result.response;
+    const text = response.text() || "Sem resposta textual.";
     
     // Process grounding chunks
     const groundingChunks = (response as any).candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => {
@@ -787,6 +805,46 @@ app.get("/api/establishments/featured", async (req, res) => {
   } catch (error: any) {
     console.error("[API Error] Featured establishments:", error.message);
     res.json(establishments.slice(0, 8));
+  }
+});
+
+app.post("/api/suggest-hours", async (req, res) => {
+  const { name, city, address } = req.body;
+  
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "GEMINI_API_KEY não configurada no servidor." });
+    }
+
+    const genAI = new GoogleGenAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const prompt = `Quais são os horários de funcionamento de "${name}" em ${city}${address ? `, no endereço ${address}` : ''}? 
+    Responda EXCLUSIVAMENTE em formato JSON com os seguintes campos:
+    {
+      "summary": "string curta resumindo os horários",
+      "is24h": boolean,
+      "structured": [
+        {"day": 0, "closed": boolean, "slots": [{"open": "HH:MM", "close": "HH:MM"}]},
+        ... (um para cada dia, 0=Domingo a 6=Sábado)
+      ]
+    }
+    Se não encontrar horários confiáveis, responda apenas o objeto com campos nulos ou vazios.`;
+
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
+    
+    res.json(JSON.parse(text || "null"));
+  } catch (error: any) {
+    console.error("[API Error] Suggesting hours:", error);
+    res.status(500).json({ error: "Erro ao sugerir horários", message: error.message });
   }
 });
 
@@ -1435,19 +1493,29 @@ app.post("/api/establishments/register", async (req, res) => {
       if (targetCityId > 0 && targetCityId < 100) {
         const mockCity = cities.find(c => c.id === targetCityId);
         if (mockCity) {
-          const { data: realCity } = await supabase
-            .from('cities')
-            .select('id')
-            .ilike('name', mockCity.name)
-            .single();
-          
-          if (realCity) {
-            console.log(`[API Register] Mapping mock city ID ${targetCityId} to Supabase ID ${realCity.id} for registration`);
-            targetCityId = realCity.id;
+          try {
+            console.log(`[API Register] Resolving real city ID for: ${mockCity.name}`);
+            const { data: realCity, error: cityMapError } = await supabase
+              .from('cities')
+              .select('id')
+              .ilike('name', mockCity.name)
+              .maybeSingle(); // maybeSingle instead of single() to avoid 406
+            
+            if (cityMapError) throw cityMapError;
+
+            if (realCity) {
+              console.log(`[API Register] Mapping mock city ID ${targetCityId} to Supabase ID ${realCity.id}`);
+              targetCityId = realCity.id;
+            } else {
+              console.warn(`[API Register] City "${mockCity.name}" not found in Supabase. Using mock ID ${targetCityId}`);
+            }
+          } catch (err: any) {
+            console.warn(`[API Register] City mapping failed:`, err.message);
           }
         }
       }
 
+      console.log(`[API Register] Inserting into establishments (city_id: ${targetCityId})...`);
       const { data, error } = await supabase.from('establishments').insert([{
         name: registration.name,
         category_id: Number(registration.categoryId),

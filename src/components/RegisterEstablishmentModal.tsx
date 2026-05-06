@@ -356,7 +356,17 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
       });
 
       console.log("[Register] Response status:", response.status);
-      const result = await response.json();
+      
+      let result;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        result = await response.json();
+      } else {
+        const text = await response.text();
+        console.error("[Register] Non-JSON response:", text);
+        throw new Error(`Servidor retornou resposta inesperada (${response.status})`);
+      }
+
       console.log("[Register] Result:", result);
 
       if (response.ok) {
@@ -395,7 +405,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
       }
     } catch (error: any) {
       console.error("[Register] Connection error:", error);
-      setError("Erro de conexão com o servidor. Verifique sua internet e tente novamente.");
+      setError(`Erro de conexão com o servidor: ${error.message}. Por favor, tente novamente.`);
     } finally {
       setIsLoading(false);
     }
