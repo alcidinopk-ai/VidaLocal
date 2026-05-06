@@ -79,85 +79,39 @@ export async function chatWithMaps(
   }
 
   try {
-    const ai = getAI();
-    const lat = userLocation?.latitude || city.latitude;
-    const lng = userLocation?.longitude || city.longitude;
-
-    const stream = await ai.models.generateContentStream({
-      model: "gemini-3-flash-preview",
-      contents: message,
-      config: {
-        systemInstruction: `Você é VidaLocal, um guia para ${city.name}. Ajude o usuário a encontrar locais.
-        ${TAXONOMY_CONTEXT}
-        Contexto local (estabelecimentos já cadastrados): ${localContext || 'Nenhum'}
-        ${categoryFilter ? `Filtro de categoria: ${categoryFilter}` : ''}
-        ${subCategoryFilter ? `Filtro de tipo: ${subCategoryFilter}` : ''}
-        
-        Comece sua resposta sempre com uma frase clara como: "Em ${city.name} - ${city.uf}, você pode encontrar os seguintes estabelecimentos que oferecem serviços de [Busca]:"
-        
-        Sempre use a ferramenta Google Maps para encontrar e confirmar a localização de todos os estabelecimentos que você mencionar na resposta.
-        Ao listar estabelecimentos, use SEMPRE o formato de lista (usando asteriscos *) para que cada local apareça em um box separado no chat.
-        Para cada local, coloque o nome em negrito e descreva brevemente o endereço e o que o local oferece.
-        `,
-        tools: [{ googleMaps: {} }],
-        toolConfig: {
-          retrievalConfig: {
-            latLng: { latitude: lat, longitude: lng },
-          },
-        },
-      },
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        city,
+        userLocation,
+        localContext,
+        categoryFilter,
+        subCategoryFilter
+      }),
     });
 
-    let fullText = "";
-    let lastChunk: GenerateContentResponse | null = null;
-
-    for await (const chunk of stream) {
-      lastChunk = chunk;
-      const chunkText = chunk.text || "";
-      fullText += chunkText;
-      if (onStream) onStream(fullText);
+    if (!response.ok) {
+      const errorData = await response.json();
+      if (response.status === 429 || errorData.error === "QUOTA_EXCEEDED") {
+        return {
+          role: "model",
+          text: "Puxa, parece que atingimos o limite de buscas gratuitas da nossa inteligência artificial por agora. Já estamos trabalhando para ampliar isso! Enquanto isso, você pode navegar pelas categorias ou tentar novamente em alguns minutinhos. Agradecemos sua paciência! 😊",
+          isError: true
+        };
+      }
+      throw new Error(errorData.message || "Erro no servidor de chat");
     }
 
-    const text = fullText || "Sem resposta textual.";
-    const groundingChunks = lastChunk?.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => {
-      const categoryId = CATEGORIES.find(c => c.name === categoryFilter)?.id;
-      
-      return {
-        maps: chunk.maps ? { 
-          uri: chunk.maps.uri, 
-          title: chunk.maps.title,
-          location: chunk.maps.location,
-          address: chunk.maps.address || chunk.maps.formattedAddress || chunk.maps.formatted_address,
-          phone: chunk.maps.phone || chunk.maps.phoneNumber || chunk.maps.phone_number,
-          whatsapp: chunk.maps.whatsapp || chunk.maps.whatsappNumber || chunk.maps.whatsapp_number,
-          plusCode: chunk.maps.plusCode || chunk.maps.plus_code || chunk.maps.plusCodeGlobalCode || chunk.maps.globalCode,
-          rating: chunk.maps.rating,
-          categoryId: categoryId,
-          subCategory: subCategoryFilter,
-        } : undefined,
-        web: chunk.web ? { uri: chunk.web.uri, title: chunk.web.title } : undefined,
-      };
-    }).filter((c: any) => c.maps || c.web) || [];
-
-    const finalResult: ChatMessage = { role: "model", text, groundingChunks };
-    responseCache.set(cacheKey, finalResult);
-    return finalResult;
-  } catch (error: any) {
-    console.error("Chat API Error:", error);
+    const data = await response.json();
+    if (onStream) onStream(data.text);
     
-    const errorMessage = error?.message || String(error);
-    const isQuotaExceeded = errorMessage.includes("429") || 
-                           errorMessage.includes("RESOURCE_EXHAUSTED") || 
-                           errorMessage.includes("quota");
-
-    if (isQuotaExceeded) {
-      return {
-        role: "model",
-        text: "Puxa, parece que atingimos o limite de buscas gratuitas da nossa inteligência artificial por agora. Já estamos trabalhando para ampliar isso! Enquanto isso, você pode navegar pelas categorias ou tentar novamente em alguns minutinhos. Agradecemos sua paciência! 😊",
-        isError: true
-      };
-    }
-
+    responseCache.set(cacheKey, data);
+    return data;
+  } catch (error: any) {
+    console.error("Chat API Proxy Error:", error);
+    
     return {
       role: "model",
       text: "Ops! Tivemos um pequeno probleminha técnico ao processar sua busca. Nossa equipe já foi avisada e está trabalhando para resolver o quanto antes. Por favor, tente novamente em instantes ou explore as categorias locais. Obrigado por compreender! ✨",

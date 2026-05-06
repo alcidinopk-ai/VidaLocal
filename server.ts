@@ -5,6 +5,13 @@ import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 import { getSupabaseAdmin } from "./src/lib/supabase-server.ts";
 import Fuse from "fuse.js";
+import { CATEGORIES, SUB_CATEGORIES } from "./src/constants/taxonomy.ts";
+
+const TAXONOMY_CONTEXT = `
+Abaixo está a taxonomia oficial do VidaLocal que você deve usar para categorizar estabelecimentos:
+${CATEGORIES.map(c => `- Categoria: ${c.name} (ID: ${c.id})
+  Tipos: ${SUB_CATEGORIES.filter(sc => sc.categoryId === c.id).map(sc => sc.name).join(", ")}`).join("\n")}
+`;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -539,6 +546,36 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
   }
 });
 
+// Helper to resolve city IDs from Supabase by name to handle ID mismatches
+async function resolveCityIdsByName(supabase: any, cityId: any): Promise<number[]> {
+  const cityIdNum = Number(String(cityId || "").split(':')[0]);
+  if (isNaN(cityIdNum)) return [];
+  
+  if (cityIdCache.has(cityIdNum)) {
+    return cityIdCache.get(cityIdNum)!;
+  }
+
+  const mockCity = cities.find(c => c.id === cityIdNum);
+  const cityName = mockCity ? mockCity.name : "Gurupi";
+
+  try {
+    const { data: matchingCities } = await supabase
+      .from('cities')
+      .select('id')
+      .ilike('name', cityName);
+    
+    if (matchingCities && matchingCities.length > 0) {
+      const ids = matchingCities.map((c: any) => c.id);
+      cityIdCache.set(cityIdNum, ids);
+      return ids;
+    }
+  } catch (err: any) {
+    console.warn(`[Supabase] City resolution failed for ${cityName}:`, err.message);
+  }
+  
+  return [cityIdNum];
+}
+
 const normalize = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 const cleanQuery = (text: string) => {
@@ -599,7 +636,74 @@ const sanitizeSupabaseQuery = (text: string) => {
 
 // API chat moved to frontend service
 app.post("/api/chat", async (req, res) => {
-  return res.status(410).json({ error: "Endpoint movido para o frontend." });
+  const { message, city, userLocation, localContext, categoryFilter, subCategoryFilter } = req.body;
+
+  if (!message || !city) {
+    return res.status(400).json({ error: "Mensagem e cidade são obrigatórios." });
+  }
+
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "GEMINI_API_KEY não configurada no servidor." });
+    }
+
+    const genAI = new GoogleGenAI(apiKey);
+    const lat = userLocation?.latitude || city.latitude;
+    const lng = userLocation?.longitude || city.longitude;
+
+    const model = genAI.getGenerativeModel({
+      model: "gemini-3-flash-preview", // Use the latest recommended model
+      systemInstruction: `Você é VidaLocal, um guia para ${city.name}. Ajude o usuário a encontrar locais.
+        ${TAXONOMY_CONTEXT}
+        Contexto local (estabelecimentos já cadastrados): ${localContext || 'Nenhum'}
+        ${categoryFilter ? `Filtro de categoria: ${categoryFilter}` : ''}
+        ${subCategoryFilter ? `Filtro de tipo: ${subCategoryFilter}` : ''}
+        
+        Comece sua resposta sempre com uma frase clara como: "Em ${city.name} - ${city.uf}, você pode encontrar os seguintes estabelecimentos que oferecem serviços de [Busca]:"
+        
+        Sempre use a ferramenta Google Maps para encontrar e confirmar a localização de todos os estabelecimentos que você mencionar na resposta.
+        Ao listar estabelecimentos, use SEMPRE o formato de lista (usando asteriscos *) para que cada local apareça em um box separado no chat.
+        Para cada local, coloque o nome em negrito e descreva brevemente o endereço e o que o local oferece.`,
+      tools: [{ googleMaps: {} } as any],
+    });
+
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: message }] }],
+      toolConfig: {
+        retrievalConfig: {
+          latLng: { latitude: lat, longitude: lng },
+        },
+      } as any,
+    });
+
+    const response = await result.response;
+    const text = response.text() || "Sem resposta textual.";
+    
+    // Process grounding chunks
+    const groundingChunks = (response as any).candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => {
+      return {
+        maps: chunk.maps ? { 
+          uri: chunk.maps.uri, 
+          title: chunk.maps.title,
+          location: chunk.maps.location,
+          address: chunk.maps.address || chunk.maps.formattedAddress,
+          phone: chunk.maps.phone || chunk.maps.phoneNumber,
+          rating: chunk.maps.rating,
+        } : undefined,
+        web: chunk.web ? { uri: chunk.web.uri, title: chunk.web.title } : undefined,
+      };
+    }).filter((c: any) => c.maps || c.web) || [];
+
+    return res.json({ role: "model", text, groundingChunks });
+  } catch (error: any) {
+    console.error("[Chat API Error]:", error.message);
+    const isQuota = error.message?.includes("429") || error.message?.includes("RESOURCE_EXHAUSTED");
+    return res.status(isQuota ? 429 : 500).json({ 
+      error: isQuota ? "QUOTA_EXCEEDED" : "TECHNICAL_ERROR",
+      message: error.message 
+    });
+  }
 });
 
 app.get("/api/establishments/category/:categoryId", async (req, res) => {
@@ -615,21 +719,7 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      let targetCityIds: number[] = !isNaN(cityIdNum) ? [cityIdNum] : [];
-      
-      if (!isNaN(cityIdNum)) {
-        const mockCity = cities.find(c => c.id === cityIdNum);
-        if (mockCity) {
-          const { data: matchingCities } = await supabase
-            .from('cities')
-            .select('id')
-            .ilike('name', mockCity.name);
-          
-          if (matchingCities && matchingCities.length > 0) {
-            targetCityIds = matchingCities.map(c => c.id);
-          }
-        }
-      }
+      const targetCityIds = await resolveCityIdsByName(supabase, city_id);
 
       let query = supabase.from('establishments').select('*');
       query = query.eq('category_id', Number(categoryId));
@@ -674,22 +764,7 @@ app.get("/api/establishments/featured", async (req, res) => {
     console.log(`[API] Fetching featured for city_id: ${cleanCityId}. Supabase available: ${!!supabase}`);
     
     if (supabase) {
-      let targetCityIds: number[] = !isNaN(cityIdNum) ? [cityIdNum] : [];
-      
-      // Find matching IDs by name if cityId is valid
-      if (!isNaN(cityIdNum)) {
-        const mockCity = cities.find(c => c.id === cityIdNum);
-        const cityName = mockCity ? mockCity.name : "Gurupi";
-
-        const { data: matchingCities } = await supabase
-          .from('cities')
-          .select('id')
-          .ilike('name', cityName);
-        
-        if (matchingCities && matchingCities.length > 0) {
-          targetCityIds = matchingCities.map(c => c.id);
-        }
-      }
+      const targetCityIds = await resolveCityIdsByName(supabase, city_id);
 
       const { data, error } = await supabase
         .from('establishments')
@@ -818,31 +893,9 @@ app.get("/api/search", async (req, res) => {
   
   try {
     if (supabase) {
-      let targetCityIds: number[] = !isNaN(cityIdNum) ? [cityIdNum] : [];
-      
-      // Find all IDs for cities with the same name to handle duplicates
-      if (!isNaN(cityIdNum)) {
-        const mockCity = cities.find(c => c.id === cityIdNum);
-        const cityName = mockCity ? mockCity.name : "Gurupi";
-
-        if (cityIdCache.has(cityIdNum)) {
-          targetCityIds = cityIdCache.get(cityIdNum)!;
-        } else {
-          try {
-            const { data: matchingCities } = await supabase
-              .from('cities')
-              .select('id')
-              .ilike('name', cityName);
-            
-            if (matchingCities && matchingCities.length > 0) {
-              targetCityIds = matchingCities.map(c => c.id);
-              cityIdCache.set(cityIdNum, targetCityIds);
-            }
-          } catch (err: any) {
-            console.warn(`[API Search] City ID resolution failed: ${cityName}`, err.message);
-          }
-        }
-      }
+      const targetCityIds = await resolveCityIdsByName(supabase, city_id);
+      const mockCity = cities.find(c => c.id === cityIdNum);
+      const cityName = mockCity ? mockCity.name : "Gurupi";
 
       // Optimized fetch: get both approved and pending in one go, but prioritize approved
       const fetchFromSupabase = async (currentQ: string) => {
