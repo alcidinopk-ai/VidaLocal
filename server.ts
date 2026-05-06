@@ -3,9 +3,9 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
-import { getSupabaseAdmin } from "./src/lib/supabase-server";
+import { getSupabaseAdmin } from "./src/lib/supabase-server.js";
 import Fuse from "fuse.js";
-import { CATEGORIES, SUB_CATEGORIES } from "./src/constants/taxonomy";
+import { CATEGORIES, SUB_CATEGORIES } from "./src/constants/taxonomy.js";
 
 const TAXONOMY_CONTEXT = `
 Abaixo está a taxonomia oficial do VidaLocal que você deve usar para categorizar estabelecimentos:
