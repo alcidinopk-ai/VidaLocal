@@ -18,7 +18,13 @@ export const getSupabaseAdmin = () => {
   }
   
   try {
-    cachedAdminClient = createClient(url, key);
+    cachedAdminClient = createClient(url, key, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    });
     return cachedAdminClient;
   } catch (e) {
     console.error('Error creating Supabase admin client:', e);

@@ -60,10 +60,23 @@ if (isSupabaseConfigured) {
       (async () => {
         try {
           const { count, error } = await supabase.from('cities').select('count', { count: 'exact', head: true });
-          if (error) console.error('[Startup] Supabase Connection Test Failed:', error.message);
-          else console.log(`[Startup] Supabase Connection Test Success. Cities count: ${count}`);
+          if (error) {
+            const isDnsError = error.message?.includes('ENOTFOUND') || error.message?.includes('getaddrinfo');
+            if (isDnsError) {
+              console.error('[Startup] Supabase Connection Test Failed: Hostname not found. Check your VITE_SUPABASE_URL and project status.');
+            } else {
+              console.error('[Startup] Supabase Connection Test Failed:', error.message);
+            }
+          } else {
+            console.log(`[Startup] Supabase Connection Test Success. Cities count: ${count}`);
+          }
         } catch (err: any) {
-          console.error('[Startup] Supabase Connection Test Exception:', err.message);
+          const isDnsError = err.message?.includes('ENOTFOUND') || err.message?.includes('getaddrinfo') || err.code === 'ENOTFOUND';
+          if (isDnsError) {
+            console.error('[Startup] Supabase Connection Test Failed: DNS Error. The project URL might be wrong or the project is paused.');
+          } else {
+            console.error('[Startup] Supabase Connection Test Exception:', err.message);
+          }
         }
       })();
     }
@@ -478,17 +491,21 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      const { data, error } = await supabase.from('cities').select('*, states(uf)').eq('active', true);
-      if (error) throw error;
-      
-      if (data && data.length > 0) {
-        let nearest = data[0];
-        let minDist = Infinity;
-        data.forEach(c => {
-          const d = Math.sqrt(Math.pow(c.latitude - lat, 2) + Math.pow(c.longitude - lng, 2));
-          if (d < minDist) { minDist = d; nearest = c; }
-        });
-        return res.json({ ...nearest, uf: nearest.states?.uf || nearest.states?.[0]?.uf || "" });
+      try {
+        const { data, error } = await supabase.from('cities').select('*, states(uf)').eq('active', true);
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          let nearest = data[0];
+          let minDist = Infinity;
+          data.forEach(c => {
+            const d = Math.sqrt(Math.pow(c.latitude - lat, 2) + Math.pow(c.longitude - lng, 2));
+            if (d < minDist) { minDist = d; nearest = c; }
+          });
+          return res.json({ ...nearest, uf: nearest.states?.uf || nearest.states?.[0]?.uf || "" });
+        }
+      } catch (err: any) {
+        console.warn("[Supabase] Fallback to mock cities due to fetch error in resolve-by-geo");
       }
     }
 
@@ -639,7 +656,6 @@ app.get("/api/establishments/featured", async (req, res) => {
         console.log(`[API Featured] Searching for "${cityName}" using IDs: ${targetCityIds.join(', ')}`);
       }
 
-      // Optimized single query for all featured/approved establishments
       const { data, error } = await supabase
         .from('establishments')
         .select('*')
@@ -649,17 +665,19 @@ app.get("/api/establishments/featured", async (req, res) => {
         .order('rating', { ascending: false })
         .limit(20);
 
-      if (data && data.length > 0) {
+      if (error) {
+        const isNetworkError = error.message?.includes('fetch failed') || error.message?.includes('getaddrinfo');
+        console.error("[Supabase Error] Querying featured:", error.message);
+        if (isNetworkError) {
+          console.warn("[Supabase Warning] Falha de DNS/Rede. Verifique se o URL do seu projeto Supabase está correto.");
+        }
+      } else if (data && data.length > 0) {
         // Filter to ensure we have at least some approved if possible, 
         // but the query already orders them well.
         const finalResults = data.slice(0, 8);
         console.log(`[API Featured] Found ${finalResults.length} establishments in Supabase`);
         setCache(cacheKey, finalResults);
         return res.json(finalResults);
-      }
-
-      if (error) {
-        console.error("[Supabase Error] Querying featured:", error.message);
       }
       
       console.log("[API Featured] No establishments found in Supabase for this city, falling back to mock data");
@@ -875,7 +893,11 @@ app.get("/api/search", async (req, res) => {
 
           return { data: sortedData.slice(0, 20), error: null };
         } catch (e: any) {
+          const isNetworkError = e.message?.includes('fetch failed') || e.code === 'ENOTFOUND';
           console.error("[Supabase Exception]:", e.message);
+          if (isNetworkError) {
+            console.error("[Supabase Warning] Falha na conexão de rede. Verifique seu VITE_SUPABASE_URL.");
+          }
           return { data: null, error: e };
         }
       };
