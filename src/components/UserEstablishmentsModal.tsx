@@ -7,10 +7,14 @@ import {
   Loader2,
   Store,
   MapPin,
-  Calendar
+  Calendar,
+  Shield,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
+import { AdminPermissionsModal } from './AdminPermissionsModal';
 
 interface UserEstablishmentsModalProps {
   isOpen: boolean;
@@ -19,6 +23,7 @@ interface UserEstablishmentsModalProps {
 
 interface Establishment {
   id: string;
+  short_id?: string;
   name: string;
   status: 'pending' | 'approved' | 'rejected';
   address: string;
@@ -31,6 +36,8 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedEstablishment, setSelectedEstablishment] = useState<Establishment | null>(null);
+  const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen && user) {
@@ -64,6 +71,11 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const openPermissions = (est: Establishment) => {
+    setSelectedEstablishment(est);
+    setIsPermissionsModalOpen(true);
   };
 
   if (!isOpen) return null;
@@ -147,6 +159,15 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
                         {est.sub_category}
                       </span>
+                      {est.status === 'approved' && (
+                        <button 
+                          onClick={() => openPermissions(est)}
+                          className="mt-1 flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold hover:bg-emerald-100 transition-all border border-emerald-100"
+                        >
+                          <Shield className="w-3 h-3" />
+                          Gerenciar Acessos
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -155,15 +176,21 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
           )}
         </div>
 
-        <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 flex justify-end">
+        <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3">
           <button 
             onClick={onClose}
-            className="px-6 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 transition-all"
+            className="px-6 py-2 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 transition-all border border-zinc-200"
           >
             Fechar
           </button>
         </div>
       </motion.div>
+
+      <AdminPermissionsModal 
+        isOpen={isPermissionsModalOpen}
+        onClose={() => setIsPermissionsModalOpen(false)}
+        establishment={selectedEstablishment}
+      />
     </div>
   );
 };

@@ -43,6 +43,8 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
 }) => {
   const { user, role } = useAuth();
   const isAdmin = user && role === 'admin';
+  const isOwner = user && chunk.maps?.user_id === user.id;
+  const [canEdit, setCanEdit] = useState(false);
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
@@ -75,6 +77,37 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
 
   const statusInfo = getBusinessStatus(chunk.maps?.hours);
 
+  React.useEffect(() => {
+    const checkPermission = async () => {
+      if (!user || !chunk.maps?.id) return;
+      if (isAdmin || isOwner) {
+        setCanEdit(true);
+        return;
+      }
+
+      // If not owner/admin, check permissions table via API
+      try {
+        const response = await fetch(`/api/search?id=${chunk.maps.id}`, {
+          headers: { 'x-user-id': user.id }
+        });
+        // The search endpoint with x-user-id could potentially return permission info
+        // For now, if current location is editable by user, it should work.
+        // A better way is a dedicated check endpoint or including it in initial fetch.
+        // But since we already have canUserEdit on server for PUT/DELETE,
+        // we'll try a lightweight check.
+        if (chunk.maps.short_id) {
+          const permRes = await fetch(`/api/admin/permissions/${chunk.maps.short_id}`, {
+            headers: { 'x-user-id': user.id }
+          });
+          if (permRes.ok) setCanEdit(true);
+        }
+      } catch (err) {
+        setCanEdit(false);
+      }
+    };
+    checkPermission();
+  }, [user, chunk.maps, isAdmin, isOwner]);
+
   const handleDelete = async () => {
     if (!chunk.maps?.id) return;
     if (!confirm(`Tem certeza que deseja excluir "${title}"?`)) return;
@@ -82,7 +115,8 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
     setIsDeleting(true);
     try {
       const response = await fetch(`/api/establishments/${chunk.maps.id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'x-user-id': user?.id || '' }
       });
       if (response.ok) {
         alert("Estabelecimento excluído com sucesso!");
@@ -176,7 +210,12 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-bold text-zinc-900 text-sm group-hover:text-emerald-700 transition-colors">{title}</h3>
+                <h3 className="font-bold text-zinc-900 text-sm group-hover:text-emerald-700 transition-colors uppercase tracking-tight">{title}</h3>
+                {chunk.maps?.short_id && (
+                  <span className="text-[9px] font-mono font-bold text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded" title="ID de Identificação">
+                    #{chunk.maps.short_id}
+                  </span>
+                )}
                 {chunk.maps?.is_premium && (
                   <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-500 text-white text-[9px] font-bold rounded-full shadow-sm">
                     <Crown className="w-2.5 h-2.5" />
@@ -321,7 +360,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
           >
             <ThumbsUp className="w-3.5 h-3.5" />
           </button>
-          {isAdmin && (
+          {(isAdmin || canEdit) && (
             <div className="flex gap-2">
               <button 
                 onClick={() => setIsEditModalOpen(true)}

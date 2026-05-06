@@ -92,6 +92,7 @@ const cities = [
 
 interface Establishment {
   id: string;
+  short_id?: string;
   name: string;
   category_id: number;
   sub_category: string;
@@ -113,6 +114,48 @@ interface Establishment {
   is_premium?: boolean;
   plus_code?: string;
   created_at?: string;
+}
+
+// Generate a random 6-character short ID (uppercase letters and numbers)
+function generateShortId(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// Permission checking helper
+async function canUserEdit(supabase: any, userId: string, establishmentIdOrShortId: string): Promise<boolean> {
+  if (!userId) return false;
+  
+  try {
+    // 1. Check if user is the creator (admin_id/user_id)
+    const { data: establishment } = await supabase
+      .from('establishments')
+      .select('user_id, short_id, id')
+      .or(`id.eq.${establishmentIdOrShortId},short_id.eq.${establishmentIdOrShortId}`)
+      .maybeSingle();
+
+    if (establishment && establishment.user_id === userId) return true;
+    
+    // 2. Check user_permissions table
+    if (establishment) {
+      const { data: permission } = await supabase
+        .from('user_permissions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('establishment_short_id', establishment.short_id)
+        .maybeSingle();
+      
+      if (permission) return true;
+    }
+  } catch (err) {
+    console.error('[Permissions] Error checking:', err);
+  }
+  
+  return false;
 }
 
 let establishments: Establishment[] = [
@@ -1247,36 +1290,53 @@ app.get("/api/establishments/user/:userId", async (req, res) => {
 app.put("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
   const registration = req.body;
+  const userId = req.headers['x-user-id'] as string;
+  
   console.log(`[API] Updating establishment ${id}:`, JSON.stringify(registration, null, 2));
   
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
+      // Permission check
+      const hasPermission = await canUserEdit(supabase, userId, id);
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Você não tem permissão para editar este estabelecimento." });
+      }
+
       // Try to use numeric ID if possible for Supabase
       const targetId = isNaN(Number(id)) ? id : Number(id);
       
+      const updatePayload: any = {
+        name: registration.name,
+        category_id: Number(registration.categoryId),
+        sub_category: registration.subCategory,
+        address: registration.address,
+        phone: registration.phone,
+        whatsapp: registration.whatsapp,
+        website: registration.website,
+        hours: registration.hours,
+        is_open_24_hours: registration.is_open_24_hours,
+        description: registration.description,
+        latitude: registration.latitude,
+        longitude: registration.longitude,
+        maps_link: registration.mapsLink,
+        plus_code: registration.plusCode,
+        city_id: registration.cityId
+      };
+
+      // Only allow admins to change premium/featured status
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
+      const isAdminGlobal = profile?.role === 'admin';
+
+      if (isAdminGlobal) {
+        updatePayload.is_featured = registration.is_featured;
+        updatePayload.is_verified = registration.is_verified;
+        updatePayload.is_premium = registration.is_premium;
+      }
+
       const { data, error } = await supabase
         .from('establishments')
-        .update({
-          name: registration.name,
-          category_id: Number(registration.categoryId),
-          sub_category: registration.subCategory,
-          address: registration.address,
-          phone: registration.phone,
-          whatsapp: registration.whatsapp,
-          website: registration.website,
-          hours: registration.hours,
-          is_open_24_hours: registration.is_open_24_hours,
-          description: registration.description,
-          latitude: registration.latitude,
-          longitude: registration.longitude,
-          maps_link: registration.mapsLink,
-          plus_code: registration.plusCode,
-          city_id: registration.cityId,
-          is_featured: registration.is_featured,
-          is_verified: registration.is_verified,
-          is_premium: registration.is_premium
-        })
+        .update(updatePayload)
         .eq('id', targetId)
         .select();
 
@@ -1368,10 +1428,17 @@ app.put("/api/establishments/:id", async (req, res) => {
 
 app.delete("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
+  const userId = req.headers['x-user-id'] as string;
   
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
+      // Permission check
+      const hasPermission = await canUserEdit(supabase, userId, id);
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Você não tem permissão para excluir este estabelecimento." });
+      }
+
       const { error } = await supabase
         .from('establishments')
         .delete()
@@ -1383,6 +1450,10 @@ app.delete("/api/establishments/:id", async (req, res) => {
     } else {
       const index = establishments.findIndex(e => e.id === id);
       if (index !== -1) {
+        // Mock permission check
+        if (userId && establishments[index].user_id !== userId) {
+          return res.status(403).json({ error: "Acesso negado." });
+        }
         establishments.splice(index, 1);
         clearCache();
         return res.json({ success: true });
@@ -1392,6 +1463,92 @@ app.delete("/api/establishments/:id", async (req, res) => {
   } catch (error: any) {
     console.error("[API Error] Deleting establishment:", error);
     res.status(500).json({ error: "Erro ao excluir estabelecimento", message: error.message });
+  }
+});
+
+// Admin Permissions Endpoints
+app.get("/api/admin/permissions/:shortId", async (req, res) => {
+  const { shortId } = req.params;
+  const userId = req.headers['x-user-id'] as string;
+  
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return res.status(503).json({ error: "Supabase not connected" });
+
+    // Check if requester is owner
+    const { data: est } = await supabase.from('establishments').select('user_id').eq('short_id', shortId).maybeSingle();
+    if (!est || est.user_id !== userId) {
+      return res.status(403).json({ error: "Somente o criador pode gerenciar permissões." });
+    }
+
+    const { data, error } = await supabase
+      .from('user_permissions')
+      .select('*')
+      .eq('establishment_short_id', shortId);
+    
+    if (error) throw error;
+    res.json(data || []);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/admin/permissions", async (req, res) => {
+  const { email, shortId, role } = req.body;
+  const requesterId = req.headers['x-user-id'] as string;
+
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return res.status(503).json({ error: "Supabase not connected" });
+
+    // Verify ownership
+    const { data: est } = await supabase.from('establishments').select('user_id').eq('short_id', shortId).maybeSingle();
+    if (!est || est.user_id !== requesterId) {
+      return res.status(403).json({ error: "Acesso negado." });
+    }
+
+    // Find user by email (we need their ID if possible, otherwise we use email)
+    // Note: Supabase auth.users is protected, usually we'd have a public users table
+    // For now we'll store user_email in the permissions table as requested
+    const { data, error } = await supabase
+      .from('user_permissions')
+      .insert([{
+        user_email: email,
+        establishment_short_id: shortId,
+        role: role || 'editor'
+      }])
+      .select();
+
+    if (error) throw error;
+    res.json(data[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete("/api/admin/permissions/:permissionId", async (req, res) => {
+  const { permissionId } = req.params;
+  const requesterId = req.headers['x-user-id'] as string;
+
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return res.status(503).json({ error: "Supabase not connected" });
+
+    // Get permission to check ownership of the establishment
+    const { data: perm } = await supabase.from('user_permissions').select('establishment_short_id').eq('id', permissionId).maybeSingle();
+    if (perm) {
+      const { data: est } = await supabase.from('establishments').select('user_id').eq('short_id', perm.establishment_short_id).maybeSingle();
+      if (!est || est.user_id !== requesterId) {
+        return res.status(403).json({ error: "Acesso negado." });
+      }
+
+      const { error } = await supabase.from('user_permissions').delete().eq('id', permissionId);
+      if (error) throw error;
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1469,12 +1626,19 @@ app.get("/api/admin/establishments/missing-hours", async (req, res) => {
 app.patch("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
   const { hours, is_open_24_hours, openingHours } = req.body;
+  const userId = req.headers['x-user-id'] as string;
   
   console.log(`[API] Updating hours for establishment ${id}: ${hours}`);
 
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
+      // Permission check
+      const hasPermission = await canUserEdit(supabase, userId, id);
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Acesso negado." });
+      }
+
       const { data, error } = await supabase
         .from('establishments')
         .update({ 
@@ -1578,8 +1742,10 @@ app.post("/api/establishments/register", async (req, res) => {
       }
 
       console.log(`[API Register] Inserting into establishments (city_id: ${targetCityId})...`);
+      const sId = generateShortId();
       const { data, error } = await supabase.from('establishments').insert([{
         name: registration.name,
+        short_id: sId,
         category_id: Number(registration.categoryId),
         sub_category: registration.subCategory,
         address: registration.address,
@@ -1652,6 +1818,7 @@ app.post("/api/establishments/register", async (req, res) => {
       // Persist locally for the session if Supabase is not available
       const newEstablishment = {
         id: `e${Date.now()}`,
+        short_id: generateShortId(),
         name: registration.name,
         category_id: Number(registration.categoryId),
         sub_category: registration.subCategory,
