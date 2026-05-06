@@ -268,6 +268,45 @@ app.get("/api/debug-supabase", async (req, res) => {
   res.json(debug);
 });
 
+app.get("/api/vercel-debug", async (req, res) => {
+  const supabase = getSupabaseAdmin();
+  const sUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+  const result: any = {
+    env: {
+      VERCEL: process.env.VERCEL || "false",
+      NODE_ENV: process.env.NODE_ENV,
+      HAS_SUPABASE_URL: !!sUrl,
+      HAS_SUPABASE_SERVICE_KEY: !!sKey,
+      HAS_SUPABASE_ANON_KEY: !!anonKey,
+      URL_PLACEHOLDER: sUrl?.includes('placeholder')
+    },
+    supabase_connection: "waiting..."
+  };
+
+  if (supabase) {
+    try {
+      const { count, error } = await supabase.from('cities').select('*', { count: 'exact', head: true });
+      if (error) {
+        result.supabase_connection = `Error: ${error.message}`;
+      } else {
+        result.supabase_connection = `Success! Found ${count} cities.`;
+        
+        const { data: ests } = await supabase.from('establishments').select('count', { count: 'exact', head: true });
+        result.establishments_count = ests?.[0]?.count || 0;
+      }
+    } catch (e: any) {
+      result.supabase_connection = `Exception: ${e.message}`;
+    }
+  } else {
+    result.supabase_connection = "Supabase client not initialized. Check URL and Key configuration.";
+  }
+
+  res.json(result);
+});
+
 app.get("/api/ping", (req, res) => {
   res.send("pong");
 });
@@ -374,17 +413,21 @@ app.get("/api/health", async (req, res) => {
   if (sUrl && sKey && !sUrl.includes('placeholder')) {
     try {
       const supabase = getSupabaseAdmin();
-      // Check if we can connect and what columns exist
-      const { data, error } = supabase ? await supabase.from('establishments').select('*, opening_hours:establishment_opening_hours(*)').limit(1) : { data: null, error: new Error("Supabase not initialized") };
-      if (error) {
-        supabase_status = `error: ${error.message}`;
+      if (!supabase) {
+        supabase_status = "initialization_failed_check_logs";
       } else {
-        supabase_status = "connected";
-        if (data && data.length > 0) {
-          table_schema = Object.keys(data[0]);
+        const { count, error } = await supabase.from('cities').select('*', { count: 'exact', head: true });
+        if (error) {
+          supabase_status = `error: ${error.message}`;
         } else {
-          // If table is empty, try to get columns via a different way or just report empty
-          supabase_status = "connected_but_empty";
+          supabase_status = `connected (${count} cities)`;
+          const { data: ests } = await supabase.from('establishments').select('*').limit(5);
+          if (ests && ests.length > 0) {
+            table_schema = Object.keys(ests[0]);
+            result.sample_establishments = ests.map(e => ({ name: e.name, status: e.status, city_id: e.city_id }));
+          } else {
+            supabase_status += " | but establishments table is empty";
+          }
         }
       }
     } catch (e: any) {
@@ -594,23 +637,47 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
   const cached = getCached(cacheKey);
   if (cached) return res.json(cached);
 
-  console.log(`[API] Fetching establishments for category: ${categoryId}, city: ${city_id}`);
-
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      let query = supabase.from('establishments').select('*, opening_hours:establishment_opening_hours(*)').eq('category_id', categoryId);
+      let targetCityIds: number[] = city_id ? [Number(city_id)] : [];
+      
+      // Try to find matching city IDs by name to handle ID inconsistencies between environments
       if (city_id) {
-        query = query.eq('city_id', city_id);
+        const mockCity = cities.find(c => c.id === Number(city_id));
+        if (mockCity) {
+          const { data: matchingCities } = await supabase
+            .from('cities')
+            .select('id')
+            .ilike('name', mockCity.name);
+          
+          if (matchingCities && matchingCities.length > 0) {
+            targetCityIds = matchingCities.map(c => c.id);
+          }
+        }
+      }
+
+      let query = supabase.from('establishments')
+        .select('*, opening_hours:establishment_opening_hours(*)');
+      
+      // Filter by category
+      query = query.eq('category_id', categoryId);
+
+      // Filter by city if available
+      if (targetCityIds.length > 0) {
+        query = query.in('city_id', targetCityIds);
       }
       
-      const { data, error } = await query.order('rating', { ascending: false }).limit(10);
+      const { data, error } = await query.order('rating', { ascending: false }).limit(20);
       
       if (error) {
         console.error("[Supabase Error] Fetching category establishments:", error);
       } else if (data && data.length > 0) {
+        console.log(`[API] Found ${data.length} establishments in Supabase for category ${categoryId}, city ${city_id}`);
         setCache(cacheKey, data);
         return res.json(data);
+      } else {
+        console.log(`[API] No establishments found in Supabase for category ${categoryId}, city ${city_id}. Target IDs explored: ${targetCityIds.join(',')}`);
       }
     }
 

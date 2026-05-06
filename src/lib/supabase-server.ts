@@ -14,11 +14,18 @@ export const getSupabaseAdmin = () => {
   const { url, key } = getSupabaseConfig();
   
   if (!url || !key || url.includes('placeholder')) {
+    if (!url) console.error('[Supabase Server] ERROR: SUPABASE_URL (ou VITE_SUPABASE_URL) não encontrada no ambiente.');
+    if (!key) console.error('[Supabase Server] ERROR: SUPABASE_SERVICE_ROLE_KEY (ou SUPABASE_SERVICE_KEY) não encontrada no ambiente.');
+    if (url?.includes('placeholder')) console.warn('[Supabase Server] WARNING: SUPABASE_URL ainda contém placeholder.');
     return null;
   }
   
   try {
-    cachedAdminClient = createClient(url, key, {
+    // Ensure URL has protocol
+    const finalUrl = url.startsWith('http') ? url : `https://${url}`;
+    console.log(`[Supabase Server] Initializing client with URL: ${finalUrl.substring(0, 30)}...`);
+    
+    cachedAdminClient = createClient(finalUrl, key, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
