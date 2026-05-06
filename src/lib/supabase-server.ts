@@ -11,19 +11,17 @@ let cachedAdminClient: any = null;
 export const getSupabaseAdmin = () => {
   if (cachedAdminClient) return cachedAdminClient;
 
-  const { url, key } = getSupabaseConfig();
-  
-  if (!url || !key || url.includes('placeholder')) {
-    if (!url) console.error('[Supabase Server] ERROR: SUPABASE_URL (ou VITE_SUPABASE_URL) não encontrada no ambiente.');
-    if (!key) console.error('[Supabase Server] ERROR: SUPABASE_SERVICE_ROLE_KEY (ou SUPABASE_SERVICE_KEY) não encontrada no ambiente.');
-    if (url?.includes('placeholder')) console.warn('[Supabase Server] WARNING: SUPABASE_URL ainda contém placeholder.');
-    return null;
-  }
-  
   try {
+    const { url, key } = getSupabaseConfig();
+    
+    if (!url || !key || url.includes('placeholder')) {
+      if (!url) console.error('[Supabase Server] ERROR: SUPABASE_URL não localizada.');
+      if (!key) console.error('[Supabase Server] ERROR: Chave de serviço não localizada.');
+      return null;
+    }
+
     // Ensure URL has protocol
     const finalUrl = url.startsWith('http') ? url : `https://${url}`;
-    console.log(`[Supabase Server] Initializing client with URL: ${finalUrl.substring(0, 30)}...`);
     
     cachedAdminClient = createClient(finalUrl, key, {
       auth: {
@@ -32,15 +30,23 @@ export const getSupabaseAdmin = () => {
         detectSessionInUrl: false
       }
     });
+    console.log('[Supabase Server] Cliente admin inicializado com sucesso.');
     return cachedAdminClient;
-  } catch (e) {
-    console.error('Error creating Supabase admin client:', e);
+  } catch (e: any) {
+    console.error('[Supabase Server] CRITICAL ERROR during initialization:', e.message);
     return null;
   }
 };
 
 // For backward compatibility, but prefer getSupabaseAdmin()
-export const supabaseAdmin = getSupabaseAdmin() || {
+export const supabaseAdmin = (() => {
+  try {
+    return getSupabaseAdmin();
+  } catch (e) {
+    console.error('[Supabase Server] Top-level initialization failed');
+    return null;
+  }
+})() || {
   from: () => ({
     select: () => ({
       limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),

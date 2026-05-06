@@ -424,7 +424,6 @@ app.get("/api/health", async (req, res) => {
           const { data: ests } = await supabase.from('establishments').select('*').limit(5);
           if (ests && ests.length > 0) {
             table_schema = Object.keys(ests[0]);
-            result.sample_establishments = ests.map(e => ({ name: e.name, status: e.status, city_id: e.city_id }));
           } else {
             supabase_status += " | but establishments table is empty";
           }
@@ -1567,9 +1566,7 @@ app.post("/api/establishments/register", async (req, res) => {
 
 // Vite middleware for development
 const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
-const rootDir = process.env.VERCEL ? path.resolve(__dirname, "..") : __dirname;
-const distPath = path.resolve(rootDir, "dist");
-const distExists = fs.existsSync(distPath);
+const isVercel = !!process.env.VERCEL;
 
 if (!isProd) {
   // Dynamic import without top-level await to avoid making the module async
@@ -1586,12 +1583,17 @@ if (!isProd) {
       next(err);
     }
   });
-} else if (distExists) {
-  // Static serving for production (only if dist exists)
-  app.use(express.static(distPath));
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
-  });
+} else if (!isVercel) {
+  // Static serving for production (only if NOT on Vercel)
+  // On Vercel, static files are handled by vercel.json rewrites
+  const rootDir = __dirname;
+  const distPath = path.resolve(rootDir, "dist");
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
 }
 
 // Only listen if not on Vercel
