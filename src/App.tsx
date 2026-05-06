@@ -41,6 +41,7 @@ import { RegisterEstablishmentModal } from './components/RegisterEstablishmentMo
 import { UserEstablishmentsModal } from './components/UserEstablishmentsModal';
 import { AuthModal } from './components/AuthModal';
 import { FeaturedEstablishments } from './components/FeaturedEstablishments';
+import { NearbyEstablishments } from './components/NearbyEstablishments';
 
 import { MaintenanceTools } from './components/MaintenanceTools';
 import { ExportTools } from './components/ExportTools';
@@ -133,7 +134,9 @@ export default function App() {
 
   const [isDetecting, setIsDetecting] = useState(false);
 
-  const detectLocation = useCallback(() => {
+  const detectLocation = useCallback((onSuccessOrEvent?: ((loc: {latitude: number, longitude: number}) => void) | React.MouseEvent) => {
+    const onSuccess = typeof onSuccessOrEvent === 'function' ? onSuccessOrEvent : undefined;
+    
     setIsDetecting(true);
     // Default to city center
     const defaultLoc = {
@@ -154,6 +157,7 @@ export default function App() {
           setLocationName("Minha Localização (GPS)");
           setIsDetecting(false);
           console.log("Real location detected:", realLoc);
+          if (onSuccess) onSuccess(realLoc);
         },
         (error) => {
           console.warn("Error detecting real location, using city defaults:", error);
@@ -163,8 +167,10 @@ export default function App() {
             if (!prev) {
               setIsRealLocation(false);
               setLocationName(`${currentCity.name} – ${currentCity.uf}`);
+              if (onSuccess) onSuccess(defaultLoc);
               return defaultLoc;
             }
+            if (onSuccess) onSuccess(prev);
             return prev;
           });
         },
@@ -176,8 +182,10 @@ export default function App() {
         if (!prev) {
           setIsRealLocation(false);
           setLocationName(`${currentCity.name} – ${currentCity.uf}`);
+          if (onSuccess) onSuccess(defaultLoc);
           return defaultLoc;
         }
+        if (onSuccess) onSuccess(prev);
         return prev;
       });
     }
@@ -207,6 +215,7 @@ export default function App() {
             is_featured: est.is_featured,
             is_verified: est.is_verified,
             is_premium: est.is_premium,
+            opening_hours: est.opening_hours,
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -347,7 +356,6 @@ export default function App() {
       setAllGroundingChunks([]);
     }
 
-    // Parallel search: Local Database + Gemini (Maps Grounding)
     try {
       const searchParams = new URLSearchParams({
         q: query,
@@ -356,9 +364,19 @@ export default function App() {
       if (categoryId) searchParams.append('category_id', String(categoryId));
       if (subCategory) searchParams.append('sub_category', subCategory);
 
-      const localResults = await fetch(`/api/search?${searchParams.toString()}`)
+      // 1. Fetch Local Database Results (FAST)
+      const localResultsPromise = fetch(`/api/search?${searchParams.toString()}`)
         .then(res => res.json())
         .catch(() => []);
+
+      // Add a preliminary message to the chat so the user sees progress
+      const initialResponse: ChatMessage = {
+        role: 'model',
+        text: `Buscando **"${query}"** em ${currentCity.name}...`
+      };
+      setMessages(prev => [...prev, initialResponse]);
+
+      const localResults = await localResultsPromise;
 
       // Convert local results to GroundingChunks
       const localChunks: GroundingChunk[] = localResults
@@ -380,6 +398,7 @@ export default function App() {
             is_featured: est.is_featured,
             is_verified: est.is_verified,
             is_premium: est.is_premium,
+            opening_hours: est.opening_hours,
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -387,15 +406,13 @@ export default function App() {
           }
         }));
 
-      // Show local results immediately for better responsiveness
+      // Show local results immediately in the map
       if (localChunks.length > 0) {
         setAllGroundingChunks(prev => {
           const newChunks = localChunks.filter(
             nc => !prev.some(pc => pc.maps?.id === nc.maps?.id)
           );
           let combined = [...newChunks, ...prev];
-          
-          // Sort by distance if location is available
           if (location) {
             combined.sort((a, b) => {
               const locA = a.maps?.location;
@@ -406,29 +423,51 @@ export default function App() {
               return distA - distB;
             });
           }
-          
           return combined.slice(0, 20);
         });
         setIsMapOpen(true);
+        
+        // Update preliminary message
+        setMessages(prev => {
+          const newMessages = [...prev];
+          if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
+            newMessages[newMessages.length - 1].text = `Encontrei **${localChunks.length}** locais em nossa base de dados. Estou buscando mais detalhes com a IA...`;
+          }
+          return newMessages;
+        });
       }
 
-      // Create context string for Gemini
+      // 2. Call Gemini (SLOWER, but now with STREAMING)
       const localContext = localResults
         .filter((item: any) => item.id && item.name && item.latitude)
         .map((est: any) => `- ${est.name}: ${est.address} (${est.sub_category})`)
         .join("\n");
 
       const categoryName = CATEGORIES.find(c => c.id === (categoryId || activeCategoryId))?.name;
+      
       const response = await chatWithMaps(
         query, 
         currentCity, 
         location, 
         localContext, 
         categoryName, 
-        subCategory || selectedSubCategory || undefined
+        subCategory || selectedSubCategory || undefined,
+        (streamedText) => {
+          // Update the last message as it streams
+          setMessages(prev => {
+            const newMessages = [...prev];
+            if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
+              newMessages[newMessages.length - 1] = {
+                ...newMessages[newMessages.length - 1],
+                text: streamedText
+              };
+            }
+            return newMessages;
+          });
+        }
       );
 
-      // If AI failed but we have local results, add a helpful message
+      // Handle AI failure/quota
       const aiFailed = response.isError || 
         response.text.includes("chave da API Gemini") || 
         response.text.includes("API_KEY") ||
@@ -445,93 +484,93 @@ export default function App() {
 
           response.text = `Em **${currentCity.name} - ${currentCity.uf}**, você pode encontrar os seguintes estabelecimentos que oferecem serviços de **${query}**:\n\n` + 
             localResults.map((est: any) => `* **${est.name}**: ${est.address}`).join("\n") +
-            `\n\n*(Nota: ${reason}. Já estamos trabalhando para resolver!)*`;
-          
-          // Clear error flag if we're providing a useful response with local results
+            `\n\n*(Nota: ${reason}. Já estamos trabalhando para que ele fique disponível o tempo todo!)*`;
           response.isError = false;
         } else {
-          // No local results and AI failed
-          response.text = `Puxa, não encontrei estabelecimentos para **"${query}"** em nossa base de dados local no momento. \n\nAlém disso, nosso assistente de IA está descansando um pouquinho (limite de uso). Já estamos trabalhando para que ele fique disponível o tempo todo! \n\n**Enquanto isso, que tal tentar:**\n1. Verifique se a cidade selecionada está correta.\n2. Tente uma busca mais simples (ex: apenas "Padaria").\n3. Explore as categorias acima. \n\nObrigado por sua paciência! 😊`;
+          // GPS Fallback if everything failed
+          try {
+            const fallbackRes = await fetch(`/api/search?q=&city_id=${currentCity.id}`);
+            const fallbackData = await fallbackRes.json();
+            if (Array.isArray(fallbackData) && fallbackData.length > 0) {
+              const nearbyChunks: GroundingChunk[] = fallbackData.map((est: any) => ({
+                maps: {
+                  id: est.id, title: est.name, categoryId: est.category_id, subCategory: est.sub_category,
+                  cityId: est.city_id, address: est.address, hours: est.hours, description: est.description,
+                  uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
+                  phone: est.phone, whatsapp: est.whatsapp, user_id: est.user_id, is_featured: est.is_featured,
+                  is_verified: est.is_verified, is_premium: est.is_premium, opening_hours: est.opening_hours,
+                  location: { latitude: est.latitude, longitude: est.longitude }
+                }
+              }));
+              if (location) {
+                nearbyChunks.sort((a, b) => {
+                  const distA = calculateDistance(location.latitude, location.longitude, a.maps!.location!.latitude, a.maps!.location!.longitude);
+                  const distB = calculateDistance(location.latitude, location.longitude, b.maps!.location!.latitude, b.maps!.location!.longitude);
+                  return distA - distB;
+                });
+              }
+              setAllGroundingChunks(nearbyChunks.slice(0, 5));
+              setIsMapOpen(true);
+              response.text = `Puxa, não encontrei estabelecimentos para **"${query}"** no momento. \n\nComo nosso assistente de IA também está temporariamente indisponível, utilizei seu GPS para encontrar os **locais mais próximos de você** em ${currentCity.name}.`;
+              response.isError = false;
+            }
+          } catch (e) {}
         }
       }
 
-      setMessages(prev => [...prev, response]);
+      // Replace the preliminary message with the final AI response
+      setMessages(prev => {
+        const newMessages = [...prev];
+        if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
+          newMessages[newMessages.length - 1] = response;
+        } else {
+          newMessages.push(response);
+        }
+        return newMessages;
+      });
       
       const geminiChunks = response.groundingChunks || [];
-      
-      // Try to extract descriptions from the response text for each chunk
       const chunksWithDescriptions = geminiChunks.map(chunk => {
         if (!chunk.maps) return chunk;
-        
         const title = chunk.maps.title;
-
-        // Check if this establishment is already in our local results
-        const localMatch = localResults.find((lr: any) => 
-          lr.name.toLowerCase().trim() === title.toLowerCase().trim()
-        );
-
+        const localMatch = localResults.find((lr: any) => lr.name.toLowerCase().trim() === title.toLowerCase().trim());
         let enrichedMaps = { ...chunk.maps };
-
         if (localMatch) {
           enrichedMaps = {
-            ...enrichedMaps,
-            id: localMatch.id,
-            categoryId: localMatch.category_id,
-            subCategory: localMatch.sub_category,
-            address: localMatch.address || enrichedMaps.address,
-            hours: localMatch.hours || enrichedMaps.hours,
-            description: localMatch.description || enrichedMaps.description,
-            phone: localMatch.phone || enrichedMaps.phone,
-            whatsapp: localMatch.whatsapp || enrichedMaps.whatsapp,
-            is_featured: localMatch.is_featured,
-            is_verified: localMatch.is_verified,
-            is_premium: localMatch.is_premium,
-            plusCode: localMatch.plus_code || enrichedMaps.plusCode
+            ...enrichedMaps, id: localMatch.id, categoryId: localMatch.category_id, subCategory: localMatch.sub_category,
+            address: localMatch.address || enrichedMaps.address, hours: localMatch.hours || enrichedMaps.hours,
+            description: localMatch.description || enrichedMaps.description, phone: localMatch.phone || enrichedMaps.phone,
+            whatsapp: localMatch.whatsapp || enrichedMaps.whatsapp, is_featured: localMatch.is_featured,
+            is_verified: localMatch.is_verified, is_premium: localMatch.is_premium, plusCode: localMatch.plus_code || enrichedMaps.plusCode
           };
         }
-        
-        // Search for the title in the text and extract the following sentence/paragraph
         const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp(`\\*\\*${escapedTitle}\\*\\*:?\\s*([^\\n*]+)`, 'i');
         const match = response.text.match(regex);
-        
         if (match && match[1]) {
           const content = match[1].trim();
-          // Often the first part before a period or a long space is the address
           if (!enrichedMaps.address) {
             const addressMatch = content.match(/^([^.]{10,100})[.]/);
-            if (addressMatch) {
-              enrichedMaps.address = addressMatch[1].trim();
-            }
+            if (addressMatch) enrichedMaps.address = addressMatch[1].trim();
           }
           enrichedMaps.description = enrichedMaps.description || content;
         }
-
-        return {
-          ...chunk,
-          maps: enrichedMaps
-        };
+        return { ...chunk, maps: enrichedMaps };
       });
       
       if (chunksWithDescriptions.length > 0) {
         setAllGroundingChunks(prev => {
-          const newChunks = chunksWithDescriptions.filter(
-            nc => !prev.some(pc => pc.maps?.title === nc.maps?.title)
-          );
+          const newChunks = chunksWithDescriptions.filter(nc => !prev.some(pc => pc.maps?.title === nc.maps?.title));
           let combined = [...newChunks, ...prev];
-          
-          // Sort by distance if location is available
           if (location) {
             combined.sort((a, b) => {
-              const locA = a.maps?.location;
-              const locB = b.maps?.location;
+              const locA = a.maps?.location; const locB = b.maps?.location;
               if (!locA || !locB) return 0;
               const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
               const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
               return distA - distB;
             });
           }
-          
           return combined.slice(0, 20);
         });
         setIsMapOpen(true);
@@ -544,15 +583,19 @@ export default function App() {
   }, [isLoading, view, selectedSubCategory, currentCity, location, activeCategoryId]);
 
   const findNearbyEstablishments = useCallback(async () => {
+    const runSearch = (loc: {latitude: number, longitude: number}) => {
+      setView('chat');
+      setSelectedSubCategory('Estabelecimentos mais próximos');
+      const query = `estabelecimentos mais próximos de mim em ${currentCity.name}`;
+      performSearch(query, true);
+    };
+
     if (!location) {
-      detectLocation();
+      detectLocation(runSearch);
       return;
     }
     
-    setView('chat');
-    setSelectedSubCategory('Estabelecimentos mais próximos');
-    const query = `estabelecimentos mais próximos de mim em ${currentCity.name}`;
-    performSearch(query, true);
+    runSearch(location);
   }, [location, detectLocation, currentCity, performSearch]);
 
 
@@ -920,6 +963,9 @@ export default function App() {
 
                 {/* Featured Section */}
                 <FeaturedEstablishments userLocation={location} />
+
+                {/* Nearby Section (GPS based) */}
+                <NearbyEstablishments userLocation={location} />
               </motion.div>
             ) : view === 'subcategories' ? (
               /* Subcategories Screen */
@@ -1177,9 +1223,28 @@ export default function App() {
                       className="flex justify-start"
                     >
                       <div className="bg-zinc-100 px-5 py-3.5 rounded-2xl rounded-tl-none border border-zinc-200 flex items-center gap-3">
-                        <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
-                        <span className="text-sm text-zinc-500 font-medium">Analisando dados locais...</span>
+                        <Loader2 className="w-4 h-4 animate-spin text-[#00897b]" />
+                        <span className="text-sm text-zinc-500 font-medium">
+                          {allGroundingChunks.length > 0 
+                            ? "Enriquecendo resultados com IA..." 
+                            : "Analisando dados locais..."}
+                        </span>
                       </div>
+                    </motion.div>
+                  )}
+                  {messages.length > 1 && allGroundingChunks.length === 0 && !isLoading && (
+                    <motion.div 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex justify-center py-4"
+                    >
+                      <button 
+                        onClick={findNearbyEstablishments}
+                        className="px-6 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-lg flex items-center gap-2 active:scale-95"
+                      >
+                        <MapPin className="w-4 h-4" />
+                        Ver locais próximos a mim
+                      </button>
                     </motion.div>
                   )}
                 </div>

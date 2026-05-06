@@ -44,16 +44,30 @@ export const MaintenanceTools: React.FC = () => {
         setResults(prev => prev.map(r => r.id === est.id ? { ...r, message: 'Buscando no Maps...' } : r));
         
         // 1. Get hours from Gemini
-        const hours = await suggestBusinessHours(est.name, "Gurupi", est.address);
+        const result = await suggestBusinessHours(est.name, "Gurupi", est.address);
         
-        if (hours) {
+        if (result) {
+          const hours = result.summary;
           setResults(prev => prev.map(r => r.id === est.id ? { ...r, message: 'Atualizando banco...' } : r));
           
           // 2. Update Supabase
           const res = await fetch(`/api/establishments/${est.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ hours })
+            body: JSON.stringify({ 
+              hours,
+              is_open_24_hours: result.is24h,
+              openingHours: result.structured?.flatMap(h => 
+                h.closed 
+                  ? [{ day_of_week: h.day, open_time: null, close_time: null, is_closed: true }]
+                  : h.slots.map(slot => ({
+                      day_of_week: h.day,
+                      open_time: slot.open,
+                      close_time: slot.close,
+                      is_closed: false
+                    }))
+              )
+            })
           });
 
           if (res.ok) {

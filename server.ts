@@ -241,7 +241,7 @@ app.get("/api/debug-supabase", async (req, res) => {
         const { data: cities, error: cityErr } = await supabase.from('cities').select('*').limit(5);
         debug.tables.cities = { count: cities?.length || 0, error: cityErr?.message, sample: cities };
 
-        const { data: ests, error: estErr } = await supabase.from('establishments').select('*').limit(5);
+        const { data: ests, error: estErr } = await supabase.from('establishments').select('*, opening_hours:establishment_opening_hours(*)').limit(5);
       debug.tables.establishments = { count: ests?.length || 0, error: estErr?.message, sample: ests };
       
       if (ests && ests.length > 0) {
@@ -362,7 +362,7 @@ app.get("/api/health", async (req, res) => {
     try {
       const supabase = getSupabaseAdmin();
       // Check if we can connect and what columns exist
-      const { data, error } = supabase ? await supabase.from('establishments').select('*').limit(1) : { data: null, error: new Error("Supabase not initialized") };
+      const { data, error } = supabase ? await supabase.from('establishments').select('*, opening_hours:establishment_opening_hours(*)').limit(1) : { data: null, error: new Error("Supabase not initialized") };
       if (error) {
         supabase_status = `error: ${error.message}`;
       } else {
@@ -582,7 +582,7 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      let query = supabase.from('establishments').select('*').eq('category_id', categoryId);
+      let query = supabase.from('establishments').select('*, opening_hours:establishment_opening_hours(*)').eq('category_id', categoryId);
       if (city_id) {
         query = query.eq('city_id', city_id);
       }
@@ -812,14 +812,10 @@ app.get("/api/search", async (req, res) => {
       
       console.log(`[API Search] Searching for "${cityName}" using IDs: ${targetCityIds.join(', ')}`);
 
-      // Try fetching with status approved first, then fallback to any status
-      const fetchFromSupabase = async (withStatus: boolean, currentQ: string) => {
+      // Optimized fetch: get both approved and pending in one go, but prioritize approved
+      const fetchFromSupabase = async (currentQ: string) => {
         try {
-          let query = supabase.from('establishments').select('*');
-          
-          if (withStatus) {
-            query = query.eq('status', 'approved');
-          }
+          let query = supabase.from('establishments').select('*, opening_hours:establishment_opening_hours(*)');
           
           if (targetCityIds.length > 0) {
             query = query.in('city_id', targetCityIds);
@@ -862,44 +858,46 @@ app.get("/api/search", async (req, res) => {
             query = query.or(orConditions);
           }
           
-          const result = await query.limit(20);
-          if (result.error) {
-            console.error(`[Supabase Query Error] Status ${withStatus}:`, result.error.message);
-            if (result.error.message.includes('column') && result.error.message.includes('does not exist')) {
-              let simpleQuery = supabase.from('establishments').select('*');
-              if (withStatus) simpleQuery = simpleQuery.eq('status', 'approved');
-              if (targetCityIds.length > 0) simpleQuery = simpleQuery.in('city_id', targetCityIds);
-              return await simpleQuery.limit(20);
-            }
-          }
-          return result;
+          // Fetch more than we need to allow for filtering/prioritization
+          const result = await query.limit(50);
+          if (result.error) return result;
+
+          // Prioritize approved, then featured, then premium
+          const sortedData = (result.data || []).sort((a: any, b: any) => {
+            if (a.status === 'approved' && b.status !== 'approved') return -1;
+            if (a.status !== 'approved' && b.status === 'approved') return 1;
+            if (a.is_featured && !b.is_featured) return -1;
+            if (!a.is_featured && b.is_featured) return 1;
+            if (a.is_premium && !b.is_premium) return -1;
+            if (!a.is_premium && b.is_premium) return 1;
+            return 0;
+          });
+
+          return { data: sortedData.slice(0, 20), error: null };
         } catch (e: any) {
           console.error("[Supabase Exception]:", e.message);
           return { data: null, error: e };
         }
       };
 
-      let { data, error } = await fetchFromSupabase(true, q);
+      const start = Date.now();
+      let { data, error } = await fetchFromSupabase(q);
+      console.log(`[API Search] Supabase query for "${q}" took ${Date.now() - start}ms`);
       
       // If no results, try fuzzy correction
       if ((!data || data.length === 0) && q && !category_id && !sub_category) {
         const corrected = smartCorrectQuery(q);
         if (corrected !== q) {
           console.log(`[Smart Search] No results for "${q}", trying corrected query: "${corrected}"`);
-          const retry = await fetchFromSupabase(true, corrected);
+          const retryStart = Date.now();
+          const retry = await fetchFromSupabase(corrected);
+          console.log(`[API Search] Supabase retry for "${corrected}" took ${Date.now() - retryStart}ms`);
           if (retry.data && retry.data.length > 0) {
             data = retry.data;
             error = retry.error;
-            q = corrected; // Update q so cache uses corrected term
+            q = corrected;
           }
         }
-      }
-      
-      if (!data || data.length === 0) {
-        console.log("[API Search] No approved results, trying without status filter...");
-        const retry = await fetchFromSupabase(false, q);
-        data = retry.data;
-        error = retry.error;
       }
 
       if (error) {
@@ -1096,6 +1094,24 @@ app.put("/api/establishments/:id", async (req, res) => {
           code: error.code
         });
       }
+
+      // Update opening hours if provided
+      if (data && data[0] && registration.openingHours) {
+        try {
+          // Delete existing hours first to avoid unique constraint issues
+          await supabase.from('establishment_opening_hours').delete().eq('establishment_id', data[0].id);
+          
+          const hoursToInsert = registration.openingHours.map((h: any) => ({
+            establishment_id: data[0].id,
+            ...h
+          }));
+          
+          const { error: hoursError } = await supabase.from('establishment_opening_hours').insert(hoursToInsert);
+          if (hoursError) console.error("[Supabase Error] Updating opening hours:", hoursError);
+        } catch (err) {
+          console.error("[API] Error updating opening hours:", err);
+        }
+      }
       
       if (!data || data.length === 0) {
         console.warn(`[API] No establishment found with ID ${id} in Supabase`);
@@ -1178,7 +1194,7 @@ app.get("/api/admin/establishments/export", async (req, res) => {
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      let query = supabase.from('establishments').select('*, cities(*, states(*))');
+      let query = supabase.from('establishments').select('*, opening_hours:establishment_opening_hours(*), cities(*, states(*))');
       
       if (category_id) query = query.eq('category_id', Number(category_id));
       if (sub_category) query = query.eq('sub_category', String(sub_category));
@@ -1245,7 +1261,7 @@ app.get("/api/admin/establishments/missing-hours", async (req, res) => {
 
 app.patch("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
-  const { hours } = req.body;
+  const { hours, is_open_24_hours, openingHours } = req.body;
   
   console.log(`[API] Updating hours for establishment ${id}: ${hours}`);
 
@@ -1254,11 +1270,28 @@ app.patch("/api/establishments/:id", async (req, res) => {
     if (supabase) {
       const { data, error } = await supabase
         .from('establishments')
-        .update({ hours })
+        .update({ 
+          hours,
+          is_open_24_hours: is_open_24_hours || false
+        })
         .eq('id', id)
         .select();
 
       if (error) throw error;
+
+      // Update opening hours if provided
+      if (data && data[0] && openingHours) {
+        try {
+          await supabase.from('establishment_opening_hours').delete().eq('establishment_id', data[0].id);
+          const hoursToInsert = openingHours.map((h: any) => ({
+            establishment_id: data[0].id,
+            ...h
+          }));
+          await supabase.from('establishment_opening_hours').insert(hoursToInsert);
+        } catch (err) {
+          console.error("[API] Error updating opening hours in PATCH:", err);
+        }
+      }
       
       clearCache();
       return res.json({ success: true, data: data?.[0] });
@@ -1374,6 +1407,20 @@ app.post("/api/establishments/register", async (req, res) => {
           message: error.message,
           code: error.code
         });
+      }
+
+      // Insert opening hours if provided
+      if (data && data[0] && registration.openingHours) {
+        try {
+          const hoursToInsert = registration.openingHours.map((h: any) => ({
+            establishment_id: data[0].id,
+            ...h
+          }));
+          const { error: hoursError } = await supabase.from('establishment_opening_hours').insert(hoursToInsert);
+          if (hoursError) console.error("[Supabase Error] Inserting opening hours:", hoursError);
+        } catch (err) {
+          console.error("[API] Error inserting opening hours:", err);
+        }
       }
       
       console.log("[API] Establishment registered successfully in Supabase");

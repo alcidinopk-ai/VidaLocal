@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { CATEGORIES, SUB_CATEGORIES } from "../constants/taxonomy";
 
 const TAXONOMY_CONTEXT = `
@@ -26,6 +26,12 @@ export interface GroundingChunk {
     is_premium?: boolean;
     is_open_24_hours?: boolean;
     plusCode?: string;
+    opening_hours?: {
+      day_of_week: number;
+      open_time: string | null;
+      close_time: string | null;
+      is_closed: boolean;
+    }[];
     location?: {
       latitude: number;
       longitude: number;
@@ -62,11 +68,14 @@ export async function chatWithMaps(
   userLocation?: { latitude: number; longitude: number },
   localContext?: string,
   categoryFilter?: string,
-  subCategoryFilter?: string
+  subCategoryFilter?: string,
+  onStream?: (text: string) => void
 ): Promise<ChatMessage> {
   const cacheKey = `${city.name}-${city.uf}:${message.trim().toLowerCase()}:${userLocation ? 'geo' : 'city'}:${localContext ? 'ctx' : 'no-ctx'}:${categoryFilter || ''}:${subCategoryFilter || ''}`;
   if (responseCache.has(cacheKey)) {
-    return responseCache.get(cacheKey)!;
+    const cached = responseCache.get(cacheKey)!;
+    if (onStream) onStream(cached.text);
+    return cached;
   }
 
   try {
@@ -74,8 +83,8 @@ export async function chatWithMaps(
     const lat = userLocation?.latitude || city.latitude;
     const lng = userLocation?.longitude || city.longitude;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+    const stream = await ai.models.generateContentStream({
+      model: "gemini-3-flash-preview",
       contents: message,
       config: {
         systemInstruction: `Você é VidaLocal, um guia para ${city.name}. Ajude o usuário a encontrar locais.
@@ -99,8 +108,18 @@ export async function chatWithMaps(
       },
     });
 
-    const text = response.text || "Sem resposta textual.";
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => {
+    let fullText = "";
+    let lastChunk: GenerateContentResponse | null = null;
+
+    for await (const chunk of stream) {
+      lastChunk = chunk;
+      const chunkText = chunk.text || "";
+      fullText += chunkText;
+      if (onStream) onStream(fullText);
+    }
+
+    const text = fullText || "Sem resposta textual.";
+    const groundingChunks = lastChunk?.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => {
       const categoryId = CATEGORIES.find(c => c.name === categoryFilter)?.id;
       
       return {
@@ -115,15 +134,14 @@ export async function chatWithMaps(
           rating: chunk.maps.rating,
           categoryId: categoryId,
           subCategory: subCategoryFilter,
-          // Description is usually not in the maps chunk itself but in the response text
         } : undefined,
         web: chunk.web ? { uri: chunk.web.uri, title: chunk.web.title } : undefined,
       };
     }).filter((c: any) => c.maps || c.web) || [];
 
-    const result: ChatMessage = { role: "model", text, groundingChunks };
-    responseCache.set(cacheKey, result);
-    return result;
+    const finalResult: ChatMessage = { role: "model", text, groundingChunks };
+    responseCache.set(cacheKey, finalResult);
+    return finalResult;
   } catch (error: any) {
     console.error("Chat API Error:", error);
     
@@ -155,28 +173,44 @@ export async function suggestBusinessHours(
   name: string,
   city: string,
   address?: string
-): Promise<string | null> {
+): Promise<{ 
+  summary: string; 
+  is24h: boolean;
+  structured?: { day: number; closed: boolean; slots: { open: string; close: string }[] }[] 
+} | null> {
   try {
     const ai = getAI();
     const prompt = `Quais são os horários de funcionamento de "${name}" em ${city}${address ? `, no endereço ${address}` : ''}? 
-    Responda APENAS os horários em uma única linha, formatado como "Seg-Sex: 08h às 18h, Sáb: 08h às 12h". 
-    Se não encontrar, responda "Não encontrado".`;
+    Responda em formato JSON com os seguintes campos:
+    - summary: uma string curta resumindo os horários (ex: "Seg-Sex: 08h às 18h, Sáb: 08h às 12h")
+    - is24h: booleano indicando se funciona 24 horas
+    - structured: um array de 7 objetos (um para cada dia, 0=Domingo a 6=Sábado) com:
+      - day: número do dia (0-6)
+      - closed: booleano indicando se está fechado no dia
+      - slots: um array de objetos com { open: "HH:MM", close: "HH:MM" }. Se fechado, o array deve ser vazio.
+    
+    Se houver fechamento para almoço, inclua dois slots no array.
+    Se não encontrar, responda apenas null.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         tools: [{ googleMaps: {} }],
+        responseMimeType: "application/json"
       },
     });
 
-    const text = response.text?.trim();
-    if (text && !text.toLowerCase().includes("não encontrado")) {
-      return text;
-    }
-    return null;
-  } catch (error) {
+    const result = JSON.parse(response.text || "null");
+    return result;
+  } catch (error: any) {
     console.error("Error suggesting hours:", error);
+    
+    const errorMessage = error?.message || String(error);
+    if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("quota")) {
+      throw new Error("QUOTA_EXCEEDED");
+    }
+    
     return null;
   }
 }

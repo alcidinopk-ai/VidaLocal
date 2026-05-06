@@ -19,7 +19,8 @@ import {
   Crown,
   Wand2,
   Compass,
-  Hash
+  Hash,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
@@ -65,10 +66,20 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     is_premium: false
   });
 
+  const [openingHours, setOpeningHours] = useState([
+    { day: 0, label: 'Domingo', slots: [{ open: '08:00', close: '12:00' }], closed: true },
+    { day: 1, label: 'Segunda-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+    { day: 2, label: 'Terça-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+    { day: 3, label: 'Quarta-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+    { day: 4, label: 'Quinta-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+    { day: 5, label: 'Sexta-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+    { day: 6, label: 'Sábado', slots: [{ open: '08:00', close: '12:00' }], closed: false },
+  ]);
+
   React.useEffect(() => {
     if (initialData && isOpen) {
       setFormData({
-        name: initialData.title || '',
+        name: initialData.name || initialData.title || '',
         categoryId: String(initialData.categoryId || ''),
         subCategory: initialData.subCategory || '',
         address: initialData.address || '',
@@ -86,6 +97,28 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         is_verified: initialData.is_verified || false,
         is_premium: initialData.is_premium || false
       });
+      // Set opening hours if available in initialData
+      if (initialData.opening_hours && Array.isArray(initialData.opening_hours)) {
+        const newHours = [0, 1, 2, 3, 4, 5, 6].map(dayNum => {
+          const dayLabel = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][dayNum];
+          const daySlots = initialData.opening_hours.filter((oh: any) => oh.day_of_week === dayNum);
+          
+          if (daySlots.length > 0) {
+            const isClosed = daySlots.every((s: any) => s.is_closed);
+            return {
+              day: dayNum,
+              label: dayLabel,
+              closed: isClosed,
+              slots: isClosed ? [{ open: '', close: '' }] : daySlots.map((s: any) => ({
+                open: s.open_time?.substring(0, 5) || '',
+                close: s.close_time?.substring(0, 5) || ''
+              }))
+            };
+          }
+          return { day: dayNum, label: dayLabel, slots: [{ open: '', close: '' }], closed: true };
+        });
+        setOpeningHours(newHours);
+      }
     } else if (!initialData && isOpen) {
       setFormData({
         name: '',
@@ -123,28 +156,45 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     setError(null);
     
     try {
-      const suggested = await suggestBusinessHours(
+      const result = await suggestBusinessHours(
         formData.name, 
         currentCity.name, 
         formData.address
       );
       
-      if (suggested) {
-        const is24h = suggested.toLowerCase().includes('24 horas') || 
-                     suggested.toLowerCase().includes('24h') ||
-                     suggested.toLowerCase().includes('24 h');
-        
+      if (result) {
         setFormData(prev => ({ 
           ...prev, 
-          hours: suggested,
-          is_open_24_hours: is24h
+          hours: result.summary,
+          is_open_24_hours: result.is24h
         }));
+
+        if (result.structured && Array.isArray(result.structured)) {
+          const newHours = openingHours.map(h => {
+            const found = result.structured?.find((s: any) => s.day === h.day);
+            if (found) {
+              return {
+                ...h,
+                slots: found.slots && found.slots.length > 0 
+                  ? found.slots 
+                  : [{ open: '', close: '' }],
+                closed: found.closed
+              };
+            }
+            return h;
+          });
+          setOpeningHours(newHours);
+        }
       } else {
         setError("Não consegui encontrar os horários automaticamente. Por favor, preencha manualmente.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error suggesting hours:", err);
-      setError("Erro ao buscar horários. Tente preencher manualmente.");
+      if (err.message === "QUOTA_EXCEEDED") {
+        setError("Atingimos o limite de buscas da IA por agora. Por favor, preencha os horários manualmente ou tente novamente em alguns minutos.");
+      } else {
+        setError("Erro ao buscar horários. Tente preencher manualmente.");
+      }
     } finally {
       setIsSuggestingHours(false);
     }
@@ -196,6 +246,66 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     sc => sc.categoryId === Number(formData.categoryId)
   );
 
+  const handleHourChange = (day: number, field: 'open' | 'close' | 'closed', value: any, slotIndex: number = 0) => {
+    const newHours = openingHours.map(h => {
+      if (h.day === day) {
+        if (field === 'closed') return { ...h, closed: value };
+        
+        const newSlots = [...h.slots];
+        newSlots[slotIndex] = { ...newSlots[slotIndex], [field]: value };
+        return { ...h, slots: newSlots };
+      }
+      return h;
+    });
+    setOpeningHours(newHours);
+  };
+
+  const addSlot = (day: number) => {
+    setOpeningHours(prev => prev.map(h => {
+      if (h.day === day) {
+        return { ...h, slots: [...h.slots, { open: '14:00', close: '18:00' }] };
+      }
+      return h;
+    }));
+  };
+
+  const removeSlot = (day: number, slotIndex: number) => {
+    setOpeningHours(prev => prev.map(h => {
+      if (h.day === day) {
+        const newSlots = h.slots.filter((_, i) => i !== slotIndex);
+        return { ...h, slots: newSlots.length > 0 ? newSlots : [{ open: '', close: '' }] };
+      }
+      return h;
+    }));
+  };
+
+  const copyToAll = (sourceDay: number) => {
+    const source = openingHours.find(h => h.day === sourceDay);
+    if (!source) return;
+    
+    setOpeningHours(prev => prev.map(h => {
+      if (h.day === sourceDay) return h;
+      return {
+        ...h,
+        closed: source.closed,
+        slots: source.slots.map(s => ({ ...s }))
+      };
+    }));
+  };
+
+  const formatHoursSummary = () => {
+    if (formData.is_open_24_hours) return 'Aberto 24 horas';
+    
+    return openingHours
+      .map(h => {
+        const slotsStr = h.closed 
+          ? 'Fechado' 
+          : h.slots.map(s => `${s.open}-${s.close}`).join(', ');
+        return `${h.label}: ${slotsStr}`;
+      })
+      .join('\n');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log("[Register] Submit triggered");
@@ -212,6 +322,17 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     try {
       const payload = {
         ...formData,
+        hours: formatHoursSummary(),
+        openingHours: openingHours.flatMap(h => 
+          h.closed 
+            ? [{ day_of_week: h.day, open_time: null, close_time: null, is_closed: true }]
+            : h.slots.map(s => ({
+                day_of_week: h.day,
+                open_time: s.open,
+                close_time: s.close,
+                is_closed: false
+              }))
+        ),
         cityId: initialData?.cityId || currentCity.id,
         cityName: initialData?.cityName || currentCity.name,
         cityUf: initialData?.cityUf || currentCity.uf,
@@ -290,7 +411,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         className="bg-white w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
       >
         {/* Header */}
-        <div className="p-6 border-b border-zinc-100 flex items-center justify-between bg-white">
+        <div className="p-4 sm:p-6 border-b border-zinc-100 flex items-center justify-between bg-white">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-[#00897b] flex items-center justify-center text-white shadow-lg shadow-[#00897b]/20">
               <Plus className="w-6 h-6" />
@@ -307,7 +428,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8">
           {isSubmitted ? (
             <div className="py-12 flex flex-col items-center justify-center text-center">
               <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-6">
@@ -535,65 +656,150 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                 </div>
               </div>
 
-              <div className="space-y-8">
-                <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Detalhes Adicionais</h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <div className="flex items-center justify-between mb-2 ml-1">
-                        <label className="block text-sm font-bold text-zinc-700">Horário de Funcionamento</label>
-                        <button
-                          type="button"
-                          onClick={handleSuggestHours}
-                          disabled={isSuggestingHours || !formData.name || formData.is_open_24_hours}
-                          className="flex items-center gap-1.5 text-xs font-bold text-[#00897b] hover:text-[#00796b] transition-colors disabled:opacity-50"
-                        >
-                          {isSuggestingHours ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Wand2 className="w-3 h-3" />
-                          )}
-                          Sugerir via IA
-                        </button>
-                      </div>
-                      <textarea 
-                        value={formData.hours}
-                        onChange={e => setFormData({...formData, hours: e.target.value})}
-                        disabled={formData.is_open_24_hours}
-                        placeholder={formData.is_open_24_hours ? "Aberto 24 horas" : "Ex: Seg-Sex: 08h às 18h"}
-                        className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base h-32 resize-none disabled:opacity-50"
-                      />
-                      <label className="flex items-center gap-3 mt-3 ml-1 cursor-pointer group">
-                        <div className="relative flex items-center">
-                          <input 
-                            type="checkbox"
-                            checked={formData.is_open_24_hours}
-                            onChange={e => {
-                              const checked = e.target.checked;
-                              setFormData({
-                                ...formData, 
-                                is_open_24_hours: checked,
-                                hours: checked ? 'Aberto 24 horas' : (formData.hours === 'Aberto 24 horas' ? '' : formData.hours)
-                              });
-                            }}
-                            className="peer appearance-none w-5 h-5 border-2 border-zinc-200 rounded-lg checked:bg-[#00897b] checked:border-[#00897b] transition-all cursor-pointer"
-                          />
-                          <CheckCircle2 className="w-3 h-3 text-white absolute left-1 opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" />
-                        </div>
-                        <span className="text-sm font-bold text-zinc-600 group-hover:text-zinc-900 transition-colors">Aberto 24 horas</span>
-                      </label>
-                    </div>
-                  <div>
-                    <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Descrição do Local</label>
-                    <textarea 
-                      value={formData.description}
-                      onChange={e => setFormData({...formData, description: e.target.value})}
-                      placeholder="Conte um pouco sobre o que o estabelecimento oferece..."
-                      className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base h-32 resize-none"
-                    />
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between mb-2 ml-1">
+                    <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Horário de Funcionamento</h4>
+                    <button
+                      type="button"
+                      onClick={handleSuggestHours}
+                      disabled={isSuggestingHours || !formData.name || formData.is_open_24_hours}
+                      className="flex items-center gap-1.5 text-xs font-bold text-[#00897b] hover:text-[#00796b] transition-colors disabled:opacity-50"
+                    >
+                      {isSuggestingHours ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Wand2 className="w-3 h-3" />
+                      )}
+                      Sugerir via IA
+                    </button>
                   </div>
+
+                  <div className={`bg-zinc-50 rounded-3xl border border-zinc-100 overflow-hidden transition-opacity ${formData.is_open_24_hours ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <div className="p-2 sm:p-4 space-y-4">
+                      {openingHours.map((h) => (
+                        <div key={h.day} className="flex flex-col gap-3 p-4 bg-white sm:bg-transparent rounded-2xl sm:rounded-none border border-zinc-100 sm:border-0 sm:border-b sm:border-zinc-100 last:border-0 shadow-sm sm:shadow-none">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-zinc-700 sm:w-24">{h.label}</span>
+                              {!h.closed && (
+                                <button
+                                  type="button"
+                                  onClick={() => copyToAll(h.day)}
+                                  className="p-1.5 text-zinc-400 hover:text-[#00897b] transition-colors hidden sm:block"
+                                  title="Copiar para todos os dias"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            
+                            <button
+                              type="button"
+                              onClick={() => handleHourChange(h.day, 'closed', !h.closed)}
+                              className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${
+                                h.closed 
+                                  ? "bg-[#00897b] text-white shadow-lg shadow-[#00897b]/20" 
+                                  : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+                              }`}
+                            >
+                              {h.closed ? "Abrir" : "Fechar"}
+                            </button>
+                          </div>
+
+                          {!h.closed && (
+                            <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                              {h.slots.map((slot, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <div className="flex-1 grid grid-cols-2 gap-2">
+                                    <div className="relative">
+                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400 uppercase">De</span>
+                                      <input 
+                                        type="time"
+                                        value={slot.open}
+                                        onChange={(e) => handleHourChange(h.day, 'open', e.target.value, idx)}
+                                        className="w-full pl-8 pr-3 py-3 bg-zinc-50 border border-zinc-100 rounded-xl text-sm focus:ring-2 focus:ring-[#00897b]/20 transition-all"
+                                      />
+                                    </div>
+                                    <div className="relative">
+                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400 uppercase">Até</span>
+                                      <input 
+                                        type="time"
+                                        value={slot.close}
+                                        onChange={(e) => handleHourChange(h.day, 'close', e.target.value, idx)}
+                                        className="w-full pl-8 pr-3 py-3 bg-zinc-50 border border-zinc-100 rounded-xl text-sm focus:ring-2 focus:ring-[#00897b]/20 transition-all"
+                                      />
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-1">
+                                    {h.slots.length > 1 && (
+                                      <button 
+                                        type="button"
+                                        onClick={() => removeSlot(h.day, idx)}
+                                        className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                      >
+                                        <X className="w-5 h-5" />
+                                      </button>
+                                    )}
+                                    {idx === h.slots.length - 1 && (
+                                      <button 
+                                        type="button"
+                                        onClick={() => addSlot(h.day)}
+                                        className="p-2.5 text-[#00897b] hover:bg-[#00897b]/10 rounded-lg transition-all"
+                                        title="Adicionar intervalo"
+                                      >
+                                        <Plus className="w-5 h-5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                              
+                              <button
+                                type="button"
+                                onClick={() => copyToAll(h.day)}
+                                className="sm:hidden flex items-center justify-center gap-2 py-2 text-xs font-bold text-zinc-400 border border-dashed border-zinc-200 rounded-xl hover:bg-zinc-50 transition-all"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                                Copiar para todos os dias
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-3 mt-3 ml-1 cursor-pointer group">
+                    <div className="relative flex items-center">
+                      <input 
+                        type="checkbox"
+                        checked={formData.is_open_24_hours}
+                        onChange={e => {
+                          const checked = e.target.checked;
+                          setFormData({
+                            ...formData, 
+                            is_open_24_hours: checked,
+                            hours: checked ? 'Aberto 24 horas' : formatHoursSummary()
+                          });
+                        }}
+                        className="peer appearance-none w-5 h-5 border-2 border-zinc-200 rounded-lg checked:bg-[#00897b] checked:border-[#00897b] transition-all cursor-pointer"
+                      />
+                      <CheckCircle2 className="w-3 h-3 text-white absolute left-1 opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" />
+                    </div>
+                    <span className="text-sm font-bold text-zinc-600 group-hover:text-zinc-900 transition-colors">Aberto 24 horas</span>
+                  </label>
                 </div>
-              </div>
+
+                <div className="space-y-6">
+                  <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Descrição do Local</h4>
+                  <textarea 
+                    value={formData.description}
+                    onChange={e => setFormData({...formData, description: e.target.value})}
+                    placeholder="Conte um pouco sobre o que o estabelecimento oferece..."
+                    className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base h-48 resize-none"
+                  />
+                </div>
 
               {isAdmin && (
                 <div className="space-y-6 p-8 bg-zinc-50 rounded-[32px] border border-zinc-100">
