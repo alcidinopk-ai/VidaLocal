@@ -648,13 +648,15 @@ app.post("/api/chat", async (req, res) => {
       return res.status(500).json({ error: "GEMINI_API_KEY não configurada no servidor." });
     }
 
-    const genAI = new GoogleGenAI(apiKey);
+    const ai = new GoogleGenAI({ apiKey });
     const lat = userLocation?.latitude || city.latitude;
     const lng = userLocation?.longitude || city.longitude;
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3-flash-preview", // Use the latest recommended model
-      systemInstruction: `Você é VidaLocal, um guia para ${city.name}. Ajude o usuário a encontrar locais.
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{ role: "user", parts: [{ text: message }] }],
+      config: {
+        systemInstruction: `Você é VidaLocal, um guia para ${city.name}. Ajude o usuário a encontrar locais.
         ${TAXONOMY_CONTEXT}
         Contexto local (estabelecimentos já cadastrados): ${localContext || 'Nenhum'}
         ${categoryFilter ? `Filtro de categoria: ${categoryFilter}` : ''}
@@ -665,20 +667,16 @@ app.post("/api/chat", async (req, res) => {
         Sempre use a ferramenta Google Maps para encontrar e confirmar a localização de todos os estabelecimentos que você mencionar na resposta.
         Ao listar estabelecimentos, use SEMPRE o formato de lista (usando asteriscos *) para que cada local apareça em um box separado no chat.
         Para cada local, coloque o nome em negrito e descreva brevemente o endereço e o que o local oferece.`,
-      tools: [{ googleMaps: {} } as any],
+        tools: [{ googleMaps: {} } as any],
+        toolConfig: {
+          retrievalConfig: {
+            latLng: { latitude: lat, longitude: lng },
+          },
+        } as any,
+      },
     });
 
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: message }] }],
-      toolConfig: {
-        retrievalConfig: {
-          latLng: { latitude: lat, longitude: lng },
-        },
-      } as any,
-    });
-
-    const response = await result.response;
-    const text = response.text() || "Sem resposta textual.";
+    const text = response.text || "Sem resposta textual.";
     
     // Process grounding chunks
     const groundingChunks = (response as any).candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => {
