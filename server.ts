@@ -765,6 +765,49 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
   }
 });
 
+app.get("/api/debug-state", async (req, res) => {
+  try {
+    const supabase = getSupabaseAdmin();
+    const sUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+    
+    const debug: any = {
+      timestamp: new Date().toISOString(),
+      env: {
+        node_env: process.env.NODE_ENV,
+        is_vercel: !!process.env.VERCEL,
+        has_supabase_url: !!sUrl,
+        has_supabase_key: !!sKey,
+        supabase_url_preview: sUrl ? sUrl.substring(0, 15) + "..." : null,
+      },
+      supabase: {
+        active: !!supabase,
+        database: supabase ? (supabase as any).supabaseUrl : null,
+      },
+      mock: {
+        cities_count: cities.length,
+        establishments_count: establishments.length
+      }
+    };
+
+    if (supabase) {
+      const [{ data: dbCities, error: cityErr }, { data: dbEsts, error: estErr }] = await Promise.all([
+        supabase.from('cities').select('id, name').limit(10),
+        supabase.from('establishments').select('id, name, city_id').limit(10)
+      ]);
+      
+      debug.supabase.discovery = {
+        cities: { count: dbCities?.length || 0, error: cityErr?.message, sample: dbCities },
+        establishments: { count: dbEsts?.length || 0, error: estErr?.message, sample: dbEsts }
+      };
+    }
+
+    res.json(debug);
+  } catch (err: any) {
+    res.status(500).json({ error: "Debug failed", message: err.message });
+  }
+});
+
 app.get("/api/establishments/featured", async (req, res) => {
   const { city_id } = req.query;
   // Handle malformed city_id like "1:1"
@@ -781,11 +824,13 @@ app.get("/api/establishments/featured", async (req, res) => {
     
     if (supabase) {
       const targetCityIds = await resolveCityIdsByName(supabase, city_id);
+      console.log(`[API] Resolved city search for "${city_id}" to target IDs:`, targetCityIds);
 
       const { data, error } = await supabase
         .from('establishments')
         .select('*')
         .in('city_id', targetCityIds)
+        .eq('status', 'approved') // Only show approved ones
         .order('is_featured', { ascending: false })
         .order('is_premium', { ascending: false })
         .order('rating', { ascending: false })
@@ -794,13 +839,30 @@ app.get("/api/establishments/featured", async (req, res) => {
       if (error) {
         console.error("[Supabase Error] Querying featured:", error.message);
       } else if (data && data.length > 0) {
+        console.log(`[API] Found ${data.length} featured establishments in Supabase`);
         setCache(cacheKey, data);
         return res.json(data);
+      } else {
+        console.warn(`[API] No featured establishments found in Supabase for IDs:`, targetCityIds);
       }
     }
     
     // Fallback logic
-    const results = establishments.filter(e => !cleanCityId || e.city_id === cityIdNum).slice(0, 8);
+    console.log(`[API] Falling back to mock featured data for city ${cityIdNum} ("${cleanCityId}")`);
+    
+    // Try to find the city name to use broader fallback
+    const mockCity = cities.find(c => c.id === cityIdNum);
+    const cityName = mockCity ? mockCity.name : null;
+
+    const results = establishments.filter(e => {
+      if (!cleanCityId) return true;
+      if (e.city_id === cityIdNum) return true;
+      // If we have a city name, also match by that in case IDs shifted
+      if (cityName && cities.find(c => c.id === e.city_id)?.name === cityName) return true;
+      return false;
+    }).slice(0, 9);
+    
+    console.log(`[API] Fallback found ${results.length} results`);
     res.json(results);
   } catch (error: any) {
     console.error("[API Error] Featured establishments:", error.message);
