@@ -15,8 +15,7 @@ export const getSupabaseAdmin = () => {
     const { url, key } = getSupabaseConfig();
     
     if (!url || !key || url.includes('placeholder')) {
-      if (!url) console.error('[Supabase Server] ERROR: SUPABASE_URL não localizada.');
-      if (!key) console.error('[Supabase Server] ERROR: Chave de serviço não localizada.');
+      console.warn('[Supabase Server] initialization skipped: Config incomplete or placeholder.');
       return null;
     }
 
@@ -30,10 +29,10 @@ export const getSupabaseAdmin = () => {
         detectSessionInUrl: false
       }
     });
-    console.log('[Supabase Server] Cliente admin inicializado com sucesso.');
+    console.log('[Supabase Server] Admin client initialized successfully.');
     return cachedAdminClient;
   } catch (e: any) {
-    console.error('[Supabase Server] CRITICAL ERROR during initialization:', e.message);
+    console.error('[Supabase Server] CRITICAL initialization error:', e.message);
     return null;
   }
 };
@@ -41,19 +40,23 @@ export const getSupabaseAdmin = () => {
 // For backward compatibility, but prefer getSupabaseAdmin()
 export const supabaseAdmin = (() => {
   try {
-    return getSupabaseAdmin();
+    const admin = getSupabaseAdmin();
+    if (admin) return admin;
   } catch (e) {
-    console.error('[Supabase Server] Top-level initialization failed');
-    return null;
+    console.error('[Supabase Server] Top-level fallback triggered');
   }
-})() || {
-  from: () => ({
-    select: () => ({
-      limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
-      eq: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }) }),
-      in: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }) }),
-    }),
-    insert: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
-    update: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
-  })
-};
+  
+  return {
+    from: () => ({
+      select: () => ({
+        limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+        eq: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }) }),
+        in: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }) }),
+        order: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }) }),
+        or: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }) }),
+      }),
+      insert: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+      update: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+    })
+  };
+})() as any;

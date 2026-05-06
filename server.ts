@@ -49,39 +49,8 @@ const isSupabaseConfigured = !!(supabaseUrl &&
                              supabaseKey && 
                              !supabaseUrl.includes('placeholder'));
 
-console.log(`[Startup] Supabase configured: ${isSupabaseConfigured}`);
-console.log(`[Startup] Environment: ${process.env.NODE_ENV}, VERCEL: ${process.env.VERCEL}`);
-// Test connection after a short delay to not block startup
-if (isSupabaseConfigured) {
-  setTimeout(() => {
-    console.log("[Startup] Testing Supabase connection...");
-    const supabase = getSupabaseAdmin();
-    if (supabase) {
-      (async () => {
-        try {
-          const { count, error } = await supabase.from('cities').select('count', { count: 'exact', head: true });
-          if (error) {
-            const isDnsError = error.message?.includes('ENOTFOUND') || error.message?.includes('getaddrinfo');
-            if (isDnsError) {
-              console.error('❌ [Supabase] Erro de DNS: O projeto pode estar pausado ou o URL está incorreto.');
-            } else {
-              console.error('❌ [Supabase] Erro de conexão:', error.message);
-            }
-          } else {
-            console.log(`✅ [Supabase] Conexão ativa. Cidades encontradas: ${count}`);
-          }
-        } catch (err: any) {
-          const isDnsError = err.message?.includes('ENOTFOUND') || err.message?.includes('getaddrinfo') || err.code === 'ENOTFOUND';
-          if (isDnsError) {
-            console.error('[Startup] Supabase Connection Test Failed: DNS Error. The project URL might be wrong or the project is paused.');
-          } else {
-            console.error('[Startup] Supabase Connection Test Exception:', err.message);
-          }
-        }
-      })();
-    }
-  }, 1000);
-}
+console.log(`[Startup] Supabase basic check: ${isSupabaseConfigured}`);
+console.log(`[Startup] Env: ${process.env.NODE_ENV || 'dev'}, Vercel: ${!!process.env.VERCEL}`);
 
 // Request logging
 app.use((req, res, next) => {
@@ -294,8 +263,13 @@ app.get("/api/vercel-debug", async (req, res) => {
       } else {
         result.supabase_connection = `Success! Found ${count} cities.`;
         
-        const { data: ests } = await supabase.from('establishments').select('count', { count: 'exact', head: true });
-        result.establishments_count = ests?.[0]?.count || 0;
+        const { count: estCount, error: estErr } = await supabase.from('establishments').select('*', { count: 'exact', head: true });
+        result.establishments_count = estCount || 0;
+        if (estErr) result.establishments_error = estErr.message;
+        
+        // Also check if any exist at all without filters
+        const { data: sample } = await supabase.from('establishments').select('name, city_id').limit(3);
+        result.sample = sample;
       }
     } catch (e: any) {
       result.supabase_connection = `Exception: ${e.message}`;
@@ -631,7 +605,9 @@ app.post("/api/chat", async (req, res) => {
 app.get("/api/establishments/category/:categoryId", async (req, res) => {
   const { categoryId } = req.params;
   const { city_id } = req.query;
-  const cacheKey = `category-${categoryId}-${city_id}`;
+  const cleanCityId = String(city_id || "").split(':')[0];
+  const cityIdNum = Number(cleanCityId);
+  const cacheKey = `category-${categoryId}-${cleanCityId}`;
 
   const cached = getCached(cacheKey);
   if (cached) return res.json(cached);
@@ -639,11 +615,10 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      let targetCityIds: number[] = city_id ? [Number(city_id)] : [];
+      let targetCityIds: number[] = !isNaN(cityIdNum) ? [cityIdNum] : [];
       
-      // Try to find matching city IDs by name to handle ID inconsistencies between environments
-      if (city_id) {
-        const mockCity = cities.find(c => c.id === Number(city_id));
+      if (!isNaN(cityIdNum)) {
+        const mockCity = cities.find(c => c.id === cityIdNum);
         if (mockCity) {
           const { data: matchingCities } = await supabase
             .from('cities')
@@ -656,70 +631,64 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
         }
       }
 
-      let query = supabase.from('establishments')
-        .select('*, opening_hours:establishment_opening_hours(*)');
-      
-      // Filter by category
-      query = query.eq('category_id', categoryId);
+      let query = supabase.from('establishments').select('*');
+      query = query.eq('category_id', Number(categoryId));
 
-      // Filter by city if available
       if (targetCityIds.length > 0) {
         query = query.in('city_id', targetCityIds);
       }
       
       const { data, error } = await query.order('rating', { ascending: false }).limit(20);
       
-      if (error) {
-        console.error("[Supabase Error] Fetching category establishments:", error);
-      } else if (data && data.length > 0) {
-        console.log(`[API] Found ${data.length} establishments in Supabase for category ${categoryId}, city ${city_id}`);
+      if (!error && data && data.length > 0) {
         setCache(cacheKey, data);
         return res.json(data);
-      } else {
-        console.log(`[API] No establishments found in Supabase for category ${categoryId}, city ${city_id}. Target IDs explored: ${targetCityIds.join(',')}`);
       }
     }
 
     // Fallback to mock data
     const results = establishments.filter(e => 
       e.category_id === Number(categoryId) && 
-      (!city_id || e.city_id === Number(city_id))
-    ).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 10);
+      (!cleanCityId || e.city_id === cityIdNum)
+    ).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 15);
 
     res.json(results);
-  } catch (error) {
-    console.error("[API Error] Fetching category establishments:", error);
+  } catch (error: any) {
+    console.error("[API Error] Category establishments:", error.message);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
 app.get("/api/establishments/featured", async (req, res) => {
   const { city_id } = req.query;
-  const cacheKey = `featured-${city_id}`;
+  // Handle malformed city_id like "1:1"
+  const cleanCityId = String(city_id || "").split(':')[0];
+  const cityIdNum = Number(cleanCityId);
+  const cacheKey = `featured-${cleanCityId}`;
 
   const cached = getCached(cacheKey);
   if (cached) return res.json(cached);
 
-  const supabase = getSupabaseAdmin();
-
-  console.log(`[API] Fetching featured for city_id: ${city_id}. Supabase available: ${!!supabase}`);
-  
   try {
+    const supabase = getSupabaseAdmin();
+    console.log(`[API] Fetching featured for city_id: ${cleanCityId}. Supabase available: ${!!supabase}`);
+    
     if (supabase) {
-      let targetCityIds: number[] = [Number(city_id)];
+      let targetCityIds: number[] = !isNaN(cityIdNum) ? [cityIdNum] : [];
       
-      // Find all IDs for cities with the same name to handle duplicates
-      const mockCity = cities.find(c => c.id === Number(city_id));
-      const cityName = mockCity ? mockCity.name : "Gurupi";
+      // Find matching IDs by name if cityId is valid
+      if (!isNaN(cityIdNum)) {
+        const mockCity = cities.find(c => c.id === cityIdNum);
+        const cityName = mockCity ? mockCity.name : "Gurupi";
 
-      const { data: matchingCities } = await supabase
-        .from('cities')
-        .select('id')
-        .ilike('name', cityName);
-      
-      if (matchingCities && matchingCities.length > 0) {
-        targetCityIds = matchingCities.map(c => c.id);
-        console.log(`[API Featured] Searching for "${cityName}" using IDs: ${targetCityIds.join(', ')}`);
+        const { data: matchingCities } = await supabase
+          .from('cities')
+          .select('id')
+          .ilike('name', cityName);
+        
+        if (matchingCities && matchingCities.length > 0) {
+          targetCityIds = matchingCities.map(c => c.id);
+        }
       }
 
       const { data, error } = await supabase
@@ -729,47 +698,21 @@ app.get("/api/establishments/featured", async (req, res) => {
         .order('is_featured', { ascending: false })
         .order('is_premium', { ascending: false })
         .order('rating', { ascending: false })
-        .limit(20);
+        .limit(10);
 
       if (error) {
-        const isNetworkError = error.message?.includes('fetch failed') || error.message?.includes('getaddrinfo');
         console.error("[Supabase Error] Querying featured:", error.message);
-        if (isNetworkError) {
-          console.warn("[Supabase Warning] Falha de DNS/Rede. Verifique se o URL do seu projeto Supabase está correto.");
-        }
       } else if (data && data.length > 0) {
-        // Filter to ensure we have at least some approved if possible, 
-        // but the query already orders them well.
-        const finalResults = data.slice(0, 8);
-        console.log(`[API Featured] Found ${finalResults.length} establishments in Supabase`);
-        setCache(cacheKey, finalResults);
-        return res.json(finalResults);
-      }
-      
-      console.log("[API Featured] No establishments found in Supabase for this city, falling back to mock data");
-    }
-    
-    // Fallback logic with name-matching for mock data
-    let results = establishments.filter(e => !city_id || e.city_id === Number(city_id));
-    
-    if (results.length === 0 && city_id) {
-      const cityObj = cities.find(c => c.id === Number(city_id));
-      if (cityObj) {
-        const normName = normalize(cityObj.name);
-        results = establishments.filter(e => {
-          const eCity = cities.find(c => c.id === e.city_id);
-          return eCity && normalize(eCity.name) === normName;
-        });
+        setCache(cacheKey, data);
+        return res.json(data);
       }
     }
-
-    if (results.length === 0) {
-      results = establishments.slice(0, 8);
-    }
     
-    res.json(results.slice(0, 8));
+    // Fallback logic
+    const results = establishments.filter(e => !cleanCityId || e.city_id === cityIdNum).slice(0, 8);
+    res.json(results);
   } catch (error: any) {
-    console.error("[API Error] Fetching featured establishments:", error);
+    console.error("[API Error] Featured establishments:", error.message);
     res.json(establishments.slice(0, 8));
   }
 });
@@ -863,43 +806,48 @@ app.get("/api/search", async (req, res) => {
   let q = originalQ;
   const { city_id, category_id, sub_category } = req.query;
   
-  const cacheKey = `search-${q}-${city_id}-${category_id}-${sub_category}`;
+  // Robust city_id parsing (handles "1:1" browser suffix issue)
+  const cleanCityId = String(city_id || "").split(':')[0];
+  const cityIdNum = Number(cleanCityId);
+  
+  const cacheKey = `search-${q}-${cleanCityId}-${category_id}-${sub_category}`;
   const cached = getCached(cacheKey);
   if (cached) return res.json(cached);
 
   const supabase = getSupabaseAdmin();
   
-  console.log(`[API Search] Query: "${rawQ}" -> Cleaned: "${q}". City: ${city_id}, Category: ${category_id}. Supabase: ${!!supabase}`);
-  
   try {
     if (supabase) {
-      let targetCityIds: number[] = [Number(city_id)];
+      let targetCityIds: number[] = !isNaN(cityIdNum) ? [cityIdNum] : [];
       
-      // Find all IDs for cities with the same name to handle duplicates (like IDs 1, 2, 3 for Gurupi)
-      const mockCity = cities.find(c => c.id === Number(city_id));
-      const cityName = mockCity ? mockCity.name : "Gurupi";
+      // Find all IDs for cities with the same name to handle duplicates
+      if (!isNaN(cityIdNum)) {
+        const mockCity = cities.find(c => c.id === cityIdNum);
+        const cityName = mockCity ? mockCity.name : "Gurupi";
 
-      if (cityIdCache.has(Number(city_id))) {
-        targetCityIds = cityIdCache.get(Number(city_id))!;
-      } else {
-        const { data: matchingCities } = await supabase
-          .from('cities')
-          .select('id')
-          .ilike('name', cityName);
-        
-        if (matchingCities && matchingCities.length > 0) {
-          targetCityIds = matchingCities.map(c => c.id);
-          cityIdCache.set(Number(city_id), targetCityIds);
-          console.log(`[API Search] Cached IDs for "${cityName}": ${targetCityIds.join(', ')}`);
+        if (cityIdCache.has(cityIdNum)) {
+          targetCityIds = cityIdCache.get(cityIdNum)!;
+        } else {
+          try {
+            const { data: matchingCities } = await supabase
+              .from('cities')
+              .select('id')
+              .ilike('name', cityName);
+            
+            if (matchingCities && matchingCities.length > 0) {
+              targetCityIds = matchingCities.map(c => c.id);
+              cityIdCache.set(cityIdNum, targetCityIds);
+            }
+          } catch (err: any) {
+            console.warn(`[API Search] City ID resolution failed: ${cityName}`, err.message);
+          }
         }
       }
-      
-      console.log(`[API Search] Searching for "${cityName}" using IDs: ${targetCityIds.join(', ')}`);
 
       // Optimized fetch: get both approved and pending in one go, but prioritize approved
       const fetchFromSupabase = async (currentQ: string) => {
         try {
-          let query = supabase.from('establishments').select('*, opening_hours:establishment_opening_hours(*)');
+          let query = supabase.from('establishments').select('*'); // Removed opening_hours join for stability
           
           if (targetCityIds.length > 0) {
             query = query.in('city_id', targetCityIds);
@@ -1018,21 +966,21 @@ app.get("/api/search", async (req, res) => {
     
     // Get city name for name-based matching if ID might be different
     let cityName = "";
-    if (city_id) {
+    if (cityIdNum && !isNaN(cityIdNum)) {
       // Try to find city name in Supabase cities or mock cities
       const supabase = getSupabaseAdmin();
       if (supabase) {
-        const { data: cityData } = await supabase.from('cities').select('name').eq('id', Number(city_id)).single();
+        const { data: cityData } = await supabase.from('cities').select('name').eq('id', cityIdNum).single();
         if (cityData) cityName = cityData.name;
       }
       if (!cityName) {
-        cityName = cities.find(c => c.id === Number(city_id))?.name || "";
+        cityName = cities.find(c => c.id === cityIdNum)?.name || "";
       }
     }
 
     let mockResults = establishments.filter(e => {
       const eCity = cities.find(c => c.id === e.city_id);
-      const matchCity = city_id ? (e.city_id === Number(city_id) || (cityName && eCity && normalize(eCity.name) === normalize(cityName))) : true;
+      const matchCity = !isNaN(cityIdNum) ? (e.city_id === cityIdNum || (cityName && eCity && normalize(eCity.name) === normalize(cityName))) : true;
       const matchCategory = category_id ? e.category_id === Number(category_id) : true;
       const matchSub = sub_category ? normalize(e.sub_category).includes(normalize(String(sub_category))) : true;
       
