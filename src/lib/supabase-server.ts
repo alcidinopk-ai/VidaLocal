@@ -27,6 +27,35 @@ export const getSupabaseAdmin = () => {
         persistSession: false,
         autoRefreshToken: false,
         detectSessionInUrl: false
+      },
+      global: {
+        headers: { 'x-application-name': 'vidalocal_backend' },
+        // Add fetch options with retries to handle network flakiness in Vercel
+        fetch: async (url, options) => {
+          let lastError;
+          for (let i = 0; i < 3; i++) {
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 15000);
+              
+              const res = await fetch(url, {
+                ...options,
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+              return res;
+            } catch (err: any) {
+              lastError = err;
+              console.warn(`[Supabase Fetch] Attempt ${i + 1} failed:`, err.message);
+              // Wait a bit before retrying (exponential backoff pattern)
+              if (i < 2) await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
+            }
+          }
+          throw lastError;
+        }
+      },
+      db: {
+        schema: 'public'
       }
     });
     console.log('[Supabase Server] Admin client initialized successfully.');
