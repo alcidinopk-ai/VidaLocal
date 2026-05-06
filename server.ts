@@ -63,12 +63,12 @@ if (isSupabaseConfigured) {
           if (error) {
             const isDnsError = error.message?.includes('ENOTFOUND') || error.message?.includes('getaddrinfo');
             if (isDnsError) {
-              console.error('[Startup] Supabase Connection Test Failed: Hostname not found. Check your VITE_SUPABASE_URL and project status.');
+              console.error('❌ [Supabase] Erro de DNS: O projeto pode estar pausado ou o URL está incorreto.');
             } else {
-              console.error('[Startup] Supabase Connection Test Failed:', error.message);
+              console.error('❌ [Supabase] Erro de conexão:', error.message);
             }
           } else {
-            console.log(`[Startup] Supabase Connection Test Success. Cities count: ${count}`);
+            console.log(`✅ [Supabase] Conexão ativa. Cidades encontradas: ${count}`);
           }
         } catch (err: any) {
           const isDnsError = err.message?.includes('ENOTFOUND') || err.message?.includes('getaddrinfo') || err.code === 'ENOTFOUND';
