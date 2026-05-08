@@ -42,6 +42,7 @@ import { UserEstablishmentsModal } from './components/UserEstablishmentsModal';
 import { AuthModal } from './components/AuthModal';
 import { FeaturedEstablishments } from './components/FeaturedEstablishments';
 import { NearbyEstablishments } from './components/NearbyEstablishments';
+import { UserProfileModal } from './components/UserProfileModal';
 
 import { MaintenanceTools } from './components/MaintenanceTools';
 import { ExportTools } from './components/ExportTools';
@@ -86,7 +87,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export default function App() {
   const { currentCity, isLoading: isCityLoading, skipLoading } = useCity();
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const [showSkip, setShowSkip] = useState(false);
 
   useEffect(() => {
@@ -116,6 +117,7 @@ export default function App() {
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isUserEstModalOpen, setIsUserEstModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<{ intents: any[], types: string[] }>({ intents: [], types: [] });
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -693,13 +695,15 @@ export default function App() {
             {user ? (
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  <p className="hidden sm:block text-xs font-bold text-zinc-900 truncate max-w-[120px]">{user.email}</p>
+                  <p className="hidden sm:block text-xs font-bold text-zinc-900 truncate max-w-[120px]">
+                    {profile?.full_name || user.email}
+                  </p>
                   <div className="flex items-center justify-end gap-2 sm:gap-3">
                     <button 
-                      onClick={() => setIsUserEstModalOpen(true)}
+                      onClick={() => setIsProfileModalOpen(true)}
                       className="text-[10px] font-bold text-[#00897b] hover:underline transition-colors uppercase tracking-widest"
                     >
-                      Meus Cadastros
+                      Perfil
                     </button>
                     {user.email === 'alcidinopk@gmail.com' && (
                       <button 
@@ -1350,6 +1354,10 @@ export default function App() {
       <UserEstablishmentsModal 
         isOpen={isUserEstModalOpen} 
         onClose={() => setIsUserEstModalOpen(false)} 
+      />
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
       />
       <AuthModal 
         isOpen={isAuthModalOpen} 

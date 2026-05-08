@@ -74,12 +74,21 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
       const { error: googleError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin
-        }
+          redirectTo: window.location.origin,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
       });
       if (googleError) throw googleError;
     } catch (err: any) {
-      setError(err.message || 'Ocorreu um erro ao entrar com o Google.');
+      console.error('Google login error:', err);
+      // More descriptive error for local development/redirect issues
+      const isRedirectError = err.message?.includes('redirect') || err.message?.includes('callback');
+      setError(isRedirectError 
+        ? `Erro de configuração: Verifique se "${window.location.origin}" está nos Redirect URIs do Supabase.`
+        : (err.message || 'Ocorreu um erro ao entrar com o Google.'));
       setIsGoogleLoading(false);
     }
   };

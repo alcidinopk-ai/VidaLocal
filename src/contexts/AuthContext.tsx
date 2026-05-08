@@ -2,17 +2,32 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
 
+interface Profile {
+  id: string;
+  role: 'admin' | 'user';
+  email?: string | null;
+  full_name?: string | null;
+  avatar_url?: string | null;
+  phone?: string | null;
+  city?: string | null;
+  bio?: string | null;
+  updated_at?: string;
+}
+
 interface AuthContextType {
   user: User | null;
+  profile: Profile | null;
   role: 'admin' | 'user' | null;
   isLoading: boolean;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<'admin' | 'user' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -20,33 +35,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('role')
+        .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle(); 
       
       if (error) {
+        console.error('Error fetching profile:', error);
+        setRole('user');
+        return;
+      }
+      
+      if (!data) {
         // If profile doesn't exist, create it as a regular user
-        if (error.code === 'PGRST116') {
-          const { data: newProfile, error: createError } = await supabase
-            .from('profiles')
-            .insert([{ id: userId, role: 'user' }])
-            .select('role')
-            .single();
-          
-          if (!createError && newProfile) {
-            setRole(newProfile.role);
-          } else {
-            setRole('user');
-          }
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert([{ id: userId, role: 'user', email: user?.email }])
+          .select('*')
+          .single();
+        
+        if (!createError && newProfile) {
+          setProfile(newProfile);
+          setRole(newProfile.role);
         } else {
           setRole('user');
         }
-      } else if (data) {
+      } else {
+        setProfile(data);
         setRole(data.role);
       }
     } catch (err) {
-      console.error('Error fetching profile:', err);
+      console.error('Error in fetchProfile:', err);
       setRole('user');
+    }
+  };
+
+  const refreshProfile = async () => {
+    if (user) {
+      await fetchProfile(user.id);
     }
   };
 
@@ -61,11 +86,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Check active sessions and sets the user
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
-      console.log("[Auth] Initial session user:", currentUser?.email || "None");
       setUser(currentUser);
       if (currentUser) {
         fetchProfile(currentUser.id).finally(() => setIsLoading(false));
       } else {
+        setProfile(null);
         setRole(null);
         setIsLoading(false);
       }
@@ -74,11 +99,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Listen for changes on auth state (logged in, signed out, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user ?? null;
-      console.log("[Auth] State change user:", currentUser?.email || "None");
       setUser(currentUser);
       if (currentUser) {
         fetchProfile(currentUser.id).finally(() => setIsLoading(false));
       } else {
+        setProfile(null);
         setRole(null);
         setIsLoading(false);
       }
@@ -89,11 +114,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setProfile(null);
     setRole(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, isLoading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, role, isLoading, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
