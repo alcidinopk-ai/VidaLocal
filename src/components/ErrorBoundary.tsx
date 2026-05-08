@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+// Force reload ErrorBoundary
 import { AlertCircle, RefreshCw, Home } from 'lucide-react';
 
 interface Props {

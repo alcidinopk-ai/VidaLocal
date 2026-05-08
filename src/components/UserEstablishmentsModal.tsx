@@ -156,9 +156,13 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
                     
                     <div className="flex flex-col items-end gap-2">
                       <StatusBadge status={est.status} />
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                        {est.sub_category}
-                      </span>
+                      <div className="flex flex-wrap gap-1 mt-1 justify-end">
+                        {(est.sub_category || '').split(est.sub_category?.includes(' | ') ? ' | ' : /,\s*(?![^()]*\))/).map((cat, idx) => (
+                          <span key={idx} className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-widest">
+                            {cat && typeof cat === 'string' ? cat.trim() : ''}
+                          </span>
+                        ))}
+                      </div>
                       {est.status === 'approved' && (
                         <button 
                           onClick={() => openPermissions(est)}

@@ -131,7 +131,14 @@ export function getBusinessStatus(hoursStr: string | undefined | null): StatusIn
   }
 
   // 2. Handle explicit "Aberto agora" or "Fechado" from AI text
-  if (lowerHours.includes('aberto agora') || lowerHours.includes('aberto até')) {
+  if (lowerHours === 'fechado' || lowerHours === 'permanentemente fechado') {
+    return { status: 'closed', label: 'Fechado', color: 'text-red-500' };
+  }
+
+  // Check if it looks like a day-by-day list before checking "Aberto Agora"
+  const isStructured = lowerHours.includes(':') && (lowerHours.includes('segunda') || lowerHours.includes('seg-'));
+
+  if (!isStructured && (lowerHours.includes('aberto agora') || lowerHours.includes('aberto até'))) {
     if (lowerHours.includes('até')) {
       const timeMatch = lowerHours.match(/(\d{1,2})[:h](\d{2})?/);
       if (timeMatch) {
@@ -141,16 +148,13 @@ export function getBusinessStatus(hoursStr: string | undefined | null): StatusIn
         
         if (endTimeInMinutes - currentTimeInMinutes > 0 && endTimeInMinutes - currentTimeInMinutes <= 30) {
           return { status: 'closing_soon', label: 'Quase Fechando', color: 'text-orange-500' };
+        } else if (endTimeInMinutes - currentTimeInMinutes < 0) {
+          return { status: 'closed', label: 'Fechado', color: 'text-red-500' };
         }
       }
     }
     return { status: 'open', label: 'Aberto Agora', color: 'text-emerald-500' };
   }
-
-  if (lowerHours.includes('fechado') && !lowerHours.includes('exceto')) {
-    return { status: 'closed', label: 'Fechado', color: 'text-red-500' };
-  }
-
   // Check for "Exceto" (Except)
   if (lowerHours.includes('exceto')) {
     if (lowerHours.includes('domingo') && currentDay === 0) return { status: 'closed', label: 'Fechado aos Domingos', color: 'text-red-500' };

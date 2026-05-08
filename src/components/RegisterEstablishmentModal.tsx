@@ -84,10 +84,20 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         if (Array.isArray(initialData.subCategory)) {
           subCats = initialData.subCategory;
         } else if (typeof initialData.subCategory === 'string') {
-          subCats = initialData.subCategory.split(',').map(s => s.trim()).filter(Boolean);
+          // Handle both ' | ' and ', ' separators
+          if (initialData.subCategory.includes(' | ')) {
+            subCats = initialData.subCategory.split(' | ').map(s => s.trim()).filter(Boolean);
+          } else {
+            // Regex to split by comma but NOT inside parentheses
+            subCats = initialData.subCategory.split(/,\s*(?![^()]*\))/).map(s => s.trim()).filter(Boolean);
+          }
         }
       } else if (initialData.sub_category) {
-        subCats = initialData.sub_category.split(',').map((s: string) => s.trim()).filter(Boolean);
+        if (initialData.sub_category.includes(' | ')) {
+          subCats = initialData.sub_category.split(' | ').map((s: string) => s.trim()).filter(Boolean);
+        } else {
+          subCats = initialData.sub_category.split(/,\s*(?![^()]*\))/).map((s: string) => s.trim()).filter(Boolean);
+        }
       }
 
       setFormData({
@@ -339,7 +349,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     try {
       const payload = {
         ...formData,
-        subCategory: formData.subCategory.join(', '),
+        subCategory: formData.subCategory.join(' | '),
         hours: formatHoursSummary(),
         openingHours: openingHours.flatMap(h => 
           h.closed 
