@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { suggestBusinessHours } from '../services/geminiService';
-import { Loader2, RefreshCw, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { Loader2, RefreshCw, CheckCircle2, AlertCircle, Clock, MapPin, Globe } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Establishment {
   id: string;
@@ -11,11 +12,43 @@ interface Establishment {
 }
 
 export const MaintenanceTools: React.FC = () => {
+  const { user } = useAuth();
   const [missingHours, setMissingHours] = useState<Establishment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geoStats, setGeoStats] = useState({ total: 0, processed: 0, errors: 0 });
   const [results, setResults] = useState<{ id: string; status: 'success' | 'error' | 'pending'; message?: string }[]>([]);
-  const [cityName, setCityName] = useState<string>('');
+
+  const runGeoBackfill = async () => {
+    if (isGeocoding || !user) return;
+    setIsGeocoding(true);
+    setGeoStats({ total: 0, processed: 0, errors: 0 });
+
+    try {
+      const res = await fetch('/api/maintenance/backfill-geo', {
+        method: 'POST',
+        headers: { 'x-user-id': user.id }
+      });
+      const data = await res.json();
+      setGeoStats({ 
+        total: data.batchSize || 0, 
+        processed: data.processed || 0, 
+        errors: data.errors || 0 
+      });
+      
+      if (data.processed > 0) {
+        alert(`${data.processed} estabelecimentos foram geocodificados com sucesso!`);
+      } else if (data.batchSize === 0) {
+        alert("Todos os estabelecimentos já possuem cidade e estado vinculados.");
+      }
+    } catch (err) {
+      console.error("Geo backfill error:", err);
+      alert("Erro ao executar geocodificação.");
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
 
   const fetchMissing = async () => {
     setIsLoading(true);
@@ -164,6 +197,71 @@ export const MaintenanceTools: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="mt-8 bg-zinc-900 rounded-3xl shadow-xl overflow-hidden border border-zinc-800">
+        <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-800/50">
+          <div>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <Globe className="w-5 h-5 text-emerald-400" />
+              Geocodificação Reversa (Nominatim)
+            </h2>
+            <p className="text-xs text-zinc-400 mt-1">
+              Resolve automaticamente Cidade e Estado para registros antigos sem vínculo.
+            </p>
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex-1">
+              <ul className="text-xs text-zinc-400 space-y-2">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  Trava de Segurança: Não sobrescreve dados manuais preenchidos.
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  Idempotência: Verifica nomes e UFs antes de criar novos registros.
+                </li>
+                <li className="flex items-center gap-2">
+                  <Clock className="w-3 h-3 text-emerald-500" />
+                  Cortesia: Respeita o limite de 1req/seg da API Nominatim.
+                </li>
+              </ul>
+            </div>
+            
+            <div className="shrink-0 flex flex-col items-center gap-3">
+              <button 
+                onClick={runGeoBackfill}
+                disabled={isGeocoding}
+                className="px-8 py-3 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-2"
+              >
+                {isGeocoding ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processando Lote...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Executar Backfill de Geo
+                  </>
+                )}
+              </button>
+              
+              {geoStats.total > 0 && (
+                <div className="text-center">
+                  <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">
+                    Lote Processado: {geoStats.processed} de {geoStats.total}
+                  </p>
+                  {geoStats.errors > 0 && (
+                    <p className="text-[9px] text-red-400 mt-1">Erros: {geoStats.errors}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

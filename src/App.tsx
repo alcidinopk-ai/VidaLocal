@@ -692,9 +692,9 @@ export default function App() {
 
             {user ? (
               <div className="flex items-center gap-3">
-                <div className="hidden sm:block text-right">
-                  <p className="text-xs font-bold text-zinc-900 truncate max-w-[120px]">{user.email}</p>
-                  <div className="flex items-center justify-end gap-3">
+                <div className="text-right">
+                  <p className="hidden sm:block text-xs font-bold text-zinc-900 truncate max-w-[120px]">{user.email}</p>
+                  <div className="flex items-center justify-end gap-2 sm:gap-3">
                     <button 
                       onClick={() => setIsUserEstModalOpen(true)}
                       className="text-[10px] font-bold text-[#00897b] hover:underline transition-colors uppercase tracking-widest"

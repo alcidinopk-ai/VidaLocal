@@ -15,7 +15,8 @@ import {
   Edit,
   Trash2,
   Crown,
-  Plus
+  Plus,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock } from 'lucide-react';
@@ -51,6 +52,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   const [rating, setRating] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showFullHours, setShowFullHours] = useState(false);
 
   const title = chunk.maps?.title || 'Estabelecimento';
   const uri = chunk.maps?.uri || '#';
@@ -243,15 +245,30 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                   </p>
                 )}
                 <div className="flex flex-col gap-0.5">
-                  <div className={`flex items-center gap-1 text-[10px] font-bold ${statusInfo.color}`}>
+                  <button 
+                    onClick={() => setShowFullHours(!showFullHours)}
+                    className={`flex items-center gap-1 text-[10px] font-bold hover:opacity-80 transition-opacity outline-none ${statusInfo.color}`}
+                  >
                     <Clock className="w-2.5 h-2.5" />
                     {statusInfo.label}
-                  </div>
-                  {chunk.maps?.hours && (
-                    <p className="text-[9px] text-zinc-500 font-medium">
-                      {chunk.maps.hours}
-                    </p>
-                  )}
+                    {chunk.maps?.hours && (
+                      <ChevronDown className={`w-2 h-2 transition-transform ${showFullHours ? 'rotate-180' : ''}`} />
+                    )}
+                  </button>
+                  <AnimatePresence>
+                    {showFullHours && chunk.maps?.hours && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <p className="text-[9px] text-zinc-500 font-medium whitespace-pre-line mt-1 bg-zinc-100/50 p-2 rounded-lg border border-zinc-100">
+                          {chunk.maps.hours}
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
               <p className="text-xs text-zinc-500 mt-1 line-clamp-2 leading-relaxed">

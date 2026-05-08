@@ -49,6 +49,68 @@ process.on('uncaughtException', (err) => {
 const app = express();
 app.use(express.json());
 
+async function resolveCityAndState(supabase: any, geo: any) {
+  if (!geo || !geo.cityName || !geo.stateUf) return null;
+  
+  try {
+    // 1. Resolve State
+    const { data: stateData } = await supabase
+      .from('states')
+      .select('id')
+      .eq('uf', geo.stateUf)
+      .maybeSingle();
+    
+    if (!stateData) {
+      console.warn(`[ResolveGeo] State ${geo.stateUf} not found.`);
+      return null;
+    }
+
+    const stateId = stateData.id;
+    
+    // 2. Resolve or Create City
+    const { data: cityData } = await supabase
+      .from('cities')
+      .select('id')
+      .eq('state_id', stateId)
+      .ilike('name', geo.cityName)
+      .maybeSingle();
+    
+    if (cityData) {
+      return { cityId: cityData.id, stateId };
+    }
+
+    // Create new city
+    console.log(`[ResolveGeo] Creating new city: ${geo.cityName}`);
+    const slug = geo.cityName
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    
+    const { data: newCity, error: createError } = await supabase
+      .from('cities')
+      .insert([{
+        name: geo.cityName,
+        state_id: stateId,
+        slug: slug,
+        active: true
+      }])
+      .select()
+      .maybeSingle();
+    
+    if (!createError && newCity) {
+      return { cityId: newCity.id, stateId };
+    } else {
+      console.error("[ResolveGeo] Failed to create city:", createError?.message);
+      return null;
+    }
+  } catch (err: any) {
+    console.error("[ResolveGeo] Unexpected error:", err.message);
+    return null;
+  }
+}
+
 // Check Supabase configuration on startup
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -329,10 +391,6 @@ app.get("/api/vercel-debug", async (req, res) => {
   }
 
   res.json(result);
-});
-
-app.get("/api/ping", (req, res) => {
-  res.send("pong");
 });
 
 // API Routes
@@ -1426,6 +1484,92 @@ app.put("/api/establishments/:id", async (req, res) => {
   }
 });
 
+// --- GEOLOCATION SERVICE (Nominatim) ---
+async function reverseGeocode(lat: number, lng: number) {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
+      {
+        headers: { "User-Agent": "VidaLocal-App-Geocoding-Service" }
+      }
+    );
+    
+    if (!response.ok) throw new Error(`Nominatim API Error: ${response.statusText}`);
+    
+    const data = await response.json();
+    const address = data.address;
+
+    // Mapeamento inteligente para o Brasil
+    const cityName = address.city || address.town || address.village || address.municipality;
+    const stateUf = address["ISO3166-2-lvl4"]?.split("-")[1] || address.state; // Tenta pegar UF sigla
+    const stateName = address.state;
+
+    if (!cityName || !stateUf) return null;
+
+    return { cityName, stateUf, stateName };
+  } catch (error) {
+    console.error("[Geocoding] Fatal error:", error);
+    return null;
+  }
+}
+
+// --- MAINTENANCE & BACKFILL ---
+app.post("/api/maintenance/backfill-geo", async (req, res) => {
+  const userId = req.headers['x-user-id'] as string;
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return res.status(503).json({ error: "DB not connected" });
+
+  // Segurança: Apenas admins (ou verificação de chave secreta)
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
+  if (profile?.role !== 'admin') return res.status(403).json({ error: "Permission denied" });
+
+  // 1. Busca estabelecimentos sem city_id ou state_id que tenham coordenadas
+  const { data: records, error } = await supabase
+    .from('establishments')
+    .select('id, name, latitude, longitude')
+    .or('city_id.is.null,state_id.is.null')
+    .not('latitude', 'is', null)
+    .not('longitude', 'is', null)
+    .limit(50); // Processa em lotes para segurança
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  let processedCount = 0;
+  let errorCount = 0;
+
+  console.log(`[Backfill] Starting for ${records?.length} records...`);
+
+  for (const record of (records || [])) {
+    try {
+      // Respeita o limite de 1 requisição/seg do Nominatim
+      await new Promise(resolve => setTimeout(resolve, 1100));
+
+      const geo = await reverseGeocode(record.latitude, record.longitude);
+      
+      if (geo) {
+        const resolved = await resolveCityAndState(supabase, geo);
+        if (resolved) {
+          await supabase.from('establishments').update({
+            city_id: resolved.cityId,
+            state_id: resolved.stateId
+          }).eq('id', record.id);
+          processedCount++;
+        }
+      }
+    } catch (err) {
+      console.error(`[Backfill] Failed record ${record.id}:`, err);
+      errorCount++;
+    }
+  }
+
+  res.json({ 
+    message: "Processamento concluído", 
+    batchSize: records?.length, 
+    processed: processedCount,
+    errors: errorCount 
+  });
+});
+
 app.delete("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
   const userId = req.headers['x-user-id'] as string;
@@ -1714,8 +1858,33 @@ app.post("/api/establishments/register", async (req, res) => {
     const supabase = getSupabaseAdmin();
     if (supabase) {
       let targetCityId = Number(registration.cityId);
+      let targetStateId: number | null = null;
 
-      // Map mock ID to real Supabase ID if necessary
+      // TRIGGER LÓGICA: Se city_id for inválido (0 ou -1) ou estiver faltando, e tivermos coordenadas,
+      // disparamos o Geocoding reverso como um "trigger" de aplicação.
+      const hasCoords = (registration.latitude && registration.longitude) || (registration.cityLat && registration.cityLng);
+
+      if ((!targetCityId || targetCityId <= 0) && hasCoords) {
+        try {
+          console.log(`[API Register] Missing city_id. Attempting auto-geocoding...`);
+          const lat = registration.latitude || registration.cityLat;
+          const lng = registration.longitude || registration.cityLng;
+          
+          const geo = await reverseGeocode(lat, lng);
+          if (geo) {
+            const resolved = await resolveCityAndState(supabase, geo);
+            if (resolved) {
+              targetCityId = resolved.cityId;
+              targetStateId = resolved.stateId;
+              console.log(`[API Register] Auto-resolved to city_id: ${targetCityId}, state_id: ${targetStateId}`);
+            }
+          }
+        } catch (geoErr) {
+          console.error("[API Register] Auto-geocoding resolution failed:", geoErr);
+        }
+      }
+
+      // Map mock ID to real Supabase ID if necessary (for pre-defined cities)
       if (targetCityId > 0 && targetCityId < 100) {
         const mockCity = cities.find(c => c.id === targetCityId);
         if (mockCity) {
@@ -1760,6 +1929,7 @@ app.post("/api/establishments/register", async (req, res) => {
         maps_link: registration.mapsLink,
         plus_code: registration.plusCode,
         city_id: targetCityId,
+        state_id: targetStateId,
         user_id: registration.userId,
         status: 'approved',
         is_featured: registration.is_featured || false,

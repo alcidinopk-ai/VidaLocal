@@ -722,34 +722,34 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                           {!h.closed && (
                             <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
                               {h.slots.map((slot, idx) => (
-                                <div key={idx} className="flex items-center gap-2">
+                                <div key={idx} className="flex items-start sm:items-center gap-2">
                                   <div className="flex-1 grid grid-cols-2 gap-2">
-                                    <div className="relative">
-                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400 uppercase">De</span>
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-[9px] font-bold text-zinc-400 uppercase ml-1">De</span>
                                       <input 
                                         type="time"
                                         value={slot.open}
                                         onChange={(e) => handleHourChange(h.day, 'open', e.target.value, idx)}
-                                        className="w-full pl-8 pr-3 py-3 bg-zinc-50 border border-zinc-100 rounded-xl text-sm focus:ring-2 focus:ring-[#00897b]/20 transition-all"
+                                        className="w-full px-3 py-3 bg-zinc-50 border border-zinc-100 rounded-xl text-sm focus:ring-2 focus:ring-[#00897b]/20 transition-all font-medium"
                                       />
                                     </div>
-                                    <div className="relative">
-                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400 uppercase">Até</span>
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-[9px] font-bold text-zinc-400 uppercase ml-1">Até</span>
                                       <input 
                                         type="time"
                                         value={slot.close}
                                         onChange={(e) => handleHourChange(h.day, 'close', e.target.value, idx)}
-                                        className="w-full pl-8 pr-3 py-3 bg-zinc-50 border border-zinc-100 rounded-xl text-sm focus:ring-2 focus:ring-[#00897b]/20 transition-all"
+                                        className="w-full px-3 py-3 bg-zinc-50 border border-zinc-100 rounded-xl text-sm focus:ring-2 focus:ring-[#00897b]/20 transition-all font-medium"
                                       />
                                     </div>
                                   </div>
                                   
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex items-center gap-1 pt-5 sm:pt-0">
                                     {h.slots.length > 1 && (
                                       <button 
                                         type="button"
                                         onClick={() => removeSlot(h.day, idx)}
-                                        className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                                       >
                                         <X className="w-5 h-5" />
                                       </button>
@@ -758,7 +758,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                                       <button 
                                         type="button"
                                         onClick={() => addSlot(h.day)}
-                                        className="p-2.5 text-[#00897b] hover:bg-[#00897b]/10 rounded-lg transition-all"
+                                        className="p-2 text-[#00897b] hover:bg-[#00897b]/10 rounded-lg transition-all"
                                         title="Adicionar intervalo"
                                       >
                                         <Plus className="w-5 h-5" />
