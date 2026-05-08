@@ -9,6 +9,7 @@ interface Profile {
   full_name?: string | null;
   avatar_url?: string | null;
   phone?: string | null;
+  state?: string | null;
   city?: string | null;
   bio?: string | null;
   updated_at?: string;
@@ -47,9 +48,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (!data) {
         // If profile doesn't exist, create it as a regular user
+        const newProfileData = { 
+          id: userId, 
+          role: 'user' as const, 
+          email: user?.email || '',
+          full_name: user?.user_metadata?.full_name || '',
+          avatar_url: user?.user_metadata?.avatar_url || ''
+        };
+        
         const { data: newProfile, error: createError } = await supabase
           .from('profiles')
-          .insert([{ id: userId, role: 'user', email: user?.email }])
+          .insert([newProfileData])
           .select('*')
           .single();
         
@@ -57,6 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setProfile(newProfile);
           setRole(newProfile.role);
         } else {
+          console.error('Error creating profile:', createError);
           setRole('user');
         }
       } else {

@@ -109,10 +109,13 @@ export default function App() {
           } else {
             window.location.href = '/';
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error('[Auth] Callback error:', err);
           if (window.opener) {
-            window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR' }, '*');
+            window.opener.postMessage({ 
+              type: 'OAUTH_AUTH_ERROR', 
+              error: err.message || 'Falha ao processar o login.' 
+            }, '*');
             setTimeout(() => window.close(), 1000);
           }
         }

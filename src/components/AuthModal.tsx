@@ -56,6 +56,15 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
         console.log('[Auth] Google login success message received');
         onClose();
       }
+
+      if (event.data?.type === 'OAUTH_AUTH_ERROR') {
+        console.error('[Auth] Google login error message received');
+        setError(event.data.error || 'Erro na autenticação. Verifique as configurações de URL no Supabase.');
+        setIsGoogleLoading(false);
+        if (event.data.error?.includes('403')) {
+          setShow403Help(true);
+        }
+      }
     };
 
     window.addEventListener('message', handleMessage);
@@ -236,13 +245,26 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
                       <div className="flex items-center gap-2 text-amber-700 font-bold text-xs uppercase tracking-wider">
                         <HelpCircle className="w-4 h-4" /> Como resolver o erro 403:
                       </div>
-                      <p className="text-[11px] text-amber-800 leading-relaxed">
-                        Este erro ocorre porque o projeto ainda está em modo de <b>teste</b> no Google Cloud.
+                      <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                        Como resolver o erro 403:
                       </p>
-                      <ul className="text-[10px] text-amber-800 space-y-1 list-disc pl-4">
-                        <li>Vá ao Console do Google Cloud</li>
-                        <li>Na tela de consentimento OAuth, mude o status para <b>"Em Produção"</b></li>
-                        <li>Ou adicione seu e-mail como <b>"Usuário de teste"</b></li>
+                      <ul className="text-[10px] text-amber-800 space-y-1.5 list-none pl-1">
+                        <li className="flex gap-2">
+                          <span className="shrink-0 w-4 h-4 rounded-full bg-amber-200 flex items-center justify-center font-bold text-[9px]">1</span>
+                          <span>No Supabase: Auth {'>'} Configuration {'>'} URL Configuration</span>
+                        </li>
+                        <li className="flex gap-2">
+                          <span className="shrink-0 w-4 h-4 rounded-full bg-amber-200 flex items-center justify-center font-bold text-[9px]">2</span>
+                          <span>No Supabase: Adicione <b>{window.location.origin}</b> aos "Redirect URLs" em Auth {'>'} Configuration.</span>
+                        </li>
+                        <li className="flex gap-2">
+                          <span className="shrink-0 w-4 h-4 rounded-full bg-amber-200 flex items-center justify-center font-bold text-[9px]">3</span>
+                          <span>No Supabase: Se adicionou colunas recentemente, vá em <b>Settings {'>'} API</b> e clique em <b>"PostgREST Config - Reload Schema"</b>.</span>
+                        </li>
+                        <li className="flex gap-2">
+                          <span className="shrink-0 w-4 h-4 rounded-full bg-amber-200 flex items-center justify-center font-bold text-[9px]">4</span>
+                          <span>No Google Cloud: Verifique se o e-mail {user?.email || 'atual'} está como "Usuário de teste" caso o App esteja em modo de teste.</span>
+                        </li>
                       </ul>
                     </div>
                   )}
