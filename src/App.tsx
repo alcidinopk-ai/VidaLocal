@@ -32,6 +32,7 @@ import {
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { chatWithMaps, ChatMessage, GroundingChunk } from './services/geminiService';
+import { supabase } from './lib/supabase';
 import { MapDisplay } from './components/MapDisplay';
 import { EstablishmentCard } from './components/EstablishmentCard';
 import { useCity } from './contexts/CityContext';
@@ -89,6 +90,36 @@ export default function App() {
   const { currentCity, isLoading: isCityLoading, skipLoading } = useCity();
   const { user, profile, signOut } = useAuth();
   const [showSkip, setShowSkip] = useState(false);
+
+  // Auth callback handling (runs in the popup)
+  const [isAuthCallback, setIsAuthCallback] = useState(window.location.pathname === '/auth/callback');
+
+  useEffect(() => {
+    if (isAuthCallback) {
+      const handleCallback = async () => {
+        try {
+          // Supabase exchanges the code for a session automatically if detectSessionInUrl is true
+          // but we call getSession to be sure it's processed.
+          await supabase.auth.getSession();
+          
+          if (window.opener) {
+            window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
+            // Give it a moment to send the message before closing
+            setTimeout(() => window.close(), 500);
+          } else {
+            window.location.href = '/';
+          }
+        } catch (err) {
+          console.error('[Auth] Callback error:', err);
+          if (window.opener) {
+            window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR' }, '*');
+            setTimeout(() => window.close(), 1000);
+          }
+        }
+      };
+      handleCallback();
+    }
+  }, [isAuthCallback]);
 
   useEffect(() => {
     if (isCityLoading) {
@@ -645,6 +676,16 @@ export default function App() {
     performSearch(input, true);
     setInput('');
   };
+
+  if (isAuthCallback) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-white p-6 text-center">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6" />
+        <h2 className="text-xl font-bold text-zinc-900 mb-2">Autenticando...</h2>
+        <p className="text-zinc-500">Por favor, aguarde enquanto processamos seu login.</p>
+      </div>
+    );
+  }
 
   if (isCityLoading) {
     return (

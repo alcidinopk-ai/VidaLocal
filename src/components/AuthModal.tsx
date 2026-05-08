@@ -41,16 +41,20 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Basic security check for the origin
-      if (!event.origin.endsWith('.run.app') && !event.origin.includes('localhost')) {
-        return;
+      // Basic security check - allow same origin
+      if (event.origin !== window.location.origin) {
+        // Also allow common dev/preview domains
+        const isAllowed = 
+          event.origin.endsWith('.run.app') || 
+          event.origin.includes('localhost') || 
+          event.origin.includes('vercel.app');
+        
+        if (!isAllowed) return;
       }
 
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
         console.log('[Auth] Google login success message received');
         onClose();
-        // The AuthContext will handle the user state update automatically
-        // as Supabase listens to auth changes
       }
     };
 
@@ -91,11 +95,16 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     setIsGoogleLoading(true);
     setError(null);
     setShow403Help(false);
+    console.log('[Auth] Starting Google OAuth flow...');
+    
     try {
+      const callbackUrl = `${window.location.origin}/auth/callback`;
+      console.log('[Auth] Redirect URL:', callbackUrl);
+
       const { data, error: googleError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: callbackUrl,
           skipBrowserRedirect: true,
           queryParams: {
             access_type: 'offline',
@@ -104,11 +113,13 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
         },
       });
 
-      if (googleError) throw googleError;
+      if (googleError) {
+        console.error('[Auth] Supabase OAuth error:', googleError);
+        throw googleError;
+      }
 
       if (data?.url) {
-        // Clear loading state after opening popup
-        setIsGoogleLoading(false);
+        console.log('[Auth] Opening popup window...');
         
         const width = 600;
         const height = 700;
@@ -122,13 +133,38 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
         );
 
         if (!popup) {
-          setError('O bloqueador de pop-ups impediu o login. Por favor, permita pop-ups para este site.');
+          setIsGoogleLoading(false);
+          const blockMsg = 'O bloqueador de pop-ups impediu o login. Por favor, permita pop-ups para este site e tente novamente.';
+          setError(blockMsg);
+          console.warn('[Auth] Popup blocked');
+          return;
         }
+
+        // Periodically check if popup is closed as a fallback
+        const checkPopup = setInterval(async () => {
+          if (popup.closed) {
+            clearInterval(checkPopup);
+            console.log('[Auth] Popup closed by user or success');
+            
+            // Give it a moment to process the session
+            setTimeout(async () => {
+              const { data: sessionData } = await supabase.auth.getSession();
+              if (sessionData.session) {
+                console.log('[Auth] Session found after popup close');
+                onClose();
+              } else {
+                setIsGoogleLoading(false);
+              }
+            }, 1000);
+          }
+        }, 1000);
+      } else {
+        throw new Error('Não foi possível gerar a URL de login do Google.');
       }
     } catch (err: any) {
       console.error('Google login error:', err);
-      // Check for common status codes in error message
       const errorMsg = err.message || '';
+      
       if (errorMsg.includes('403') || errorMsg.includes('forbidden') || errorMsg.includes('access_denied')) {
         setShow403Help(true);
       }
@@ -271,7 +307,10 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
                 className="w-full py-3 bg-white border border-zinc-200 text-zinc-700 rounded-xl font-bold hover:bg-zinc-50 transition-all flex items-center justify-center gap-3 shadow-sm disabled:opacity-50"
               >
                 {isGoogleLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Janela de login aberta...
+                  </>
                 ) : (
                   <>
                     <GoogleIcon />
