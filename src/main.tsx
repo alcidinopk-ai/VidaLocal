@@ -1,9 +1,9 @@
 import {StrictMode} from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App.tsx';
-import { CityProvider } from './contexts/CityContext.tsx';
-import { AuthProvider } from './contexts/AuthContext.tsx';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import App from './App';
+import { CityProvider } from './contexts/CityContext';
+import { AuthProvider } from './contexts/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(

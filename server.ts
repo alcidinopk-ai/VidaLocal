@@ -127,6 +127,33 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get(['/auth/callback', '/auth/callback/'], (req, res) => {
+  res.send(`
+    <html>
+      <head>
+        <title>Autenticação Concluída</title>
+        <style>
+          body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f9fafb; color: #111827; }
+          .loader { border: 3px solid #f3f3f3; border-top: 3px solid #00897b; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; margin-bottom: 16px; }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+      </head>
+      <body>
+        <div class="loader"></div>
+        <p>Autenticação concluída! Fechando esta janela...</p>
+        <script>
+          if (window.opener) {
+            window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
+            setTimeout(() => window.close(), 1000);
+          } else {
+            window.location.href = '/';
+          }
+        </script>
+      </body>
+    </html>
+  `);
+});
+
 // Mock Data
 const states = [
   { id: 1, name: "Tocantins", uf: "TO" },

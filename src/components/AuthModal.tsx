@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Mail, Lock, Loader2, AlertCircle, CheckCircle2, User as UserIcon } from 'lucide-react';
+import { X, Mail, Lock, Loader2, AlertCircle, CheckCircle2, User as UserIcon, HelpCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface AuthModalProps {
@@ -37,6 +37,26 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [show403Help, setShow403Help] = useState(false);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Basic security check for the origin
+      if (!event.origin.endsWith('.run.app') && !event.origin.includes('localhost')) {
+        return;
+      }
+
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        console.log('[Auth] Google login success message received');
+        onClose();
+        // The AuthContext will handle the user state update automatically
+        // as Supabase listens to auth changes
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,25 +90,53 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
     setError(null);
+    setShow403Help(false);
     try {
-      const { error: googleError } = await supabase.auth.signInWithOAuth({
+      const { data, error: googleError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: true,
           queryParams: {
             access_type: 'offline',
-            prompt: 'consent',
+            prompt: 'select_account',
           },
         },
       });
+
       if (googleError) throw googleError;
+
+      if (data?.url) {
+        // Clear loading state after opening popup
+        setIsGoogleLoading(false);
+        
+        const width = 600;
+        const height = 700;
+        const left = window.screenX + (window.outerWidth - width) / 2;
+        const top = window.screenY + (window.outerHeight - height) / 2;
+        
+        const popup = window.open(
+          data.url,
+          'google_login_popup',
+          `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
+        );
+
+        if (!popup) {
+          setError('O bloqueador de pop-ups impediu o login. Por favor, permita pop-ups para este site.');
+        }
+      }
     } catch (err: any) {
       console.error('Google login error:', err);
-      // More descriptive error for local development/redirect issues
-      const isRedirectError = err.message?.includes('redirect') || err.message?.includes('callback');
+      // Check for common status codes in error message
+      const errorMsg = err.message || '';
+      if (errorMsg.includes('403') || errorMsg.includes('forbidden') || errorMsg.includes('access_denied')) {
+        setShow403Help(true);
+      }
+      
+      const isRedirectError = errorMsg.includes('redirect') || errorMsg.includes('callback');
       setError(isRedirectError 
         ? `Erro de configuração: Verifique se "${window.location.origin}" está nos Redirect URIs do Supabase.`
-        : (err.message || 'Ocorreu um erro ao entrar com o Google.'));
+        : (errorMsg || 'Ocorreu um erro ao entrar com o Google.'));
       setIsGoogleLoading(false);
     }
   };
@@ -141,9 +189,27 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
-                <div className="p-3 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-600 text-xs">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <p>{error}</p>
+                <div className="space-y-3">
+                  <div className="p-3 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-600 text-xs">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <p>{error}</p>
+                  </div>
+                  
+                  {(show403Help || error.includes('403')) && (
+                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl space-y-2">
+                      <div className="flex items-center gap-2 text-amber-700 font-bold text-xs uppercase tracking-wider">
+                        <HelpCircle className="w-4 h-4" /> Como resolver o erro 403:
+                      </div>
+                      <p className="text-[11px] text-amber-800 leading-relaxed">
+                        Este erro ocorre porque o projeto ainda está em modo de <b>teste</b> no Google Cloud.
+                      </p>
+                      <ul className="text-[10px] text-amber-800 space-y-1 list-disc pl-4">
+                        <li>Vá ao Console do Google Cloud</li>
+                        <li>Na tela de consentimento OAuth, mude o status para <b>"Em Produção"</b></li>
+                        <li>Ou adicione seu e-mail como <b>"Usuário de teste"</b></li>
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 
