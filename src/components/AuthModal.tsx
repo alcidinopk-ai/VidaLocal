@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Mail, Lock, Loader2, AlertCircle, CheckCircle2, User as UserIcon, HelpCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ const GoogleIcon = () => (
 );
 
 export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
+  const { user } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

@@ -49,7 +49,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   const [formData, setFormData] = useState({
     name: '',
     categoryId: '',
-    subCategory: '',
+    subCategory: [] as string[],
     address: '',
     phone: '',
     whatsapp: '',
@@ -78,10 +78,22 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
 
   React.useEffect(() => {
     if (initialData && isOpen) {
+      // Process subCategory into array if it's a string
+      let subCats: string[] = [];
+      if (initialData.subCategory) {
+        if (Array.isArray(initialData.subCategory)) {
+          subCats = initialData.subCategory;
+        } else if (typeof initialData.subCategory === 'string') {
+          subCats = initialData.subCategory.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      } else if (initialData.sub_category) {
+        subCats = initialData.sub_category.split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+
       setFormData({
         name: initialData.name || initialData.title || '',
         categoryId: String(initialData.categoryId || ''),
-        subCategory: initialData.subCategory || '',
+        subCategory: subCats,
         address: initialData.address || '',
         phone: initialData.phone || '',
         whatsapp: initialData.whatsapp || '',
@@ -123,7 +135,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
       setFormData({
         name: '',
         categoryId: '',
-        subCategory: '',
+        subCategory: [],
         address: '',
         phone: '',
         whatsapp: '',
@@ -316,12 +328,18 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
       return;
     }
 
+    if (formData.subCategory.length === 0) {
+      setError("Por favor, selecione pelo menos um tipo de estabelecimento.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     
     try {
       const payload = {
         ...formData,
+        subCategory: formData.subCategory.join(', '),
         hours: formatHoursSummary(),
         openingHours: openingHours.flatMap(h => 
           h.closed 
@@ -386,7 +404,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
           setFormData({
             name: '',
             categoryId: '',
-            subCategory: '',
+            subCategory: [],
             address: '',
             phone: '',
             whatsapp: '',
@@ -497,7 +515,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         <select 
                           required
                           value={formData.categoryId}
-                          onChange={e => setFormData({...formData, categoryId: e.target.value, subCategory: ''})}
+                          onChange={e => setFormData({...formData, categoryId: e.target.value, subCategory: []})}
                           className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base appearance-none"
                         >
                           <option value="">Selecione...</option>
@@ -506,20 +524,48 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                           ))}
                         </select>
                       </div>
-                      <div>
-                        <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Tipo *</label>
-                        <select 
-                          required
-                          disabled={!formData.categoryId}
-                          value={formData.subCategory}
-                          onChange={e => setFormData({...formData, subCategory: e.target.value})}
-                          className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base appearance-none disabled:opacity-50"
-                        >
-                          <option value="">Selecione...</option>
-                          {filteredSubCategories.map(sc => (
-                            <option key={sc.name} value={sc.name}>{sc.name}</option>
-                          ))}
-                        </select>
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Tipos (Selecione um ou mais) *</label>
+                        <div className="relative">
+                          <div className="flex flex-wrap gap-2 p-2 bg-zinc-50 border border-zinc-100 rounded-2xl min-h-[58px]">
+                            {filteredSubCategories.length === 0 && (
+                              <span className="text-zinc-400 text-sm p-2 italic">Selecione uma categoria primeiro</span>
+                            )}
+                            {filteredSubCategories.map(sc => {
+                              const isSelected = formData.subCategory.includes(sc.name);
+                              return (
+                                <button
+                                  key={sc.id}
+                                  type="button"
+                                  onClick={() => {
+                                    const current = [...formData.subCategory];
+                                    if (isSelected) {
+                                      setFormData({
+                                        ...formData,
+                                        subCategory: current.filter(name => name !== sc.name)
+                                      });
+                                    } else {
+                                      setFormData({
+                                        ...formData,
+                                        subCategory: [...current, sc.name]
+                                      });
+                                    }
+                                  }}
+                                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                                    isSelected 
+                                      ? "bg-[#00897b] text-white border-[#00897b] shadow-lg shadow-[#00897b]/10" 
+                                      : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300"
+                                  }`}
+                                >
+                                  {sc.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {formData.subCategory.length === 0 && formData.categoryId && (
+                            <p className="text-[10px] text-red-500 mt-1 ml-1 font-medium">Selecione pelo menos um tipo</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

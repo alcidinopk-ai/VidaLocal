@@ -213,6 +213,11 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-bold text-zinc-900 text-sm group-hover:text-emerald-700 transition-colors uppercase tracking-tight">{title}</h3>
+                {chunk.maps?.subCategory && (
+                  <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                    {chunk.maps.subCategory}
+                  </span>
+                )}
                 {chunk.maps?.short_id && (
                   <span className="text-[9px] font-mono font-bold text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded" title="ID de Identificação">
                     #{chunk.maps.short_id}
