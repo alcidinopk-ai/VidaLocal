@@ -47,7 +47,8 @@ process.on('uncaughtException', (err) => {
 });
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 async function resolveCityAndState(supabase: any, geo: any) {
   if (!geo || !geo.cityName || !geo.stateUf) return null;
@@ -179,6 +180,7 @@ interface Establishment {
   is_premium?: boolean;
   plus_code?: string;
   created_at?: string;
+  images?: string[];
 }
 
 // Generate a random 6-character short ID (uppercase letters and numbers)
@@ -193,29 +195,73 @@ function generateShortId(): string {
 
 // Permission checking helper
 async function canUserEdit(supabase: any, userId: string, establishmentIdOrShortId: string): Promise<boolean> {
-  if (!userId) return false;
+  console.log(`[Permissions] Checking edit permission for user ${userId} on establishment ${establishmentIdOrShortId}`);
+  if (!userId) {
+    console.warn('[Permissions] No userId provided');
+    return false;
+  }
   
   try {
+    // 0. Check if user is admin (this bypasses everything else)
+    // First check by ID in profiles
+    const { data: profile } = await supabase.from('profiles').select('role, email').eq('id', userId).maybeSingle();
+    if (profile?.role === 'admin' || profile?.email === 'alcidinopk@gmail.com') {
+      console.log(`[Permissions] User ${userId} is an admin or developer (via profile). Permission granted.`);
+      return true;
+    }
+
+    // Fallback: check Auth email directly (most reliable for developer account)
+    const { data: { user: authUser }, error: authError } = await supabase.auth.admin.getUser(userId);
+    if (!authError && authUser?.email === 'alcidinopk@gmail.com') {
+      console.log(`[Permissions] User ${userId} is the developer (via auth email). Permission granted.`);
+      return true;
+    }
+
     // 1. Check if user is the creator (admin_id/user_id)
-    const { data: establishment } = await supabase
+    // Separate queries to avoid potential type mismatch issues in .or() if using UUID vs String
+    let establishment = null;
+    
+    // Try by short_id first (safest as it's always a string)
+    const { data: byShortId } = await supabase
       .from('establishments')
       .select('user_id, short_id, id')
-      .or(`id.eq.${establishmentIdOrShortId},short_id.eq.${establishmentIdOrShortId}`)
+      .eq('short_id', establishmentIdOrShortId)
       .maybeSingle();
+      
+    establishment = byShortId;
+    
+    // If not found and looks like a UUID, try by id
+    if (!establishment && establishmentIdOrShortId.length > 30) {
+      const { data: byId } = await supabase
+        .from('establishments')
+        .select('user_id, short_id, id')
+        .eq('id', establishmentIdOrShortId)
+        .maybeSingle();
+      establishment = byId;
+    }
 
-    if (establishment && establishment.user_id === userId) return true;
+    if (!establishment) {
+      console.warn(`[Permissions] Establishment ${establishmentIdOrShortId} not found in Supabase`);
+      return false;
+    }
+
+    console.log(`[Permissions] Establishment found. Owner: ${establishment.user_id}, Checking against: ${userId}`);
+    if (establishment.user_id === userId) return true;
     
     // 2. Check user_permissions table
-    if (establishment) {
-      const { data: permission } = await supabase
-        .from('user_permissions')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('establishment_short_id', establishment.short_id)
-        .maybeSingle();
+    const { data: permission } = await supabase
+      .from('user_permissions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('establishment_short_id', establishment.short_id)
+      .maybeSingle();
       
-      if (permission) return true;
+    if (permission) {
+      console.log(`[Permissions] User ${userId} has explicit permission for ${establishment.short_id}`);
+      return true;
     }
+
+    console.warn(`[Permissions] User ${userId} does NOT have permission for ${establishment.short_id}`);
   } catch (err) {
     console.error('[Permissions] Error checking:', err);
   }
@@ -224,18 +270,18 @@ async function canUserEdit(supabase: any, userId: string, establishmentIdOrShort
 }
 
 let establishments: Establishment[] = [
-  { id: "e1", name: "Espetinho do Adão B13", category_id: 1, sub_category: "Espetinho", address: "Av. Goiás, 1438, Centro, Gurupi - TO", city_id: 1, latitude: -11.7289, longitude: -49.0692, rating: 4.8, whatsapp: "63984551234", phone: "6333121234", description: "O melhor espetinho da região com acompanhamentos tradicionais.", status: 'approved', is_featured: true, is_verified: true, is_premium: true },
-  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Restaurante", address: "Av. Maranhão, 1245, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455", phone: "6333124455", description: "Comida caseira, lanches e sobremesas feitas com carinho.", status: 'approved', is_featured: true, is_verified: true, is_premium: false },
-  { id: "e3", name: "Mecânica do Neném", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Maranhão, 2560, Setor Industrial, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0720, rating: 4.5, whatsapp: "63984112233", phone: "6333121122", description: "Manutenção preventiva e corretiva para seu veículo com confiança.", status: 'approved' },
-  { id: "e4", name: "Pet Shop Amigão", category_id: 5, sub_category: "Pet Shop (varejo)", address: "Av. Goiás, 2100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0685, rating: 4.7, whatsapp: "63999887766", phone: "6333128877", description: "Tudo para o seu pet: rações, acessórios e banho e tosa.", status: 'approved' },
-  { id: "e5", name: "Pizzaria Bella Italia", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7295, longitude: -49.0670, rating: 4.6, whatsapp: "63992112233", phone: "6333129988", description: "Pizzas artesanais com massa fina e ingredientes selecionados.", status: 'approved', is_featured: true, is_verified: true, is_premium: true },
-  { id: "e6", name: "Farmácia Preço Baixo", category_id: 1, sub_category: "Farmácia", address: "Rua 5, 800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7310, longitude: -49.0695, rating: 4.4, whatsapp: "63992445566", phone: "6333127766", description: "Medicamentos e perfumaria com os melhores preços da cidade.", status: 'approved' },
-  { id: "e7", name: "Supermercado Araguaia", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Goiás, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7260, longitude: -49.0650, rating: 4.3, whatsapp: "63992556677", phone: "6333126655", description: "Variedade em hortifruti, açougue e mercearia para sua família.", status: 'approved' },
-  { id: "e8", name: "Barbearia do Zé", category_id: 4, sub_category: "Salão de Beleza / Barbearia", address: "Rua 3, 450, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0680, rating: 4.9, whatsapp: "63992667788", phone: "6333125544", description: "Corte de cabelo e barba com estilo e atendimento personalizado.", status: 'approved', is_featured: true, is_verified: true, is_premium: false },
+  { id: "e1", name: "Espetinho do Adão B13", category_id: 1, sub_category: "Espetinho", address: "Av. Goiás, 1438, Centro, Gurupi - TO", city_id: 1, latitude: -11.7289, longitude: -49.0692, rating: 4.8, whatsapp: "63984551234", phone: "6333121234", description: "O melhor espetinho da região com acompanhamentos tradicionais.", status: 'approved', is_featured: true, is_verified: true, is_premium: true, images: ["https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80", "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=800&q=80"], hours: "Segunda-feira: 18:00-00:00\nTerça-feira: 18:00-00:00\nQuarta-feira: 18:00-00:00\nQuinta-feira: 18:00-00:00\nSexta-feira: 18:00-01:00\nSábado: 18:00-01:00\nDomingo: Fechado" },
+  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Restaurante", address: "Av. Maranhão, 1245, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455", phone: "6333124455", description: "Comida caseira, lanches e sobremesas feitas com carinho.", status: 'approved', is_featured: true, is_verified: true, is_premium: false, images: ["https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80", "https://images.unsplash.com/photo-1476224483472-279815b0019e?w=800&q=80"], hours: "Segunda-feira: 11:00-14:30\nTerça-feira: 11:00-14:30\nQuarta-feira: 11:00-14:30\nQuinta-feira: 11:00-14:30\nSexta-feira: 11:00-14:30\nSábado: 11:00-15:00\nDomingo: 11:00-15:00" },
+  { id: "e3", name: "Mecânica do Neném", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Maranhão, 2560, Setor Industrial, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0720, rating: 4.5, whatsapp: "63984112233", phone: "6333121122", description: "Manutenção preventiva e corretiva para seu veículo com confiança.", status: 'approved', images: ["https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800&q=80", "https://images.unsplash.com/photo-1487754164641-a09bd0ec07aa?w=800&q=80"] },
+  { id: "e4", name: "Pet Shop Amigão", category_id: 5, sub_category: "Pet Shop (varejo)", address: "Av. Goiás, 2100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0685, rating: 4.7, whatsapp: "63999887766", phone: "6333128877", description: "Tudo para o seu pet: rações, acessórios e banho e tosa.", status: 'approved', images: ["https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800&q=80", "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=800&q=80"] },
+  { id: "e5", name: "Pizzaria Bella Italia", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7295, longitude: -49.0670, rating: 4.6, whatsapp: "63992112233", phone: "6333129988", description: "Pizzas artesanais com massa fina e ingredientes selecionados.", status: 'approved', is_featured: true, is_verified: true, is_premium: true, images: ["https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80", "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=80"], hours: "Aberto 24 horas" },
+  { id: "e6", name: "Farmácia Preço Baixo", category_id: 1, sub_category: "Farmácia", address: "Rua 5, 800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7310, longitude: -49.0695, rating: 4.4, whatsapp: "63992445566", phone: "6333127766", description: "Medicamentos e perfumaria com os melhores preços da cidade.", status: 'approved', images: ["https://images.unsplash.com/photo-1587854692152-cbe660dbbb88?w=800&q=80"] },
+  { id: "e7", name: "Supermercado Araguaia", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Goiás, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7260, longitude: -49.0650, rating: 4.3, whatsapp: "63992556677", phone: "6333126655", description: "Variedade em hortifruti, açougue e mercearia para sua família.", status: 'approved', images: ["https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&q=80"] },
+  { id: "e8", name: "Barbearia do Zé", category_id: 4, sub_category: "Salão de Beleza / Barbearia", address: "Rua 3, 450, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0680, rating: 4.9, whatsapp: "63992667788", phone: "6333125544", description: "Corte de cabelo e barba com estilo e atendimento personalizado.", status: 'approved', is_featured: true, is_verified: true, is_premium: false, images: ["https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&q=80", "https://images.unsplash.com/photo-1599351474290-288d848c3fdf?w=800&q=80"] },
   { id: "e9", name: "Clínica Veterinária Vida", category_id: 5, sub_category: "Clínica Veterinária", address: "Av. Maranhão, 3000, Gurupi - TO", city_id: 1, latitude: -11.7380, longitude: -49.0750, rating: 4.8, whatsapp: "63992778899", phone: "6333124433", description: "Cuidado completo para a saúde do seu animal de estimação.", status: 'approved' },
-  { id: "e10", name: "Posto Central", category_id: 6, sub_category: "Posto de Combustível", address: "Av. Goiás, 500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7250, longitude: -49.0640, rating: 4.2, whatsapp: "63992889900", phone: "6333123322", description: "Combustível de qualidade e conveniência 24 horas.", status: 'approved' },
-  { id: "e11", name: "Restaurante Popular", category_id: 1, sub_category: "Restaurante", address: "Av. Maranhão, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0680, rating: 4.5, whatsapp: "63992990011", phone: "6333122211", description: "Almoço self-service com grande variedade e preço justo.", status: 'approved' },
-  { id: "e12", name: "Lanchonete Central", category_id: 1, sub_category: "Lanchonete", address: "Rua 4, 600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0675, rating: 4.7, whatsapp: "63992001122", phone: "6333121100", description: "Salgados frescos, sucos naturais e o melhor café da manhã.", status: 'approved' },
+  { id: "e10", name: "Posto Central", category_id: 6, sub_category: "Posto de Combustível", address: "Av. Goiás, 500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7250, longitude: -49.0640, rating: 4.2, whatsapp: "63992889900", phone: "6333123322", description: "Combustível de qualidade e conveniência 24 horas.", status: 'approved', images: ["https://images.unsplash.com/photo-1545147551-6d738f67e589?w=800&q=80"] },
+  { id: "e11", name: "Concessionária de Água (Saneamento)", category_id: 1, sub_category: "Concessionária de Água", address: "Rua 1, Centro, Gurupi - TO", city_id: 1, latitude: -11.7255, longitude: -49.0655, rating: 4.0, phone: "6333150001", description: "Atendimento ao público para serviços de água e esgoto.", status: 'approved', images: ["https://images.unsplash.com/photo-1541888941255-20219669651c?w=800&q=80"] },
+  { id: "e12", name: "Lanchonete Central", category_id: 1, sub_category: "Lanchonete", address: "Rua 4, 600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0675, rating: 4.7, whatsapp: "63992001122", phone: "6333121100", description: "Salgados frescos, sucos naturais e o melhor café da manhã.", status: 'approved', images: ["https://images.unsplash.com/photo-1550507992-eb63ffee0847?w=800&q=80"] },
   { id: "e13", name: "Pizzaria do Vale", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 2000, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0700, rating: 4.8, whatsapp: "63992112233", phone: "6333120099", description: "Pizzas no forno a lenha com bordas recheadas e muito sabor.", status: 'approved' },
   { id: "e14", name: "Hospital Regional de Gurupi", category_id: 3, sub_category: "Hospital / Clínica / UPA", address: "Av. Pará, S/N, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0750, rating: 4.1, whatsapp: "6333150200", phone: "6333150200", description: "Atendimento hospitalar de urgência e emergência para a região.", status: 'approved' },
   { id: "e15", name: "Prefeitura Municipal", category_id: 3, sub_category: "Prefeitura / Câmara / Secretarias", address: "Rua 1, Centro, Gurupi - TO", city_id: 1, latitude: -11.7250, longitude: -49.0650, rating: 4.0, whatsapp: "6333150000", phone: "6333150000", description: "Sede administrativa do poder executivo municipal de Gurupi.", status: 'approved' },
@@ -1351,22 +1397,26 @@ app.get("/api/establishments/user/:userId", async (req, res) => {
 app.put("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
   const registration = req.body;
-  const userId = req.headers['x-user-id'] as string;
+  const userId = (req.headers['x-user-id'] || req.headers['x-vidalocal-user-id']) as string;
   
-  console.log(`[API] Updating establishment ${id}:`, JSON.stringify(registration, null, 2));
+  const { images, ...logData } = registration;
+  console.log(`[API] Updating establishment ${id}:`, JSON.stringify(logData, null, 2), images ? `(${images.length} images)` : "(no images)");
   
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
       // Permission check
-      const hasPermission = await canUserEdit(supabase, userId, id);
+      const isAdminByEmail = registration.userEmail === 'alcidinopk@gmail.com';
+      const hasPermission = isAdminByEmail || await canUserEdit(supabase, userId, id);
+      
       if (!hasPermission) {
-        return res.status(403).json({ error: "Você não tem permissão para editar este estabelecimento." });
+        console.warn(`[API] Permission denied for user ${userId} / ${registration.userEmail} on establishment ${id}`);
+        return res.status(403).json({ 
+          error: "Você não tem permissão para editar este estabelecimento.",
+          debug: { userId, estId: id, email: registration.userEmail }
+        });
       }
 
-      // Try to use numeric ID if possible for Supabase
-      const targetId = isNaN(Number(id)) ? id : Number(id);
-      
       const updatePayload: any = {
         name: registration.name,
         category_id: Number(registration.categoryId),
@@ -1382,23 +1432,74 @@ app.put("/api/establishments/:id", async (req, res) => {
         longitude: registration.longitude,
         maps_link: registration.mapsLink,
         plus_code: registration.plusCode,
-        city_id: registration.cityId
+        city_id: registration.cityId ? Number(registration.cityId) : null,
+        state_id: registration.stateId ? Number(registration.stateId) : null,
+        images: registration.images || []
       };
 
       // Only allow admins to change premium/featured status
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
       const isAdminGlobal = profile?.role === 'admin';
 
-      if (isAdminGlobal) {
+      if (isAdminGlobal || isAdminByEmail) {
         updatePayload.is_featured = registration.is_featured;
         updatePayload.is_verified = registration.is_verified;
         updatePayload.is_premium = registration.is_premium;
       }
 
+      console.log(`[API] Attempting update for ${id}. IsAdminGlobal: ${isAdminGlobal}, IsAdminByEmail: ${isAdminByEmail}`);
+
+      // Determine if we should update by ID (UUID) or Short ID
+      const isUuid = id.length > 30 && id.includes('-');
+      
+      // Try to find the exact record first to see if it even exists
+      let recordToUpdate = null;
+      if (isUuid) {
+        const { data: found } = await supabase.from('establishments').select('id, short_id').eq('id', id).maybeSingle();
+        recordToUpdate = found;
+      } else {
+        const { data: found } = await supabase.from('establishments').select('id, short_id').eq('short_id', id).maybeSingle();
+        recordToUpdate = found;
+      }
+
+      if (!recordToUpdate) {
+        // If not found, check if it's a mock ID (e.g., e11, p3, a2)
+        const isMockId = /^[epa]\d+$/.test(id);
+        
+        if (isMockId) {
+          console.log(`[API] Mock establishment ID ${id} detected for update. Redirecting to INSERT (Register)...`);
+          
+          // Prepare for insert
+          const insertPayload = {
+            ...updatePayload,
+            user_id: userId,
+            status: 'approved', // Automatically approve updates to mock data saved by users (or keep pending?)
+            short_id: generateShortId()
+          };
+          
+          const { data: insertedData, error: insertError } = await supabase
+            .from('establishments')
+            .insert([insertPayload])
+            .select();
+            
+          if (insertError) {
+            console.error(`[Supabase Error] Creating replacement for mock ${id}:`, insertError);
+            return res.status(500).json({ error: "Erro ao salvar cópia do estabelecimento: " + insertError.message });
+          }
+          
+          return res.json(insertedData[0]);
+        }
+
+        console.warn(`[API] Establishment NOT FOUND for ID/ShortID: ${id}`);
+        return res.status(404).json({ error: `Estabelecimento não encontrado no banco de dados (ID: ${id}). Verifique se os dados iniciais estão corretos.` });
+      }
+
+      console.log(`[API] Record found! Real UUID: ${recordToUpdate.id}. Proceeding with update...`);
+
       const { data, error } = await supabase
         .from('establishments')
         .update(updatePayload)
-        .eq('id', targetId)
+        .eq('id', recordToUpdate.id)
         .select();
 
       if (error) {
@@ -1411,6 +1512,8 @@ app.put("/api/establishments/:id", async (req, res) => {
             userMessage = "Erro de esquema: A coluna 'is_open_24_hours' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN is_open_24_hours BOOLEAN DEFAULT FALSE;";
           } else if (error.message && error.message.includes('plus_code')) {
             userMessage = "Erro de esquema: A coluna 'plus_code' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN plus_code TEXT;";
+          } else if (error.message && error.message.includes('images')) {
+            userMessage = "Erro de esquema: A coluna 'images' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN images TEXT[];";
           }
         } else if (error.message) {
           userMessage = `Erro no Supabase: ${error.message}`;
@@ -1470,7 +1573,8 @@ app.put("/api/establishments/:id", async (req, res) => {
           city_id: Number(registration.cityId),
           is_featured: registration.is_featured,
           is_verified: registration.is_verified,
-          is_premium: registration.is_premium
+          is_premium: registration.is_premium,
+          images: registration.images || []
         };
         console.log(`[API] Establishment ${id} updated successfully in local memory`);
         clearCache();
@@ -1580,18 +1684,58 @@ app.delete("/api/establishments/:id", async (req, res) => {
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      // Permission check
-      const hasPermission = await canUserEdit(supabase, userId, id);
+      // 1. Identify if it's a mock ID
+      const isMockId = /^[epa]\d+$/.test(id);
+      
+      // 2. Determine the real UUID to delete
+      const isUuid = id.length > 30 && id.includes('-');
+      let realId = id;
+      let recordInDb = null;
+
+      if (!isUuid) {
+        const { data: found } = await supabase
+          .from('establishments')
+          .select('id, user_id')
+          .eq('short_id', id)
+          .maybeSingle();
+        
+        if (found) {
+          realId = found.id;
+          recordInDb = found;
+        } else if (isMockId) {
+          // It's a mock ID not in DB, so we just "pretend" to delete
+          console.log(`[API] Mock ID ${id} requested for delete. No record in DB, returning success.`);
+          return res.json({ success: true, message: "Mock establishment removed (not in DB)" });
+        } else {
+          return res.status(404).json({ error: "Estabelecimento não encontrado para exclusão." });
+        }
+      } else {
+        // It's a UUID, check if it exists
+        const { data: found } = await supabase
+          .from('establishments')
+          .select('id, user_id')
+          .eq('id', id)
+          .maybeSingle();
+        recordInDb = found;
+      }
+
+      // 3. Permission check
+      const hasPermission = await canUserEdit(supabase, userId, recordInDb ? id : (isUuid ? id : id)); 
+      // canUserEdit already handles ID/ShortID and Admin status
+      
       if (!hasPermission) {
         return res.status(403).json({ error: "Você não tem permissão para excluir este estabelecimento." });
       }
 
-      const { error } = await supabase
-        .from('establishments')
-        .delete()
-        .eq('id', id);
+      if (recordInDb) {
+        const { error } = await supabase
+          .from('establishments')
+          .delete()
+          .eq('id', recordInDb.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
+      
       clearCache();
       return res.json({ success: true });
     } else {
@@ -1830,8 +1974,11 @@ app.patch("/api/establishments/:id", async (req, res) => {
 });
 
 app.post("/api/establishments/register", async (req, res) => {
+  console.log("[API] Hit POST /api/establishments/register");
+  // return res.json({ status: "debug", message: "Reached server!" }); // Uncomment for deeper debug
   const registration = req.body;
-  console.log("[API] Registering new establishment:", JSON.stringify(registration, null, 2));
+  const { images, ...logData } = registration;
+  console.log("[API] Registering new establishment:", JSON.stringify(logData, null, 2), images ? `(${images.length} images)` : "(no images)");
 
   try {
     // SQL Schema for 'establishments' table:
@@ -1915,6 +2062,10 @@ app.post("/api/establishments/register", async (req, res) => {
 
       console.log(`[API Register] Inserting into establishments (city_id: ${targetCityId})...`);
       const sId = generateShortId();
+      
+      // Ensure user_id is a valid UUID or null
+      const userId = (registration.userId && registration.userId.length > 10) ? registration.userId : null;
+      
       const { data, error } = await supabase.from('establishments').insert([{
         name: registration.name,
         short_id: sId,
@@ -1933,11 +2084,12 @@ app.post("/api/establishments/register", async (req, res) => {
         plus_code: registration.plusCode,
         city_id: targetCityId,
         state_id: targetStateId,
-        user_id: registration.userId,
+        user_id: userId,
         status: 'approved',
         is_featured: registration.is_featured || false,
         is_verified: registration.is_verified || false,
-        is_premium: registration.is_premium || false
+        is_premium: registration.is_premium || false,
+        images: registration.images || []
       }]).select();
 
       if (error) {
@@ -1954,6 +2106,8 @@ app.post("/api/establishments/register", async (req, res) => {
           userMessage = "Erro de esquema: A coluna 'is_open_24_hours' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN is_open_24_hours BOOLEAN DEFAULT FALSE;";
         } else if (error.code === '42703' && error.message && error.message.includes('plus_code')) {
           userMessage = "Erro de esquema: A coluna 'plus_code' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN plus_code TEXT;";
+        } else if (error.code === '42703' && error.message && error.message.includes('images')) {
+          userMessage = "Erro de esquema: A coluna 'images' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN images TEXT[];";
         } else if (error.message) {
           userMessage = `Erro no Supabase: ${error.message}`;
         }
@@ -2011,6 +2165,7 @@ app.post("/api/establishments/register", async (req, res) => {
         is_featured: registration.is_featured || false,
         is_verified: registration.is_verified || false,
         is_premium: registration.is_premium || false,
+        images: registration.images || [],
         created_at: new Date().toISOString()
       };
       establishments.push(newEstablishment);

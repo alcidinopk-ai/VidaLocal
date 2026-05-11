@@ -265,6 +265,7 @@ export default function App() {
             is_verified: est.is_verified,
             is_premium: est.is_premium,
             opening_hours: est.opening_hours,
+            images: est.images || [],
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -451,6 +452,7 @@ export default function App() {
             is_verified: est.is_verified,
             is_premium: est.is_premium,
             opening_hours: est.opening_hours,
+            images: est.images || [],
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -551,6 +553,7 @@ export default function App() {
                   uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
                   phone: est.phone, whatsapp: est.whatsapp, user_id: est.user_id, is_featured: est.is_featured,
                   is_verified: est.is_verified, is_premium: est.is_premium, opening_hours: est.opening_hours,
+                  images: est.images || [],
                   location: { latitude: est.latitude, longitude: est.longitude }
                 }
               }));
@@ -593,7 +596,8 @@ export default function App() {
             address: localMatch.address || enrichedMaps.address, hours: localMatch.hours || enrichedMaps.hours,
             description: localMatch.description || enrichedMaps.description, phone: localMatch.phone || enrichedMaps.phone,
             whatsapp: localMatch.whatsapp || enrichedMaps.whatsapp, is_featured: localMatch.is_featured,
-            is_verified: localMatch.is_verified, is_premium: localMatch.is_premium, plusCode: localMatch.plus_code || enrichedMaps.plusCode
+            is_verified: localMatch.is_verified, is_premium: localMatch.is_premium, plusCode: localMatch.plus_code || enrichedMaps.plusCode,
+            images: localMatch.images || enrichedMaps.images || []
           };
         }
         const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

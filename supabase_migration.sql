@@ -71,8 +71,35 @@ CREATE TABLE IF NOT EXISTS establishments (
   is_verified BOOLEAN DEFAULT FALSE,
   is_premium BOOLEAN DEFAULT FALSE,
   is_open_24_hours BOOLEAN DEFAULT FALSE,
+  short_id TEXT UNIQUE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6.1 Profiles table
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT,
+  role TEXT DEFAULT 'user', -- user, admin
+  full_name TEXT,
+  avatar_url TEXT,
+  phone TEXT,
+  state TEXT,
+  city TEXT,
+  bio TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6.2 User Permissions table
+CREATE TABLE IF NOT EXISTS user_permissions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_email TEXT,
+  establishment_id UUID REFERENCES establishments(id) ON DELETE CASCADE,
+  establishment_short_id TEXT REFERENCES establishments(short_id) ON DELETE CASCADE,
+  role TEXT DEFAULT 'editor', -- editor, owner
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, establishment_short_id)
 );
 
 -- 7. Seed Data (Optional but helpful for initial setup)

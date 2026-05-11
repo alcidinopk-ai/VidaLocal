@@ -20,7 +20,8 @@ import {
   Wand2,
   Compass,
   Hash,
-  Copy
+  Copy,
+  Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
@@ -43,6 +44,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   const { currentCity } = useCity();
   const { user, role } = useAuth();
   const isAdmin = user && role === 'admin';
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +65,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     plusCode: '',
     is_featured: false,
     is_verified: false,
-    is_premium: false
+    is_premium: false,
+    images: [] as string[]
   });
 
   const [openingHours, setOpeningHours] = useState([
@@ -117,7 +120,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         plusCode: initialData.plusCode || '',
         is_featured: initialData.is_featured || false,
         is_verified: initialData.is_verified || false,
-        is_premium: initialData.is_premium || false
+        is_premium: initialData.is_premium || false,
+        images: initialData.images || []
       });
       // Set opening hours if available in initialData
       if (initialData.opening_hours && Array.isArray(initialData.opening_hours)) {
@@ -159,7 +163,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         plusCode: '',
         is_featured: false,
         is_verified: false,
-        is_premium: false
+        is_premium: false,
+        images: []
       });
     }
   }, [initialData, isOpen]);
@@ -241,6 +246,76 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         alert("Não foi possível obter sua localização.");
       }
     );
+  };
+
+  const handleAddImage = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach(file => {
+      // Compress image before adding to state to avoid 403 Forbidden (payload too large)
+      // Limit to 5 images total
+      setFormData(prev => {
+        if (prev.images.length >= 5) {
+          alert("Limite de 5 fotos atingido.");
+          return prev;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            // Reduce to 400px max dimension for extremely small payload
+            const MAX_SIZE = 400;
+            if (width > height) {
+              if (width > MAX_SIZE) {
+                height *= MAX_SIZE / width;
+                width = MAX_SIZE;
+              }
+            } else {
+              if (height > MAX_SIZE) {
+                width *= MAX_SIZE / height;
+                height = MAX_SIZE;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            
+            // Compress to JPEG with 0.4 quality (tiny file size)
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.4);
+            
+            setFormData(current => ({
+              ...current,
+              images: [...current.images, compressedBase64]
+            }));
+          };
+          img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+        return prev;
+      });
+    });
+    
+    // Reset input value so same file can be selected again
+    e.target.value = '';
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
   };
 
   const handleResolvePlusCode = () => {
@@ -346,6 +421,12 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     setIsLoading(true);
     setError(null);
     
+    if (!user) {
+      setError("Você precisa estar logado para salvar alterações.");
+      setIsLoading(false);
+      return;
+    }
+    
     try {
       const payload = {
         ...formData,
@@ -370,7 +451,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         userEmail: user.email
       };
       
-      console.log("[Register] Sending payload:", payload);
+      console.log("[Register] Sending payload. Images:", payload.images?.length || 0, "Approximate size:", JSON.stringify(payload).length, "bytes");
 
       const isUpdate = initialData && initialData.id;
       const url = isUpdate 
@@ -394,7 +475,17 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         result = await response.json();
       } else {
         const text = await response.text();
-        console.error("[Register] Non-JSON response:", text);
+        console.error("[Register] Error payload:", text);
+        
+        if (response.status === 403) {
+          let serverError = "";
+          try {
+            const errorData = JSON.parse(text);
+            serverError = errorData.error || errorData.message || "";
+          } catch (e) {}
+          throw new Error(`ERRO 403 (Proibido): ${serverError || 'O servidor bloqueou o envio.'} Se este erro acontece mesmo SEM FOTOS, pode haver uma restrição no firewall ou banco de dados.`);
+        }
+        
         throw new Error(`Servidor retornou resposta inesperada (${response.status})`);
       }
 
@@ -428,7 +519,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             is_featured: false,
             is_verified: false,
             is_premium: false,
-            plusCode: ''
+            plusCode: '',
+            images: []
           });
         }, 3000);
       } else {
@@ -578,6 +670,58 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                {/* Photos Section */}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Fotos do Local</h4>
+                    <button 
+                      type="button" 
+                      onClick={handleAddImage}
+                      className="flex items-center gap-1.5 text-xs font-bold text-[#00897b] hover:text-[#00796b] transition-colors"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      Anexar Fotos
+                    </button>
+                  </div>
+                  
+                  <input 
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                  />
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {formData.images.map((img, idx) => (
+                      <div key={idx} className="relative aspect-video rounded-2xl overflow-hidden group bg-zinc-100 border border-zinc-200">
+                        <img 
+                          src={img} 
+                          alt={`Foto ${idx + 1}`} 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(idx)}
+                          className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleAddImage}
+                      className="aspect-video rounded-2xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-[#00897b] hover:border-[#00897b] hover:bg-emerald-50/50 transition-all"
+                    >
+                      <Upload className="w-6 h-6" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Anexar Fotos</span>
+                    </button>
                   </div>
                 </div>
 

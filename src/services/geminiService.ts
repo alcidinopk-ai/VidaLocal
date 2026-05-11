@@ -16,6 +16,7 @@ export interface GroundingChunk {
     categoryId?: number;
     cityId?: number;
     subCategory?: string;
+    sub_category?: string;
     address?: string;
     hours?: string;
     description?: string;
@@ -27,6 +28,7 @@ export interface GroundingChunk {
     is_premium?: boolean;
     is_open_24_hours?: boolean;
     plusCode?: string;
+    images?: string[];
     opening_hours?: {
       day_of_week: number;
       open_time: string | null;

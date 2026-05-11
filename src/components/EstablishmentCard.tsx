@@ -14,9 +14,12 @@ import {
   Printer,
   Edit,
   Trash2,
+  Loader2,
   Crown,
   Plus,
-  ChevronDown
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock } from 'lucide-react';
@@ -53,6 +56,15 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showFullHours, setShowFullHours] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+
+  const images = chunk.maps?.images || [];
+
+  const subCategoryStr = chunk.maps?.subCategory || chunk.maps?.sub_category;
+  const subCategories = typeof subCategoryStr === 'string' 
+    ? (subCategoryStr.includes(' | ') ? subCategoryStr.split(' | ') : subCategoryStr.split(/,\s*(?![^()]*\))/))
+    : [];
 
   const title = chunk.maps?.title || 'Estabelecimento';
   const uri = chunk.maps?.uri || '#';
@@ -120,17 +132,19 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
         method: 'DELETE',
         headers: { 'x-user-id': user?.id || '' }
       });
+      
+      const data = await response.json();
+      
       if (response.ok) {
         alert("Estabelecimento excluído com sucesso!");
         if (onRefresh) onRefresh();
         else window.location.reload();
-      }
- else {
-        alert("Erro ao excluir estabelecimento.");
+      } else {
+        alert(`Erro ao excluir: ${data.error || "Ocorreu um erro inesperado."}`);
       }
     } catch (err) {
       console.error("Delete error:", err);
-      alert("Erro de conexão ao excluir.");
+      alert("Erro de conexão ao excluir. Verifique sua internet.");
     } finally {
       setIsDeleting(false);
     }
@@ -200,8 +214,72 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   return (
     <>
       <motion.div 
-        className="group bg-zinc-50 border border-zinc-100 rounded-2xl p-5 hover:bg-white hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-900/5 transition-all"
+        className="group bg-zinc-50 border border-zinc-100 rounded-2xl p-5 hover:bg-white hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-900/5 transition-all overflow-hidden"
       >
+        {/* Image Gallery */}
+        {images.length > 0 ? (
+          <div 
+            className="relative w-full aspect-video mb-5 rounded-xl overflow-hidden bg-zinc-200 group-image cursor-zoom-in"
+            onClick={() => setIsLightboxOpen(true)}
+          >
+            <motion.img
+              key={currentImageIndex}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              src={images[currentImageIndex]}
+              alt={`${title} - Foto ${currentImageIndex + 1}`}
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+            
+            <div className="absolute top-3 right-3 px-2 py-1 bg-black/50 backdrop-blur-md rounded-lg text-[10px] font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity">
+              Clique para ampliar
+            </div>
+
+            {images.length > 1 && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+                  }}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentImageIndex((prev) => (prev + 1) % images.length);
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                  {images.map((_, idx) => (
+                    <div
+                      key={idx}
+                      className={`w-1.5 h-1.5 rounded-full transition-all ${
+                        idx === currentImageIndex ? "bg-white w-3" : "bg-white/50"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="relative w-full aspect-video mb-5 rounded-xl overflow-hidden bg-zinc-100 flex items-center justify-center border border-dashed border-zinc-200 group-hover:border-emerald-200 transition-all">
+            <div className="flex flex-col items-center gap-2 text-zinc-400 group-hover:text-emerald-500 transition-colors">
+              <div className="p-3 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform">
+                <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
+              </div>
+              <span className="text-[10px] font-medium uppercase tracking-widest">Sem foto disponível</span>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className="w-10 h-10 shrink-0 rounded-xl bg-white border border-zinc-100 flex items-center justify-center text-zinc-400 group-hover:text-emerald-600 group-hover:border-emerald-100 transition-colors relative">
@@ -213,9 +291,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-bold text-zinc-900 text-sm group-hover:text-emerald-700 transition-colors uppercase tracking-tight">{title}</h3>
-                {chunk.maps?.subCategory && typeof chunk.maps.subCategory === 'string' && (chunk.maps.subCategory.includes(' | ') ? chunk.maps.subCategory.split(' | ') : chunk.maps.subCategory.split(/,\s*(?![^()]*\))/)).map((cat, idx) => {
-                  // If it's a known subcategory name that contains commas, ensure we didn't split it incorrectly
-                  // But with ' | ' as primary separator, this is much safer.
+                {subCategories.map((cat, idx) => {
                   return (
                     <span key={idx} className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
                       {cat.trim()}
@@ -395,16 +471,16 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
               >
                 {chunk.maps?.id ? <Edit className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
               </button>
-              {chunk.maps?.id && (
-                <button 
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="p-2 rounded-xl bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 transition-all disabled:opacity-50"
-                  title="Excluir"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
+                    {chunk.maps?.id && (
+                      <button 
+                        onClick={handleDelete}
+                        disabled={isDeleting}
+                        className="p-2 rounded-xl bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 transition-all disabled:opacity-50"
+                        title="Excluir"
+                      >
+                        {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
             </div>
           )}
         </div>
@@ -494,6 +570,79 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Lightbox Modal */}
+      <AnimatePresence>
+        {isLightboxOpen && images.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4 flex-col gap-6"
+            onClick={() => setIsLightboxOpen(false)}
+          >
+            <button 
+              className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors z-10"
+              onClick={() => setIsLightboxOpen(false)}
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div 
+              className="relative w-full max-w-5xl aspect-video sm:aspect-[16/9] bg-black rounded-2xl overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <motion.img
+                key={currentImageIndex}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                src={images[currentImageIndex]}
+                alt={`${title} - Foto ${currentImageIndex + 1}`}
+                className="w-full h-full object-contain"
+                referrerPolicy="no-referrer"
+              />
+
+              {images.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors border border-white/10"
+                  >
+                    <ChevronLeft className="w-6 h-6" />
+                  </button>
+                  <button
+                    onClick={() => setCurrentImageIndex((prev) => (prev + 1) % images.length)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors border border-white/10"
+                  >
+                    <ChevronRight className="w-6 h-6" />
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-white font-bold text-lg uppercase tracking-widest">{title}</p>
+              <div className="flex gap-2">
+                {images.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentImageIndex(idx);
+                    }}
+                    className={`w-12 h-1.5 rounded-full transition-all ${
+                      idx === currentImageIndex ? "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]" : "bg-white/20 hover:bg-white/40"
+                    }`}
+                  />
+                ))}
+              </div>
+              <p className="text-zinc-500 text-xs font-medium mt-2">
+                FOTO {currentImageIndex + 1} DE {images.length}
+              </p>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </>
