@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Search, User as UserIcon, Shield, ShieldAlert, Loader2 } from 'lucide-react';
+import { X, Search, User as UserIcon, Shield, ShieldAlert, Loader2, Pencil, Trash2, Eye } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -11,6 +11,7 @@ interface Profile {
   full_name?: string | null;
   city?: string | null;
   state?: string | null;
+  phone?: string | null;
 }
 
 export const UserManagementModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
@@ -19,6 +20,7 @@ export const UserManagementModal = ({ isOpen, onClose }: { isOpen: boolean; onCl
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<Profile | null>(null);
 
   const isAdmin = currentUser?.email === 'alcidinopk@gmail.com';
 
@@ -58,6 +60,51 @@ export const UserManagementModal = ({ isOpen, onClose }: { isOpen: boolean; onCl
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
     } catch (err) {
       console.error('Error updating role:', err);
+    } finally {
+      setIsUpdating(null);
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.')) return;
+
+    setIsUpdating(userId);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (error) throw error;
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    } catch (err) {
+      console.error('Error deleting user:', err);
+    } finally {
+      setIsUpdating(null);
+    }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    setIsUpdating(editingUser.id);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: editingUser.full_name,
+          city: editingUser.city,
+          state: editingUser.state,
+          phone: editingUser.phone
+        })
+        .eq('id', editingUser.id);
+
+      if (error) throw error;
+      setUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
+      setEditingUser(null);
+    } catch (err) {
+      console.error('Error updating user:', err);
     } finally {
       setIsUpdating(null);
     }
@@ -153,6 +200,25 @@ export const UserManagementModal = ({ isOpen, onClose }: { isOpen: boolean; onCl
 
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => setEditingUser(user)}
+                        className="p-2 text-zinc-400 hover:text-[#00897b] hover:bg-[#00897b]/10 rounded-xl transition-all"
+                        title="Editar / Visualizar"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      
+                      <button
+                        onClick={() => deleteUser(user.id)}
+                        disabled={isUpdating === user.id || user.id === currentUser?.id}
+                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+
+                      <div className="w-px h-6 bg-zinc-100 mx-1 hidden sm:block" />
+
+                      <button
                         onClick={() => toggleRole(user.id, user.role)}
                         disabled={isUpdating === user.id}
                         className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
@@ -186,6 +252,105 @@ export const UserManagementModal = ({ isOpen, onClose }: { isOpen: boolean; onCl
             )}
           </div>
         </motion.div>
+
+        {/* Edit Modal Overlay */}
+        <AnimatePresence>
+          {editingUser && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                className="bg-white w-full max-w-lg rounded-[32px] overflow-hidden shadow-2xl"
+              >
+                <div className="p-8 border-b border-zinc-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#00897b]/10 flex items-center justify-center text-[#00897b]">
+                      <Pencil className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-zinc-900">Editar Cadastro</h3>
+                      <p className="text-xs text-zinc-500">{editingUser.email}</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setEditingUser(null)}
+                    className="p-2 hover:bg-zinc-100 rounded-full transition-colors"
+                  >
+                    <X className="w-5 h-5 text-zinc-400" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleUpdateUser} className="p-8 space-y-6">
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                      <input 
+                        value={editingUser.full_name || ''}
+                        onChange={e => setEditingUser({ ...editingUser, full_name: e.target.value })}
+                        className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#00897b]/10 focus:border-[#00897b] transition-all text-sm"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Cidade</label>
+                        <input 
+                          value={editingUser.city || ''}
+                          onChange={e => setEditingUser({ ...editingUser, city: e.target.value })}
+                          className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#00897b]/10 focus:border-[#00897b] transition-all text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Estado (UF)</label>
+                        <input 
+                          value={editingUser.state || ''}
+                          onChange={e => setEditingUser({ ...editingUser, state: e.target.value })}
+                          className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#00897b]/10 focus:border-[#00897b] transition-all text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Telefone</label>
+                      <input 
+                        value={editingUser.phone || ''}
+                        onChange={e => setEditingUser({ ...editingUser, phone: e.target.value })}
+                        className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#00897b]/10 focus:border-[#00897b] transition-all text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-4">
+                    <button 
+                      type="button"
+                      onClick={() => setEditingUser(null)}
+                      className="flex-1 py-4 text-zinc-500 font-bold hover:bg-zinc-100 rounded-2xl transition-all"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isUpdating === editingUser.id}
+                      className="flex-[2] py-4 bg-[#00897b] text-white rounded-2xl font-bold hover:bg-[#00796b] transition-all shadow-lg shadow-emerald-100 disabled:opacity-50 flex items-center justify-center"
+                    >
+                      {isUpdating === editingUser.id ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        'Salvar Alterações'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </AnimatePresence>
   );

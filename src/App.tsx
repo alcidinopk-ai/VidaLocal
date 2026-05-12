@@ -836,12 +836,20 @@ export default function App() {
                       Perfil
                     </button>
                     {user.email === 'alcidinopk@gmail.com' && (
-                      <button 
-                        onClick={() => setView('maintenance')}
-                        className="hidden sm:block text-[10px] font-bold text-[#f57c00] hover:underline transition-colors uppercase tracking-widest"
-                      >
-                        Manutenção
-                      </button>
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <button 
+                          onClick={() => setIsUserManagementModalOpen(true)}
+                          className="text-[9px] sm:text-[10px] font-bold text-[#00897b] hover:underline transition-colors uppercase tracking-tight sm:tracking-widest"
+                        >
+                          Usuários
+                        </button>
+                        <button 
+                          onClick={() => setView('maintenance')}
+                          className="text-[9px] sm:text-[10px] font-bold text-[#f57c00] hover:underline transition-colors uppercase tracking-tight sm:tracking-widest"
+                        >
+                          Manutenção
+                        </button>
+                      </div>
                     )}
                     <button 
                       onClick={() => signOut()}
