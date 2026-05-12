@@ -89,25 +89,30 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export default function App() {
   const { currentCity, isLoading: isCityLoading, skipLoading } = useCity();
-  const { user, profile, signOut, isAuthModalOpen, setIsAuthModalOpen } = useAuth();
+  const { user, profile, isLoading: isAuthLoading, signOut, isAuthModalOpen, setIsAuthModalOpen } = useAuth();
   const [showSkip, setShowSkip] = useState(false);
 
   // Auth callback handling (runs in the popup)
-  const [isAuthCallback, setIsAuthCallback] = useState(window.location.pathname === '/auth/callback');
+  const isAuthCallback = window.location.pathname === '/auth/callback';
 
   useEffect(() => {
     if (isAuthCallback) {
       const handleCallback = async () => {
+        console.log('[Auth] Handler in callback page running...');
         try {
           // Supabase exchanges the code for a session automatically if detectSessionInUrl is true
-          // but we call getSession to be sure it's processed.
-          await supabase.auth.getSession();
+          // but we call getSession to be sure it's processed and we have the session.
+          const { data, error } = await supabase.auth.getSession();
+          if (error) throw error;
+          
+          console.log('[Auth] Callback success, session:', data.session ? 'Found' : 'Not found');
           
           if (window.opener) {
             window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
             // Give it a moment to send the message before closing
-            setTimeout(() => window.close(), 500);
+            setTimeout(() => window.close(), 800);
           } else {
+            // If opened directly (not as popup), just go home
             window.location.href = '/';
           }
         } catch (err: any) {
@@ -117,7 +122,11 @@ export default function App() {
               type: 'OAUTH_AUTH_ERROR', 
               error: err.message || 'Falha ao processar o login.' 
             }, '*');
-            setTimeout(() => window.close(), 1000);
+            setTimeout(() => window.close(), 1500);
+          } else {
+            // Show error on screen if not in popup
+            alert('Erro de autenticação: ' + err.message);
+            window.location.href = '/';
           }
         }
       };
@@ -745,24 +754,28 @@ export default function App() {
 
   if (isAuthCallback) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-white p-6 text-center">
-        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6" />
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-zinc-50 p-6 text-center">
+        <div className="w-16 h-16 bg-[#f57c00] rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg animate-bounce">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </div>
         <h2 className="text-xl font-bold text-zinc-900 mb-2">Autenticando...</h2>
-        <p className="text-zinc-500">Por favor, aguarde enquanto processamos seu login.</p>
+        <p className="text-zinc-500 max-w-xs mx-auto">Por favor, aguarde enquanto finalizamos sua identificação.</p>
       </div>
     );
   }
 
-  if (isCityLoading) {
+  if (isAuthLoading || isCityLoading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-white">
-        <div className="w-20 h-20 bg-[#00897b] rounded-3xl flex items-center justify-center text-white mb-6 animate-pulse">
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-white p-6 text-center">
+        <div className="w-20 h-20 bg-[#00897b] rounded-3xl flex items-center justify-center text-white mb-6 animate-pulse shadow-xl">
           <MapPin className="w-10 h-10" />
         </div>
         <h1 className="text-2xl font-bold text-zinc-900">VidaLocal</h1>
-        <p className="text-sm text-zinc-400 mt-2 animate-bounce">Detectando sua localização...</p>
+        <p className="text-sm text-zinc-400 mt-2">
+          {isAuthLoading ? 'Recuperando sua sessão...' : 'Detectando sua localização...'}
+        </p>
         
-        {showSkip && (
+        {isCityLoading && showSkip && (
           <button 
             onClick={skipLoading}
             className="mt-8 px-6 py-2 text-sm font-medium text-zinc-500 hover:text-[#00897b] transition-colors border border-zinc-200 rounded-full"

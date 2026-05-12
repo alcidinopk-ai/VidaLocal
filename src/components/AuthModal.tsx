@@ -157,13 +157,18 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
             clearInterval(checkPopup);
             console.log('[Auth] Popup closed by user or success');
             
-            // Give it a moment to process the session
-            setTimeout(async () => {
+            // Poll for session a few times
+            let attempts = 0;
+            const pollSession = setInterval(async () => {
+              attempts++;
               const { data: sessionData } = await supabase.auth.getSession();
               if (sessionData.session) {
-                console.log('[Auth] Session found after popup close');
+                console.log('[Auth] Session found after popup close on attempt', attempts);
+                clearInterval(pollSession);
                 onClose();
-              } else {
+              } else if (attempts > 5) {
+                console.log('[Auth] Polling finished, no session found');
+                clearInterval(pollSession);
                 setIsGoogleLoading(false);
               }
             }, 1000);
@@ -205,10 +210,12 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
             </div>
             <div>
               <h2 className="text-xl font-bold text-zinc-900">
-                {isLogin ? 'Entrar no VidaLocal' : 'Criar Conta'}
+                {isLogin ? 'Identifique-se no VidaLocal' : 'Fazer parte da comunidade'}
               </h2>
-              <p className="text-xs text-zinc-500">
-                {isLogin ? 'Bem-vindo de volta!' : 'Junte-se a nós hoje'}
+              <p className="text-xs text-zinc-500 leading-relaxed max-w-[240px]">
+                {isLogin 
+                  ? 'Para interagir e aproveitar o melhor da cidade, você precisa se identificar primeiro' 
+                  : 'Estamos felizes em ter você aqui! Vamos começar seu cadastro?'}
               </p>
             </div>
           </div>
@@ -349,7 +356,7 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
                   onClick={() => setIsLogin(!isLogin)}
                   className="text-xs font-bold text-zinc-500 hover:text-[#f57c00] transition-colors"
                 >
-                  {isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Entre agora'}
+                  {isLogin ? 'Ainda não faz parte? Cadastre-se com elegância' : 'Já é da casa? Entre agora'}
                 </button>
               </div>
             </form>

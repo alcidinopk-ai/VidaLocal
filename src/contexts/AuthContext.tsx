@@ -35,7 +35,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, currentUser?: User | null) => {
+    console.log('[AuthContext] Fetching profile for:', userId);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -44,19 +45,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .maybeSingle(); 
       
       if (error) {
-        console.error('Error fetching profile:', error);
+        console.error('[AuthContext] Error fetching profile:', error);
         setRole('user');
         return;
       }
       
       if (!data) {
+        console.log('[AuthContext] No profile found, creating one...');
         // If profile doesn't exist, create it as a regular user
+        const targetUser = currentUser || user;
         const newProfileData = { 
           id: userId, 
           role: 'user' as const, 
-          email: user?.email || '',
-          full_name: user?.user_metadata?.full_name || '',
-          avatar_url: user?.user_metadata?.avatar_url || ''
+          email: targetUser?.email || '',
+          full_name: targetUser?.user_metadata?.full_name || '',
+          avatar_url: targetUser?.user_metadata?.avatar_url || ''
         };
         
         const { data: newProfile, error: createError } = await supabase
@@ -66,55 +69,75 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .single();
         
         if (!createError && newProfile) {
+          console.log('[AuthContext] Profile created successfully');
           setProfile(newProfile);
           setRole(newProfile.role);
         } else {
-          console.error('Error creating profile:', createError);
+          console.error('[AuthContext] Error creating profile:', createError);
           setRole('user');
         }
       } else {
+        console.log('[AuthContext] Profile loaded:', data.role);
         setProfile(data);
         setRole(data.role);
       }
     } catch (err) {
-      console.error('Error in fetchProfile:', err);
+      console.error('[AuthContext] Unexpected error in fetchProfile:', err);
       setRole('user');
     }
   };
 
   const refreshProfile = async () => {
     if (user) {
-      await fetchProfile(user.id);
+      await fetchProfile(user.id, user);
     }
   };
 
   useEffect(() => {
+    console.log('[AuthContext] Initializing auth state...');
     const isPlaceholder = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
     
     if (isPlaceholder) {
+      console.warn('[AuthContext] Supabase placeholder detected');
       setIsLoading(false);
       return;
     }
 
     // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('[AuthContext] Get session error:', error);
+        setIsLoading(false);
+        return;
+      }
+      
       const currentUser = session?.user ?? null;
+      console.log('[AuthContext] Initial session:', currentUser ? 'Found' : 'Not found');
       setUser(currentUser);
       if (currentUser) {
-        fetchProfile(currentUser.id).finally(() => setIsLoading(false));
+        fetchProfile(currentUser.id, currentUser).finally(() => {
+          setIsLoading(false);
+          console.log('[AuthContext] Initial load complete (user logged in)');
+        });
       } else {
         setProfile(null);
         setRole(null);
         setIsLoading(false);
+        console.log('[AuthContext] Initial load complete (no user)');
       }
     });
 
     // Listen for changes on auth state (logged in, signed out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[AuthContext] Auth state change event:', event);
       const currentUser = session?.user ?? null;
       setUser(currentUser);
+      
       if (currentUser) {
-        fetchProfile(currentUser.id).finally(() => setIsLoading(false));
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'USER_UPDATED' && !profile)) {
+          setIsLoading(true); // Re-show loading if we need to fetch profile
+          fetchProfile(currentUser.id, currentUser).finally(() => setIsLoading(false));
+        }
       } else {
         setProfile(null);
         setRole(null);
