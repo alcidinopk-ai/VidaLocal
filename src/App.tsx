@@ -823,37 +823,29 @@ export default function App() {
             </button>
 
             {user ? (
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="hidden sm:block text-xs font-bold text-zinc-900 truncate max-w-[120px]">
-                    {profile?.full_name || user.email}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="text-right flex flex-col justify-center">
+                  <p className="text-[10px] sm:text-xs font-bold text-zinc-900 truncate max-w-[65px] sm:max-w-[150px]">
+                    {profile?.full_name || user.email?.split('@')[0]}
                   </p>
-                  <div className="flex items-center justify-end gap-2 sm:gap-3">
+                  <div className="flex items-center justify-end gap-1.5 sm:gap-3">
                     <button 
                       onClick={() => setIsProfileModalOpen(true)}
-                      className="text-[10px] font-bold text-[#00897b] hover:underline transition-colors uppercase tracking-widest"
+                      className="text-[9px] sm:text-[10px] font-bold text-[#00897b] hover:underline transition-colors uppercase tracking-tight sm:tracking-widest"
                     >
                       Perfil
                     </button>
                     {user.email === 'alcidinopk@gmail.com' && (
-                      <>
-                        <button 
-                          onClick={() => setIsUserManagementModalOpen(true)}
-                          className="text-[10px] font-bold text-[#00897b] hover:underline transition-colors uppercase tracking-widest"
-                        >
-                          Usuários
-                        </button>
-                        <button 
-                          onClick={() => setView('maintenance')}
-                          className="text-[10px] font-bold text-[#f57c00] hover:underline transition-colors uppercase tracking-widest"
-                        >
-                          Manutenção
-                        </button>
-                      </>
+                      <button 
+                        onClick={() => setView('maintenance')}
+                        className="hidden sm:block text-[10px] font-bold text-[#f57c00] hover:underline transition-colors uppercase tracking-widest"
+                      >
+                        Manutenção
+                      </button>
                     )}
                     <button 
                       onClick={() => signOut()}
-                      className="text-[10px] font-bold text-zinc-400 hover:text-red-500 transition-colors uppercase tracking-widest"
+                      className="text-[9px] sm:text-[10px] font-bold text-zinc-400 hover:text-red-500 transition-colors uppercase tracking-tight sm:tracking-widest"
                     >
                       Sair
                     </button>
@@ -861,9 +853,9 @@ export default function App() {
                 </div>
                 <button 
                   onClick={() => setIsUserEstModalOpen(true)}
-                  className="w-9 h-9 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-600 border border-zinc-200 hover:bg-zinc-200 transition-all"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-600 border border-zinc-200 hover:bg-zinc-200 transition-all shrink-0"
                 >
-                  <UserIcon className="w-5 h-5" />
+                  <UserIcon className="w-4 h-4 sm:w-5 h-5" />
                 </button>
               </div>
             ) : (
@@ -878,7 +870,7 @@ export default function App() {
             
             <button 
               onClick={() => setIsMapOpen(!isMapOpen)}
-              className={`p-2 rounded-xl transition-all flex items-center gap-2 ${
+              className={`hidden sm:flex p-2 rounded-xl transition-all items-center gap-2 ${
                 isMapOpen 
                   ? 'bg-[#00897b] text-white shadow-lg shadow-emerald-100' 
                   : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
