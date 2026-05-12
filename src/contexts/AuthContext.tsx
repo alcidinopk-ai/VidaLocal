@@ -22,6 +22,8 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (isOpen: boolean) => void;
+  isRegisterUserModalOpen: boolean;
+  setIsRegisterUserModalOpen: (isOpen: boolean) => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -34,6 +36,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<'admin' | 'user' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isRegisterUserModalOpen, setIsRegisterUserModalOpen] = useState(false);
 
   const fetchProfile = async (userId: string, currentUser?: User | null) => {
     console.log('[AuthContext] Fetching profile for:', userId);
@@ -59,7 +62,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           role: 'user' as const, 
           email: targetUser?.email || '',
           full_name: targetUser?.user_metadata?.full_name || '',
-          avatar_url: targetUser?.user_metadata?.avatar_url || ''
+          avatar_url: targetUser?.user_metadata?.avatar_url || '',
+          state: targetUser?.user_metadata?.state || '',
+          city: targetUser?.user_metadata?.city || '',
+          phone: targetUser?.user_metadata?.phone || ''
         };
         
         const { data: newProfile, error: createError } = await supabase
@@ -161,7 +167,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       role, 
       isLoading, 
       isAuthModalOpen, 
-      setIsAuthModalOpen, 
+      setIsAuthModalOpen,
+      isRegisterUserModalOpen,
+      setIsRegisterUserModalOpen,
       signOut, 
       refreshProfile 
     }}>

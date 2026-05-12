@@ -41,6 +41,7 @@ import { CitySelectorButton } from './components/CitySelector';
 import { RegisterEstablishmentModal } from './components/RegisterEstablishmentModal';
 import { UserEstablishmentsModal } from './components/UserEstablishmentsModal';
 import { AuthModal } from './components/AuthModal';
+import { RegisterModal as RegisterUserModal } from './components/RegisterModal';
 import { FeaturedEstablishments } from './components/FeaturedEstablishments';
 import { NearbyEstablishments } from './components/NearbyEstablishments';
 import { UserProfileModal } from './components/UserProfileModal';
@@ -89,7 +90,16 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export default function App() {
   const { currentCity, isLoading: isCityLoading, skipLoading } = useCity();
-  const { user, profile, isLoading: isAuthLoading, signOut, isAuthModalOpen, setIsAuthModalOpen } = useAuth();
+  const { 
+    user, 
+    profile, 
+    isLoading: isAuthLoading, 
+    signOut, 
+    isAuthModalOpen, 
+    setIsAuthModalOpen,
+    isRegisterUserModalOpen,
+    setIsRegisterUserModalOpen
+  } = useAuth();
   const [showSkip, setShowSkip] = useState(false);
 
   // Auth callback handling (runs in the popup)
@@ -859,7 +869,7 @@ export default function App() {
             ) : (
               <button 
                 onClick={() => setIsAuthModalOpen(true)}
-                className="px-4 py-2 bg-zinc-900 text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-all flex items-center gap-2"
+                className="px-6 py-2 bg-zinc-900 text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-all flex items-center gap-2 shadow-sm"
               >
                 <UserIcon className="w-4 h-4" />
                 Entrar
@@ -1495,6 +1505,14 @@ export default function App() {
       <AuthModal 
         isOpen={isAuthModalOpen} 
         onClose={() => setIsAuthModalOpen(false)} 
+      />
+      <RegisterUserModal
+        isOpen={isRegisterUserModalOpen}
+        onClose={() => setIsRegisterUserModalOpen(false)}
+        onSwitchToLogin={() => {
+          setIsRegisterUserModalOpen(false);
+          setIsAuthModalOpen(true);
+        }}
       />
     </div>
   );
