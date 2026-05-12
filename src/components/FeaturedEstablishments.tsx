@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
-import { Star, MapPin, Share2, ExternalLink, MessageCircle, Navigation2, Crown, CheckCircle2, Clock } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Star, MapPin, Share2, ExternalLink, MessageCircle, Navigation2, Crown, CheckCircle2, Clock, X } from 'lucide-react';
 import { useCity } from '../contexts/CityContext';
 import { getBusinessStatus } from '../utils/hours';
+import { EstablishmentCard } from './EstablishmentCard';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Establishment {
   id: string;
@@ -17,6 +19,8 @@ interface Establishment {
   user_id?: string;
   is_premium?: boolean;
   is_verified?: boolean;
+  is_featured?: boolean;
+  images?: string[];
 }
 
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -34,8 +38,21 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { latitude: number; longitude: number } }) => {
   const { currentCity } = useCity();
+  const { user, setIsAuthModalOpen } = useAuth();
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedEst, setSelectedEst] = useState<Establishment | null>(null);
+
+  const [showHoursId, setShowHoursId] = useState<string | null>(null);
+
+  const handleAction = (e: React.MouseEvent, action: () => void) => {
+    e.stopPropagation();
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    action();
+  };
 
   useEffect(() => {
     const fetchFeatured = async () => {
@@ -48,9 +65,27 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
           let sortedData = [...data];
           if (userLocation) {
             sortedData.sort((a, b) => {
+              // Priority 1: Premium
+              if (a.is_premium && !b.is_premium) return -1;
+              if (!a.is_premium && b.is_premium) return 1;
+
+              // Priority 2: Featured
+              if (a.is_featured && !b.is_featured) return -1;
+              if (!a.is_featured && b.is_featured) return 1;
+
+              // Priority 3: Distance
               const distA = calculateDistance(userLocation.latitude, userLocation.longitude, a.latitude, a.longitude);
               const distB = calculateDistance(userLocation.latitude, userLocation.longitude, b.latitude, b.longitude);
               return distA - distB;
+            });
+          } else {
+            // Even without location, sort premium then featured
+            sortedData.sort((a, b) => {
+              if (a.is_premium && !b.is_premium) return -1;
+              if (!a.is_premium && b.is_premium) return 1;
+              if (a.is_featured && !b.is_featured) return -1;
+              if (!a.is_featured && b.is_featured) return 1;
+              return 0;
             });
           }
           setEstablishments(sortedData);
@@ -125,101 +160,191 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
           const statusInfo = getBusinessStatus(est.hours);
           
           return (
-            <motion.div 
-              key={est.id}
-              whileHover={{ y: -5 }}
-              className="group bg-white border border-zinc-100 rounded-[32px] p-5 hover:shadow-xl hover:shadow-zinc-200 transition-all flex flex-col"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 group-hover:text-[#f57c00] group-hover:bg-orange-50 transition-all">
-                  <MapPin className="w-6 h-6" />
-                </div>
-                <div className="flex items-center gap-1 px-2.5 py-1 bg-zinc-50 rounded-full">
-                  <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                  <span className="text-[10px] font-bold text-zinc-600">{est.rating}</span>
-                </div>
-              </div>
-
-              <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <h4 className="font-bold text-zinc-900 text-sm group-hover:text-[#f57c00] transition-colors">{est.name}</h4>
-                  {est.is_premium && (
-                    <div className="flex items-center gap-1 px-1.5 py-0.5 bg-orange-500 text-white text-[8px] font-bold rounded-full shadow-sm">
-                      <Crown className="w-2 h-2" />
-                      Premium
+            <React.Fragment key={est.id}>
+              <motion.div 
+                whileHover={{ y: -5 }}
+                className="group bg-white border border-zinc-100 rounded-[32px] overflow-hidden hover:shadow-xl hover:shadow-zinc-200 transition-all flex flex-col cursor-pointer"
+                onClick={() => setSelectedEst(est)}
+              >
+                <div className="relative w-full aspect-video bg-zinc-100 overflow-hidden">
+                  {est.images && est.images.length > 0 ? (
+                    <img 
+                      src={est.images[0]} 
+                      alt={est.name} 
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-zinc-300">
+                      <MapPin className="w-8 h-8" />
                     </div>
                   )}
-                  {est.is_verified && (
-                    <div className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500 text-white text-[8px] font-bold rounded-full shadow-sm">
-                      <CheckCircle2 className="w-2 h-2" />
-                      Verificado
-                    </div>
-                  )}
-                </div>
-                <p className="text-[10px] font-bold text-[#00897b] uppercase tracking-wider mb-2">{est.sub_category}</p>
-                <p className="text-xs text-zinc-400 line-clamp-1">{est.address}</p>
-                <div className="flex items-center gap-3 mt-2">
-                  {est.whatsapp && (
-                    <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                      <MessageCircle className="w-2.5 h-2.5" />
-                      {est.whatsapp}
-                    </p>
-                  )}
-                  <div className={`flex items-center gap-1 text-[10px] font-bold ${statusInfo.color}`}>
-                    <Clock className="w-2.5 h-2.5" />
-                    {statusInfo.label}
+                  
+                  <div className="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
+                    {est.is_premium && (
+                      <div className="flex items-center gap-1 px-2 py-1 bg-orange-500 text-white text-[8px] font-bold rounded-full shadow-lg">
+                        <Crown className="w-2.5 h-2.5" />
+                        PREMIUM
+                      </div>
+                    )}
+                    {est.is_verified && (
+                      <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500 text-white text-[8px] font-bold rounded-full shadow-lg">
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                        VERIFICADO
+                      </div>
+                    )}
                   </div>
-                  {est.hours && (
-                    <p className="text-[9px] text-zinc-500 font-medium">
-                      {est.hours}
-                    </p>
+
+                  <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 bg-black/40 backdrop-blur-md text-white rounded-full">
+                    <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
+                    <span className="text-[9px] font-bold">{est.rating || '5.0'}</span>
+                  </div>
+
+                    <div className="absolute bottom-3 inset-x-3 flex items-center justify-between gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <a 
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${est.latitude},${est.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!user) {
+                            e.preventDefault();
+                            setIsAuthModalOpen(true);
+                          }
+                        }}
+                        className="flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-all shadow-xl"
+                        title="Traçar Rota"
+                      >
+                        <Navigation2 className="w-4 h-4" />
+                      </a>
+                      <a 
+                        href={whatsappUrl}
+                        target={whatsappUrl !== "#" ? "_blank" : undefined}
+                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (whatsappUrl === "#") {
+                            e.preventDefault();
+                            return;
+                          }
+                          if (!user) {
+                            e.preventDefault();
+                            setIsAuthModalOpen(true);
+                          }
+                        }}
+                        className={`flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white transition-all shadow-xl ${
+                          whatsappUrl !== "#" ? "hover:bg-black/40" : "opacity-40 cursor-not-allowed"
+                        }`}
+                        title="WhatsApp"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </a>
+                      <button 
+                        onClick={(e) => {
+                          handleAction(e, () => {
+                            const text = `Confira ${est.name} no VidaLocal!`;
+                            const url = `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`;
+                            if (navigator.share) {
+                              navigator.share({ title: est.name, text, url });
+                            } else {
+                              window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
+                            }
+                          });
+                        }}
+                        className="flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-all shadow-xl"
+                        title="Compartilhar"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                </div>
+
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="mb-1">
+                    <h4 className="font-bold text-zinc-900 text-sm group-hover:text-[#f57c00] transition-colors">{est.name}</h4>
+                  </div>
+                  <p className="text-[10px] font-bold text-[#00897b] uppercase tracking-wider mb-2">{est.sub_category}</p>
+                  <p className="text-xs text-zinc-400 line-clamp-1">{est.address}</p>
+                  <div className="flex items-center gap-3 mt-2">
+                    {est.whatsapp && (
+                      <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                        <MessageCircle className="w-2.5 h-2.5" />
+                        {est.whatsapp}
+                      </p>
+                    )}
+                    <div 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowHoursId(showHoursId === est.id ? null : est.id);
+                      }}
+                      className={`flex items-center gap-1 text-[10px] font-bold cursor-pointer hover:opacity-70 transition-opacity ${statusInfo.color}`}
+                    >
+                      <Clock className="w-2.5 h-2.5" />
+                      {statusInfo.label}
+                    </div>
+                  </div>
+                  
+                  {showHoursId === est.id && est.hours && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="mt-2 p-2 bg-zinc-50 rounded-xl border border-zinc-100"
+                    >
+                      <p className="text-[9px] text-zinc-500 font-medium whitespace-pre-line leading-relaxed">
+                        {est.hours}
+                      </p>
+                    </motion.div>
                   )}
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-2 mt-6 pt-4 border-t border-zinc-50">
-                <a 
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${est.latitude},${est.longitude}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#f57c00] text-white rounded-xl text-[10px] font-bold hover:bg-[#e65100] transition-all shadow-sm"
-                >
-                  <Navigation2 className="w-3.5 h-3.5" />
-                  Traçar Rota
-                </a>
-                <div className="flex items-center gap-2">
-                  <a 
-                    href={whatsappUrl}
-                    target={whatsappUrl !== "#" ? "_blank" : undefined}
-                    rel="noopener noreferrer"
-                    onClick={(e) => whatsappUrl === "#" && e.preventDefault()}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-bold transition-all ${
-                      whatsappUrl !== "#" ? "bg-zinc-900 text-white hover:bg-zinc-800" : "bg-zinc-100 text-zinc-400 cursor-not-allowed"
-                    }`}
-                  >
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    WhatsApp
-                  </a>
-                  <button 
-                    onClick={() => {
-                      const text = `Confira ${est.name} no VidaLocal!`;
-                      const url = `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`;
-                      if (navigator.share) {
-                        navigator.share({ title: est.name, text, url });
-                      } else {
-                        window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
-                      }
-                    }}
-                    className="p-2.5 rounded-xl bg-zinc-50 text-zinc-400 hover:text-[#f57c00] hover:bg-orange-50 transition-all"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+              </motion.div>
+            </React.Fragment>
           );
         })}
       </div>
+
+      <AnimatePresence>
+        {selectedEst && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-0 lg:p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setSelectedEst(null)}
+            />
+            <div className="relative w-full h-full lg:h-auto overflow-hidden">
+              <EstablishmentCard 
+                chunk={{
+                  maps: {
+                    id: selectedEst.id,
+                    title: selectedEst.name,
+                    uri: `https://www.google.com/maps/search/?api=1&query=${selectedEst.latitude},${selectedEst.longitude}`,
+                    location: {
+                      latitude: selectedEst.latitude,
+                      longitude: selectedEst.longitude
+                    },
+                    rating: selectedEst.rating,
+                    address: selectedEst.address,
+                    hours: selectedEst.hours,
+                    whatsapp: selectedEst.whatsapp,
+                    is_premium: selectedEst.is_premium,
+                    is_verified: selectedEst.is_verified,
+                    images: selectedEst.images,
+                    subCategory: selectedEst.sub_category
+                  }
+                } as any}
+                distance={userLocation ? (() => {
+                  const d = calculateDistance(userLocation.latitude, userLocation.longitude, selectedEst.latitude, selectedEst.longitude);
+                  return d < 1 ? `${(d * 1000).toFixed(0)} m` : `${d.toFixed(1)} km`;
+                })() : '---'}
+                userLocation={userLocation}
+                defaultOpen={true}
+                onCloseDetails={() => setSelectedEst(null)}
+              />
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

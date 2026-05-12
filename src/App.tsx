@@ -44,6 +44,7 @@ import { AuthModal } from './components/AuthModal';
 import { FeaturedEstablishments } from './components/FeaturedEstablishments';
 import { NearbyEstablishments } from './components/NearbyEstablishments';
 import { UserProfileModal } from './components/UserProfileModal';
+import { UserManagementModal } from './components/UserManagementModal';
 
 import { MaintenanceTools } from './components/MaintenanceTools';
 import { ExportTools } from './components/ExportTools';
@@ -88,7 +89,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export default function App() {
   const { currentCity, isLoading: isCityLoading, skipLoading } = useCity();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, isAuthModalOpen, setIsAuthModalOpen } = useAuth();
   const [showSkip, setShowSkip] = useState(false);
 
   // Auth callback handling (runs in the popup)
@@ -152,7 +153,7 @@ export default function App() {
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isUserEstModalOpen, setIsUserEstModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<{ intents: any[], types: string[] }>({ intents: [], types: [] });
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [view, setView] = useState<'home' | 'subcategories' | 'chat' | 'maintenance'>('home');
@@ -297,11 +298,25 @@ export default function App() {
       const res = await fetch(`/api/establishments/category/${categoryId}?city_id=${currentCity.id}`);
       let data = await res.json();
       
-      if (location && Array.isArray(data)) {
+      if (Array.isArray(data)) {
         data.sort((a, b) => {
-          const distA = calculateDistance(location.latitude, location.longitude, a.latitude, a.longitude);
-          const distB = calculateDistance(location.latitude, location.longitude, b.latitude, b.longitude);
-          return distA - distB;
+          // 1. Premium priority
+          const premiumA = a.is_premium ? 1 : 0;
+          const premiumB = b.is_premium ? 1 : 0;
+          if (premiumA !== premiumB) return premiumB - premiumA;
+          
+          // 2. Featured priority
+          const featuredA = a.is_featured ? 1 : 0;
+          const featuredB = b.is_featured ? 1 : 0;
+          if (featuredA !== featuredB) return featuredB - featuredA;
+
+          // 3. Distance priority (if location is available)
+          if (location) {
+            const distA = calculateDistance(location.latitude, location.longitude, a.latitude, a.longitude);
+            const distB = calculateDistance(location.latitude, location.longitude, b.latitude, b.longitude);
+            return distA - distB;
+          }
+          return 0;
         });
       }
       
@@ -319,6 +334,14 @@ export default function App() {
       setCategoryEstablishments(prev => {
         if (!Array.isArray(prev) || prev.length === 0) return prev;
         const sorted = [...prev].sort((a, b) => {
+          const premiumA = a.is_premium ? 1 : 0;
+          const premiumB = b.is_premium ? 1 : 0;
+          if (premiumA !== premiumB) return premiumB - premiumA;
+          
+          const featuredA = a.is_featured ? 1 : 0;
+          const featuredB = b.is_featured ? 1 : 0;
+          if (featuredA !== featuredB) return featuredB - featuredA;
+
           const distA = calculateDistance(location.latitude, location.longitude, a.latitude, a.longitude);
           const distB = calculateDistance(location.latitude, location.longitude, b.latitude, b.longitude);
           return distA - distB;
@@ -329,8 +352,19 @@ export default function App() {
       setAllGroundingChunks(prev => {
         if (!Array.isArray(prev) || prev.length === 0) return prev;
         const sorted = [...prev].sort((a, b) => {
-          const locA = a.maps?.location;
-          const locB = b.maps?.location;
+          const am = a.maps;
+          const bm = b.maps;
+          
+          const premiumA = am?.is_premium ? 1 : 0;
+          const premiumB = bm?.is_premium ? 1 : 0;
+          if (premiumA !== premiumB) return premiumB - premiumA;
+          
+          const featuredA = am?.is_featured ? 1 : 0;
+          const featuredB = bm?.is_featured ? 1 : 0;
+          if (featuredA !== featuredB) return featuredB - featuredA;
+
+          const locA = am?.location;
+          const locB = bm?.location;
           if (!locA || !locB) return 0;
           const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
           const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
@@ -463,21 +497,34 @@ export default function App() {
       // Show local results immediately in the map
       if (localChunks.length > 0) {
         setAllGroundingChunks(prev => {
-          const newChunks = localChunks.filter(
-            nc => !prev.some(pc => pc.maps?.id === nc.maps?.id)
+          // Prioritize newChunks that have data from our DB
+          const filteredPrev = prev.filter(
+            pc => !localChunks.some(nc => nc.maps?.id === pc.maps?.id || (nc.maps?.title && pc.maps?.title && nc.maps.title === pc.maps.title))
           );
-          let combined = [...newChunks, ...prev];
-          if (location) {
-            combined.sort((a, b) => {
-              const locA = a.maps?.location;
-              const locB = b.maps?.location;
+          let combined = [...localChunks, ...filteredPrev];
+          combined.sort((a, b) => {
+            const am = a.maps;
+            const bm = b.maps;
+            
+            const premiumA = am?.is_premium ? 1 : 0;
+            const premiumB = bm?.is_premium ? 1 : 0;
+            if (premiumA !== premiumB) return premiumB - premiumA;
+            
+            const featuredA = am?.is_featured ? 1 : 0;
+            const featuredB = bm?.is_featured ? 1 : 0;
+            if (featuredA !== featuredB) return featuredB - featuredA;
+
+            if (location) {
+              const locA = am?.location;
+              const locB = bm?.location;
               if (!locA || !locB) return 0;
               const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
               const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
               return distA - distB;
-            });
-          }
-          return combined.slice(0, 20);
+            }
+            return 0;
+          });
+          return combined.slice(0, 30);
         });
         setIsMapOpen(true);
         
@@ -618,16 +665,28 @@ export default function App() {
         setAllGroundingChunks(prev => {
           const newChunks = chunksWithDescriptions.filter(nc => !prev.some(pc => pc.maps?.title === nc.maps?.title));
           let combined = [...newChunks, ...prev];
-          if (location) {
-            combined.sort((a, b) => {
-              const locA = a.maps?.location; const locB = b.maps?.location;
+          combined.sort((a, b) => {
+            const am = a.maps;
+            const bm = b.maps;
+            
+            const premiumA = am?.is_premium ? 1 : 0;
+            const premiumB = bm?.is_premium ? 1 : 0;
+            if (premiumA !== premiumB) return premiumB - premiumA;
+            
+            const featuredA = am?.is_featured ? 1 : 0;
+            const featuredB = bm?.is_featured ? 1 : 0;
+            if (featuredA !== featuredB) return featuredB - featuredA;
+
+            if (location) {
+              const locA = am?.location; const locB = bm?.location;
               if (!locA || !locB) return 0;
               const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
               const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
               return distA - distB;
-            });
-          }
-          return combined.slice(0, 20);
+            }
+            return 0;
+          });
+          return combined.slice(0, 30);
         });
         setIsMapOpen(true);
       }
@@ -754,12 +813,20 @@ export default function App() {
                       Perfil
                     </button>
                     {user.email === 'alcidinopk@gmail.com' && (
-                      <button 
-                        onClick={() => setView('maintenance')}
-                        className="text-[10px] font-bold text-[#f57c00] hover:underline transition-colors uppercase tracking-widest"
-                      >
-                        Manutenção
-                      </button>
+                      <>
+                        <button 
+                          onClick={() => setIsUserManagementModalOpen(true)}
+                          className="text-[10px] font-bold text-[#00897b] hover:underline transition-colors uppercase tracking-widest"
+                        >
+                          Usuários
+                        </button>
+                        <button 
+                          onClick={() => setView('maintenance')}
+                          className="text-[10px] font-bold text-[#f57c00] hover:underline transition-colors uppercase tracking-widest"
+                        >
+                          Manutenção
+                        </button>
+                      </>
                     )}
                     <button 
                       onClick={() => signOut()}
@@ -1125,7 +1192,8 @@ export default function App() {
                               cityId: est.city_id,
                               is_featured: est.is_featured,
                               is_verified: est.is_verified,
-                              is_premium: est.is_premium
+                              is_premium: est.is_premium,
+                              images: est.images || (typeof est.image === 'string' ? [est.image] : [])
                             }
                           };
                           
@@ -1406,6 +1474,10 @@ export default function App() {
       <UserProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+      />
+      <UserManagementModal
+        isOpen={isUserManagementModalOpen}
+        onClose={() => setIsUserManagementModalOpen(false)}
       />
       <AuthModal 
         isOpen={isAuthModalOpen} 

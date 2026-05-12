@@ -16,6 +16,7 @@ import {
   Trash2,
   Loader2,
   Crown,
+  Sparkles,
   Plus,
   ChevronDown,
   ChevronLeft,
@@ -25,6 +26,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Clock } from 'lucide-react';
 import { GroundingChunk } from '../services/geminiService';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import { InteractionHistory } from './InteractionHistory';
 import { RegisterEstablishmentModal } from './RegisterEstablishmentModal';
 import { getBusinessStatus } from '../utils/hours';
 
@@ -34,30 +37,42 @@ interface EstablishmentCardProps {
   userLocation?: { latitude: number; longitude: number };
   isRealLocation?: boolean;
   onRefresh?: () => void;
+  defaultOpen?: boolean;
+  onCloseDetails?: () => void;
 }
 
-type ModalType = 'avaliar' | 'reclamar' | 'indicar' | 'corrigir' | null;
+type ModalType = 'avaliar' | 'reclamar' | 'indicar' | 'comentar' | null;
 
 export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({ 
   chunk, 
   distance, 
   userLocation, 
   isRealLocation,
-  onRefresh
+  onRefresh,
+  defaultOpen = false,
+  onCloseDetails
 }) => {
-  const { user, role } = useAuth();
-  const isAdmin = user && role === 'admin';
+  const { user, profile, role, setIsAuthModalOpen } = useAuth();
+  const isAdmin = user && (role === 'admin' || user.email === 'alcidinopk@gmail.com');
   const isOwner = user && chunk.maps?.user_id === user.id;
-  const [canEdit, setCanEdit] = useState(false);
+  const [canEdit, setCanEdit] = useState(isAdmin || isOwner);
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+
+  const handleAction = (action: () => void) => {
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    action();
+  };
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [rating, setRating] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showFullHours, setShowFullHours] = useState(false);
+  const [showFullHoursModal, setShowFullHoursModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [isFullDetailsOpen, setIsFullDetailsOpen] = useState(defaultOpen);
 
   const images = chunk.maps?.images || [];
 
@@ -168,16 +183,35 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log(`Feedback for ${title} by ${user?.email}:`, { type: activeModal, text: feedbackText, rating });
-    setIsSubmitted(true);
-    setTimeout(() => {
-      setIsSubmitted(false);
-      setActiveModal(null);
-      setFeedbackText('');
-      setRating(0);
-    }, 2000);
+    if (!user || !activeModal || !chunk.maps?.id) return;
+
+    try {
+      const { error } = await supabase.from('interactions').insert([
+        {
+          establishment_id: chunk.maps.id,
+          user_id: user.id,
+          user_name: profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário',
+          type: activeModal,
+          content: feedbackText,
+          rating: activeModal === 'avaliar' ? rating : null
+        }
+      ]);
+
+      if (error) throw error;
+
+      setIsSubmitted(true);
+      setTimeout(() => {
+        setIsSubmitted(false);
+        setActiveModal(null);
+        setFeedbackText('');
+        setRating(0);
+      }, 2000);
+    } catch (err) {
+      console.error('Error submitting interaction:', err);
+      alert('Erro ao enviar interação. Verifique se o banco de dados está configurado corretamente.');
+    }
   };
 
   const modalConfig = {
@@ -202,287 +236,244 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
       buttonClass: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
       label: 'Indicação'
     },
-    corrigir: {
-      title: 'Sugerir Correção de Contato',
-      placeholder: 'Informe o telefone ou WhatsApp correto...',
+    comentar: {
+      title: 'Enviar Comentário',
+      placeholder: 'Escreva seu comentário ou sugestão...',
       icon: <MessageCircle className="w-5 h-5 text-[#25D366]" />,
       buttonClass: 'bg-[#25D366] text-white',
-      label: 'Correção'
+      label: 'Comentário'
     }
   };
 
   return (
     <>
       <motion.div 
-        className="group bg-zinc-50 border border-zinc-100 rounded-2xl p-5 hover:bg-white hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-900/5 transition-all overflow-hidden"
+        className="group bg-white border border-zinc-100 rounded-3xl p-0 hover:border-emerald-200 hover:shadow-2xl hover:shadow-emerald-900/10 transition-all overflow-hidden flex flex-col"
       >
-        {/* Image Gallery */}
-        {images.length > 0 ? (
-          <div 
-            className="relative w-full aspect-video mb-5 rounded-xl overflow-hidden bg-zinc-200 group-image cursor-zoom-in"
-            onClick={() => setIsLightboxOpen(true)}
-          >
+        {/* Top Image Section */}
+        <div 
+          className="relative w-full aspect-video bg-zinc-200 cursor-pointer overflow-hidden group-image"
+          onClick={() => setIsFullDetailsOpen(true)}
+        >
+          {images.length > 0 ? (
             <motion.img
               key={currentImageIndex}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               src={images[currentImageIndex]}
               alt={`${title} - Foto ${currentImageIndex + 1}`}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               referrerPolicy="no-referrer"
             />
-            
-            <div className="absolute top-3 right-3 px-2 py-1 bg-black/50 backdrop-blur-md rounded-lg text-[10px] font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity">
-              Clique para ampliar
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-100 text-zinc-400 gap-2">
+              <Plus className="w-8 h-8 opacity-20" />
+              <span className="text-[10px] uppercase tracking-widest font-bold opacity-40">Sem fotos</span>
             </div>
+          )}
 
-            {images.length > 1 && (
-              <>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
-                  }}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCurrentImageIndex((prev) => (prev + 1) % images.length);
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                  {images.map((_, idx) => (
-                    <div
-                      key={idx}
-                      className={`w-1.5 h-1.5 rounded-full transition-all ${
-                        idx === currentImageIndex ? "bg-white w-3" : "bg-white/50"
-                      }`}
-                    />
-                  ))}
-                </div>
-              </>
+          {/* Overlays: Badges Top Left */}
+          <div className="absolute top-3 left-3 flex flex-col gap-2 z-10">
+            {chunk.maps?.is_premium && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f57c00] text-white text-[10px] font-bold rounded-xl shadow-lg backdrop-blur-md">
+                <Crown className="w-3 h-3" />
+                Premium
+              </div>
+            )}
+            {chunk.maps?.is_featured && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2563eb] text-white text-[10px] font-bold rounded-xl shadow-lg backdrop-blur-md">
+                <Sparkles className="w-3 h-3" />
+                Destaque
+              </div>
+            )}
+            {chunk.maps?.is_verified && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981] text-white text-[10px] font-bold rounded-xl shadow-lg backdrop-blur-md">
+                <CheckCircle2 className="w-3 h-3" />
+                Verificado
+              </div>
             )}
           </div>
-        ) : (
-          <div className="relative w-full aspect-video mb-5 rounded-xl overflow-hidden bg-zinc-100 flex items-center justify-center border border-dashed border-zinc-200 group-hover:border-emerald-200 transition-all">
-            <div className="flex flex-col items-center gap-2 text-zinc-400 group-hover:text-emerald-500 transition-colors">
-              <div className="p-3 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform">
-                <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
-              </div>
-              <span className="text-[10px] font-medium uppercase tracking-widest">Sem foto disponível</span>
-            </div>
-          </div>
-        )}
 
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 shrink-0 rounded-xl bg-white border border-zinc-100 flex items-center justify-center text-zinc-400 group-hover:text-emerald-600 group-hover:border-emerald-100 transition-colors relative">
-              <MapPin className="w-5 h-5" />
-              <div className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-emerald-500 text-white text-[8px] font-bold rounded-full shadow-sm">
-                {distance}
-              </div>
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-bold text-zinc-900 text-sm group-hover:text-emerald-700 transition-colors uppercase tracking-tight">{title}</h3>
-                {subCategories.map((cat, idx) => {
-                  return (
-                    <span key={idx} className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                      {cat.trim()}
-                    </span>
-                  );
-                })}
-                {chunk.maps?.short_id && (
-                  <span className="text-[9px] font-mono font-bold text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded" title="ID de Identificação">
-                    #{chunk.maps.short_id}
-                  </span>
-                )}
-                {chunk.maps?.is_premium && (
-                  <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-500 text-white text-[9px] font-bold rounded-full shadow-sm">
-                    <Crown className="w-2.5 h-2.5" />
-                    Premium
-                  </div>
-                )}
-                {chunk.maps?.is_verified && (
-                  <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500 text-white text-[9px] font-bold rounded-full shadow-sm">
-                    <CheckCircle2 className="w-2.5 h-2.5" />
-                    Verificado
-                  </div>
-                )}
-                {chunk.maps?.is_open_24_hours && (
-                  <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full shadow-sm">
-                    <Clock className="w-2.5 h-2.5" />
-                    24 Horas
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-3 mt-1 flex-wrap">
-                {rawPhone && (
-                  <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                    <Phone className="w-2.5 h-2.5" />
-                    {rawPhone}
-                  </p>
-                )}
-                <div className="flex flex-col gap-0.5">
-                  <button 
-                    onClick={() => setShowFullHours(!showFullHours)}
-                    className={`flex items-center gap-1 text-[10px] font-bold hover:opacity-80 transition-opacity outline-none ${statusInfo.color}`}
-                  >
-                    <Clock className="w-2.5 h-2.5" />
-                    {statusInfo.label}
-                    {chunk.maps?.hours && (
-                      <ChevronDown className={`w-2 h-2 transition-transform ${showFullHours ? 'rotate-180' : ''}`} />
-                    )}
-                  </button>
-                  <AnimatePresence>
-                    {showFullHours && chunk.maps?.hours && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <p className="text-[9px] text-zinc-500 font-medium whitespace-pre-line mt-1 bg-zinc-100/50 p-2 rounded-lg border border-zinc-100">
-                          {chunk.maps.hours}
-                        </p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-              <p className="text-xs text-zinc-500 mt-1 line-clamp-2 leading-relaxed">
-                {location && isRealLocation 
-                  ? `Localizado a ${distance} de sua posição atual.` 
-                  : `Localizado em sua cidade. A aproximadamente ${distance} de você.`}
-              </p>
-              {chunk.maps?.address && (
-                <p className="text-[10px] text-zinc-400 mt-1 flex items-center gap-1">
-                  <MapPin className="w-2.5 h-2.5" />
-                  {chunk.maps.address}
-                </p>
-              )}
-              {chunk.maps?.description && (
-                <p className="text-xs text-zinc-600 mt-2 italic leading-relaxed border-l-2 border-emerald-100 pl-3">
-                  {chunk.maps.description}
-                </p>
-              )}
-            </div>
+          {/* Quick Info Overlay Bottom */}
+          <div className="absolute bottom-0 inset-x-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+          
+          <div className="absolute bottom-3 right-3 text-white text-[10px] font-bold bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg">
+            Clique para ver detalhes
           </div>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={handleShare}
-              className="p-2.5 rounded-xl bg-white border border-zinc-100 text-zinc-400 hover:text-[#f57c00] hover:border-orange-200 transition-all shadow-sm"
-              title="Compartilhar"
-            >
-              <Share2 className="w-4 h-4" />
-            </button>
-            <a 
-              href={uri} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="p-2.5 rounded-xl bg-white border border-zinc-100 text-zinc-400 hover:text-emerald-600 hover:border-emerald-200 transition-all shadow-sm"
-              title="Ver no Google Maps"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </a>
-          </div>
-        </div>
 
-        {/* Feedback Buttons */}
-        <div className="flex flex-col gap-2 mt-4 no-print">
-          <div className="flex items-center gap-2">
+          {/* Action Buttons Overlay */}
+          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-auto">
             <a 
               href={routeUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#f57c00] text-white text-xs font-bold hover:bg-[#e65100] transition-all shadow-lg shadow-orange-900/10"
+              onClick={(e) => e.stopPropagation()}
+              className="p-2 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-all shadow-xl"
+              title="Traçar Rota"
             >
               <Navigation2 className="w-3.5 h-3.5" />
-              Traçar Rota
             </a>
-          </div>
-          <div className="flex items-center gap-2">
             <a 
               href={whatsappUrl}
               target={whatsappUrl !== "#" ? "_blank" : undefined}
               rel="noopener noreferrer"
-              onClick={(e) => whatsappUrl === "#" && e.preventDefault()}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-xs font-bold transition-all shadow-sm ${
-                whatsappUrl !== "#" ? "bg-[#25D366] hover:bg-[#128C7E]" : "bg-zinc-200 cursor-not-allowed"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (whatsappUrl === "#") {
+                  e.preventDefault();
+                  return;
+                }
+                if (!user) {
+                  e.preventDefault();
+                  setIsAuthModalOpen(true);
+                }
+              }}
+              className={`p-2 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white transition-all shadow-xl ${
+                whatsappUrl !== "#" ? "hover:bg-black/40" : "opacity-40 cursor-not-allowed"
               }`}
+              title="WhatsApp"
             >
               <MessageCircle className="w-3.5 h-3.5" />
-              WhatsApp
             </a>
-            <a 
-              href={telUrl}
-              onClick={(e) => telUrl === "#" && e.preventDefault()}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-xs font-bold transition-all shadow-sm ${
-                telUrl !== "#" ? "bg-zinc-900 hover:bg-zinc-800" : "bg-zinc-200 cursor-not-allowed"
-              }`}
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAction(handleShare);
+              }}
+              className="p-2 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-all shadow-xl"
+              title="Compartilhar"
             >
-              <Phone className="w-3.5 h-3.5" />
-              Ligar
-            </a>
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
           </div>
+
+          {images.length > 1 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+                }}
+                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/40 text-white rounded-full hover:bg-black/60 transition-colors opacity-0 group-hover:opacity-100"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentImageIndex((prev) => (prev + 1) % images.length);
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/40 text-white rounded-full hover:bg-black/60 transition-colors opacity-0 group-hover:opacity-100"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 mt-2 no-print">
-          <button 
-            onClick={() => setActiveModal('avaliar')}
-            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-white border border-zinc-200 text-zinc-600 text-[10px] font-bold hover:bg-zinc-50 transition-all"
-          >
-            <Star className="w-3 h-3" />
-            Avaliar
-          </button>
-          <button 
-            onClick={() => setActiveModal('reclamar')}
-            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-white border border-zinc-200 text-zinc-600 text-[10px] font-bold hover:bg-zinc-50 transition-all"
-          >
-            <AlertTriangle className="w-3 h-3" />
-            Reclamar
-          </button>
-          <button 
-            onClick={() => setActiveModal('corrigir')}
-            className="p-2 rounded-xl bg-white border border-zinc-200 text-zinc-400 hover:text-emerald-600 hover:border-emerald-200 transition-all"
-            title="Sugerir Correção"
-          >
-            <MessageCircle className="w-3.5 h-3.5" />
-          </button>
-          <button 
-            onClick={() => setActiveModal('indicar')}
-            className="p-2 rounded-xl bg-white border border-zinc-200 text-zinc-400 hover:text-emerald-600 hover:border-emerald-200 transition-all"
-            title="Indicar"
-          >
-            <ThumbsUp className="w-3.5 h-3.5" />
-          </button>
-          {(isAdmin || canEdit) && (
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setIsEditModalOpen(true)}
-                className="p-2 rounded-xl bg-emerald-50 border border-emerald-100 text-[#00897b] hover:bg-emerald-100 transition-all"
-                title={chunk.maps?.id ? "Editar" : "Cadastrar no VidaLocal"}
-              >
-                {chunk.maps?.id ? <Edit className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-              </button>
-                    {chunk.maps?.id && (
-                      <button 
-                        onClick={handleDelete}
-                        disabled={isDeleting}
-                        className="p-2 rounded-xl bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 transition-all disabled:opacity-50"
-                        title="Excluir"
-                      >
-                        {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                      </button>
-                    )}
+        {/* Info Section */}
+        <div className="p-3.5 flex flex-col gap-1">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-bold text-zinc-900 text-sm leading-tight group-hover:text-emerald-700 transition-colors max-w-[75%]">
+              {title}
+            </h3>
+            {/* Rating Badge */}
+            <div className="flex items-center gap-1 px-2 py-0.5 bg-[#0f172a] text-white rounded-lg shadow-md shrink-0">
+              <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
+              <span className="text-[10px] font-bold">{chunk.maps?.rating || '5.0'}</span>
             </div>
-          )}
+          </div>
+
+          <p className="text-[10px] text-zinc-400 font-medium -mt-1 line-clamp-1 uppercase tracking-wide">
+            {subCategoryStr || 'Estabelecimento Local'}
+          </p>
+
+          <div className="flex flex-col gap-1 mt-1">
+            {chunk.maps?.address && (
+              <div className="flex items-start gap-1 group-address">
+                <MapPin className="w-3 h-3 text-zinc-400 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-zinc-500 leading-tight line-clamp-1">
+                  {chunk.maps.address}
+                </p>
+              </div>
+            )}
+            
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
+                <Navigation2 className="w-3 h-3 text-blue-500" />
+                <span className="text-[10px] font-bold text-blue-600 tracking-tight">{distance}</span>
+              </div>
+              
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowFullHoursModal(!showFullHoursModal);
+                }}
+                className={`flex items-center gap-1 text-[10px] font-bold ${statusInfo.color} hover:opacity-70 transition-opacity`}
+              >
+                <Clock className="w-2.5 h-2.5" />
+                {statusInfo.label}
+              </button>
+            </div>
+
+            {showFullHoursModal && chunk.maps?.hours && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="mt-1 p-2 bg-zinc-50 rounded-lg border border-zinc-100"
+              >
+                <p className="text-[9px] text-zinc-500 font-medium whitespace-pre-line leading-relaxed">
+                  {chunk.maps.hours}
+                </p>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Action Footer */}
+          <div className="pt-2 flex items-center gap-2">
+            <button 
+              onClick={() => setIsFullDetailsOpen(true)}
+              className="flex-1 py-2 bg-zinc-50 border border-zinc-100 text-zinc-600 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-100 transition-all lg:text-[10px]"
+            >
+              Ver Tudo
+            </button>
+            <div className="flex items-center gap-1">
+              <a 
+                href={whatsappUrl} 
+                target="_blank"
+                className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-colors"
+                title="WhatsApp"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!user) {
+                    e.preventDefault();
+                    setIsAuthModalOpen(true);
+                  }
+                }}
+              >
+                <MessageCircle className="w-4 h-4" />
+              </a>
+              {canEdit && (
+                <>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setIsEditModalOpen(true); }}
+                    className="p-2.5 bg-zinc-100 text-zinc-500 rounded-xl hover:bg-zinc-200 transition-colors"
+                    title="Editar"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+                    disabled={isDeleting}
+                    className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors disabled:opacity-50"
+                    title="Excluir"
+                  >
+                    {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </motion.div>
 
@@ -573,75 +564,294 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Lightbox Modal */}
+      {/* Full Detail Modal (Expanded Card) */}
       <AnimatePresence>
-        {isLightboxOpen && images.length > 0 && (
+        {isFullDetailsOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4 flex-col gap-6"
-            onClick={() => setIsLightboxOpen(false)}
+            className="fixed inset-0 z-[200] bg-white sm:bg-black/80 sm:backdrop-blur-xl flex justify-center overflow-y-auto"
           >
-            <button 
-              className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors z-10"
-              onClick={() => setIsLightboxOpen(false)}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-full max-w-2xl bg-white h-fit sm:my-8 sm:rounded-[40px] overflow-hidden shadow-2xl"
             >
-              <X className="w-6 h-6" />
-            </button>
+              {/* Image Header */}
+              <div className="relative w-full aspect-square sm:aspect-video bg-zinc-100">
+                <motion.img
+                  key={currentImageIndex}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  src={images[currentImageIndex] || "https://images.unsplash.com/photo-1544025162-d76694265947?w=1200"}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+                <button 
+                  onClick={() => {
+                    setIsFullDetailsOpen(false);
+                    if (onCloseDetails) onCloseDetails();
+                  }}
+                  className="absolute top-4 right-4 p-2.5 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors z-10"
+                >
+                  <X className="w-5 h-5" />
+                </button>
 
-            <div 
-              className="relative w-full max-w-5xl aspect-video sm:aspect-[16/9] bg-black rounded-2xl overflow-hidden shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <motion.img
-                key={currentImageIndex}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                src={images[currentImageIndex]}
-                alt={`${title} - Foto ${currentImageIndex + 1}`}
-                className="w-full h-full object-contain"
-                referrerPolicy="no-referrer"
-              />
+                {images.length > 1 && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 p-1.5 bg-black/20 backdrop-blur-md rounded-2xl">
+                    {images.map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setCurrentImageIndex(idx)}
+                        className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentImageIndex ? 'bg-white w-4' : 'bg-white/40'}`}
+                      />
+                    ))}
+                  </div>
+                )}
 
-              {images.length > 1 && (
-                <>
-                  <button
-                    onClick={() => setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors border border-white/10"
+                {/* Overlays */}
+                <div className="absolute top-4 left-4 flex flex-col gap-1.5 pointer-events-none">
+                  {chunk.maps?.is_premium && (
+                    <span className="px-3 py-1.5 bg-[#f57c00] text-white rounded-xl text-[9px] font-black shadow-lg flex items-center gap-1.5 backdrop-blur-sm bg-opacity-90">
+                      <Crown className="w-3.5 h-3.5" /> PREMIUM
+                    </span>
+                  )}
+                  {chunk.maps?.is_featured && (
+                    <span className="px-3 py-1.5 bg-[#2563eb] text-white rounded-xl text-[9px] font-black shadow-lg flex items-center gap-1.5 backdrop-blur-sm bg-opacity-90">
+                      <Sparkles className="w-3.5 h-3.5" /> DESTAQUE
+                    </span>
+                  )}
+                  {chunk.maps?.is_verified && (
+                    <span className="px-3 py-1.5 bg-[#10b981] text-white rounded-xl text-[9px] font-black shadow-lg flex items-center gap-1.5 backdrop-blur-sm bg-opacity-90">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> VERIFICADO
+                    </span>
+                  )}
+                </div>
+
+                {/* Main Action Buttons Overlay (Mobile Optimized) */}
+                <div className="absolute bottom-4 inset-x-4 flex items-center justify-center gap-2 z-10">
+                  <a 
+                    href={routeUrl} 
+                    target="_blank"
+                    className="flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-transform active:scale-95 shadow-xl"
+                    title="Rota"
                   >
-                    <ChevronLeft className="w-6 h-6" />
-                  </button>
-                  <button
-                    onClick={() => setCurrentImageIndex((prev) => (prev + 1) % images.length)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors border border-white/10"
-                  >
-                    <ChevronRight className="w-6 h-6" />
-                  </button>
-                </>
-              )}
-            </div>
-
-            <div className="flex flex-col items-center gap-2">
-              <p className="text-white font-bold text-lg uppercase tracking-widest">{title}</p>
-              <div className="flex gap-2">
-                {images.map((_, idx) => (
-                  <button
-                    key={idx}
+                    <Navigation2 className="w-5 h-5" />
+                  </a>
+                  <a 
+                    href={whatsappUrl} 
+                    target="_blank"
+                    className="flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-transform active:scale-95 shadow-xl"
+                    title="WhatsApp"
                     onClick={(e) => {
-                      e.stopPropagation();
-                      setCurrentImageIndex(idx);
+                      if (!user) {
+                        e.preventDefault();
+                        setIsAuthModalOpen(true);
+                      }
                     }}
-                    className={`w-12 h-1.5 rounded-full transition-all ${
-                      idx === currentImageIndex ? "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]" : "bg-white/20 hover:bg-white/40"
-                    }`}
-                  />
-                ))}
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                  </a>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleAction(handleShare); }}
+                    className="flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-transform active:scale-95 shadow-xl"
+                    title="Compartilhar"
+                  >
+                    <Share2 className="w-5 h-5" />
+                  </button>
+                  <a 
+                    href={telUrl}
+                    className="flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-transform active:scale-95 shadow-xl"
+                    title="Ligar"
+                    onClick={(e) => {
+                      if (!user) {
+                        e.preventDefault();
+                        setIsAuthModalOpen(true);
+                      }
+                    }}
+                  >
+                    <Phone className="w-5 h-5" />
+                  </a>
+                </div>
               </div>
-              <p className="text-zinc-500 text-xs font-medium mt-2">
-                FOTO {currentImageIndex + 1} DE {images.length}
-              </p>
-            </div>
+
+              {/* Main Content */}
+              <div className="p-5 sm:p-10">
+                <div className="flex justify-between items-center gap-4">
+                  <div className="flex-1">
+                    <h2 className="text-base sm:text-xl lg:text-2xl font-black text-zinc-900 leading-tight tracking-tighter">
+                      {title}
+                    </h2>
+                    <p className="text-[10px] sm:text-sm font-bold text-zinc-400 mt-0.5 uppercase tracking-wide">
+                      {subCategoryStr}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0f172a] text-white rounded-xl shadow-lg shrink-0">
+                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                    <span className="text-sm sm:text-lg font-black tracking-tighter">{chunk.maps?.rating || '5.0'}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mt-4 sm:mt-12">
+                  <div className="space-y-6 sm:space-y-8">
+                    {/* Location */}
+                    <div className="flex gap-4 sm:gap-6">
+                      <div className="w-10 h-10 sm:w-14 sm:h-14 shrink-0 rounded-xl sm:rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center text-blue-600">
+                        <MapPin className="w-5 h-5 sm:w-6 sm:h-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-[10px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest mb-1">Localização</h4>
+                        <p className="text-xs sm:text-sm font-bold text-zinc-800 leading-relaxed truncate sm:whitespace-normal">{chunk.maps?.address}</p>
+                        <div className="flex items-center gap-2 mt-1.5 text-blue-600 font-black text-[10px] sm:text-sm">
+                          <Navigation2 className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />
+                          {distance} de você
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status */}
+                    <div className="flex gap-4 sm:gap-6">
+                      <div 
+                        onClick={() => setShowFullHoursModal(!showFullHoursModal)}
+                        className={`w-10 h-10 sm:w-14 sm:h-14 shrink-0 rounded-xl sm:rounded-2xl flex items-center justify-center ${statusInfo.color.replace('text-', 'bg-')} text-white shadow-sm cursor-pointer hover:opacity-90 transition-opacity`}
+                      >
+                        <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
+                      </div>
+                      <div>
+                        <h4 className="text-[10px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest mb-1">Horário</h4>
+                        <button 
+                          onClick={() => setShowFullHoursModal(!showFullHoursModal)}
+                          className={`text-xs sm:text-sm font-black ${statusInfo.color} flex items-center gap-2 hover:opacity-70 transition-opacity`}
+                        >
+                          {statusInfo.label}
+                          <ChevronDown className={`w-4 h-4 transition-transform ${showFullHoursModal ? 'rotate-180' : ''}`} />
+                        </button>
+                        {showFullHoursModal && chunk.maps?.hours && (
+                          <motion.p 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="text-[10px] sm:text-xs text-zinc-500 font-medium mt-2 leading-relaxed whitespace-pre-line"
+                          >
+                            {chunk.maps.hours}
+                          </motion.p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* Description */}
+                    {chunk.maps?.description && (
+                      <div className="p-5 sm:p-8 bg-zinc-50 rounded-[28px] sm:rounded-[32px] border border-zinc-100">
+                        <h4 className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest mb-3">Sobre</h4>
+                        <p className="text-xs sm:text-sm text-zinc-600 font-medium leading-relaxed italic">
+                          "{chunk.maps.description}"
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Actions (Desktop Only) */}
+                    <div className="hidden sm:flex flex-col gap-2.5">
+                      <a 
+                        href={routeUrl} 
+                        target="_blank"
+                        className="flex items-center justify-center gap-2.5 w-full py-4 bg-[#f57c00] text-white rounded-[20px] font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-900/10 hover:scale-[1.01] transition-all"
+                        onClick={(e) => {
+                          if (!user) {
+                            e.preventDefault();
+                            setIsAuthModalOpen(true);
+                          }
+                        }}
+                      >
+                        <Navigation2 className="w-4 h-4 fill-white" /> Traçar Rota
+                      </a>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <a 
+                          href={whatsappUrl} 
+                          target="_blank"
+                          className="flex items-center justify-center gap-2 py-3.5 bg-[#25D366] text-white rounded-[20px] font-black text-[10px] uppercase tracking-widest hover:scale-[1.01] transition-all"
+                          onClick={(e) => {
+                            if (!user) {
+                              e.preventDefault();
+                              setIsAuthModalOpen(true);
+                            }
+                          }}
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                        </a>
+                        <a 
+                          href={telUrl}
+                          className="flex items-center justify-center gap-2 py-3.5 bg-zinc-900 text-white rounded-[20px] font-black text-[10px] uppercase tracking-widest hover:scale-[1.01] transition-all"
+                          onClick={(e) => {
+                            if (!user) {
+                              e.preventDefault();
+                              setIsAuthModalOpen(true);
+                            }
+                          }}
+                        >
+                          <Phone className="w-3.5 h-3.5" /> Ligar
+                        </a>
+                      </div>
+
+                      {canEdit && (
+                        <div className="grid grid-cols-2 gap-2.5 mt-2">
+                          <button 
+                            onClick={() => setIsEditModalOpen(true)}
+                            className="flex items-center justify-center gap-2 py-3 bg-zinc-100 text-zinc-600 rounded-[20px] font-black text-[10px] uppercase tracking-widest hover:bg-zinc-200 transition-all"
+                          >
+                            <Edit className="w-3.5 h-3.5" /> Editar
+                          </button>
+                          <button 
+                            onClick={handleDelete}
+                            disabled={isDeleting}
+                            className="flex items-center justify-center gap-2 py-3 bg-red-50 text-red-600 rounded-[20px] font-black text-[10px] uppercase tracking-widest hover:bg-red-100 transition-all disabled:opacity-50"
+                          >
+                            {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                            Excluir
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Interaction History Section */}
+                <div className="mt-8 pt-8 border-t border-zinc-100">
+                  <InteractionHistory establishmentId={chunk.maps?.id || ''} />
+                </div>
+
+                {/* Feedback Section (Mobile optimized - Single Row) */}
+                <div className="mt-4 sm:mt-12 pt-4 sm:pt-12 border-t border-zinc-100 flex items-center justify-between gap-0.5 overflow-x-hidden">
+                  <button onClick={() => handleAction(() => { setIsFullDetailsOpen(false); setActiveModal('avaliar'); })} className="flex-1 flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-zinc-50 transition-colors group">
+                    <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100 flex items-center justify-center text-zinc-400 group-hover:text-yellow-500 group-hover:border-yellow-200 transition-all">
+                      <Star className="w-4 h-4" />
+                    </div>
+                    <span className="text-[7px] font-black text-zinc-400 uppercase tracking-widest">Avaliar</span>
+                  </button>
+                  <button onClick={() => handleAction(() => { setIsFullDetailsOpen(false); setActiveModal('reclamar'); })} className="flex-1 flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-zinc-50 transition-colors group">
+                    <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100 flex items-center justify-center text-zinc-400 group-hover:text-red-500 group-hover:border-red-200 transition-all">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <span className="text-[7px] font-black text-zinc-400 uppercase tracking-widest">Reclamar</span>
+                  </button>
+                  <button onClick={() => handleAction(() => { setIsFullDetailsOpen(false); setActiveModal('comentar'); })} className="flex-1 flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-zinc-50 transition-colors group">
+                    <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100 flex items-center justify-center text-zinc-400 group-hover:text-blue-500 group-hover:border-blue-200 transition-all">
+                      <MessageCircle className="w-4 h-4" />
+                    </div>
+                    <span className="text-[7px] font-black text-zinc-400 uppercase tracking-widest">Comentar</span>
+                  </button>
+                  <button onClick={() => handleAction(() => { setIsFullDetailsOpen(false); setActiveModal('indicar'); })} className="flex-1 flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-zinc-50 transition-colors group">
+                    <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100 flex items-center justify-center text-zinc-400 group-hover:text-emerald-500 group-hover:border-emerald-200 transition-all">
+                      <ThumbsUp className="w-4 h-4" />
+                    </div>
+                    <span className="text-[7px] font-black text-zinc-400 uppercase tracking-widest">Indicar</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

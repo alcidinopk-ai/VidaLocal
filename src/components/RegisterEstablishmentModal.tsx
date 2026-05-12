@@ -21,7 +21,8 @@ import {
   Compass,
   Hash,
   Copy,
-  Upload
+  Upload,
+  Camera
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
@@ -42,9 +43,10 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   onSuccess 
 }) => {
   const { currentCity } = useCity();
-  const { user, role } = useAuth();
-  const isAdmin = user && role === 'admin';
+  const { user, profile, role } = useAuth();
+  const isAdmin = user && (role === 'admin' || user.email === 'alcidinopk@gmail.com');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -250,6 +252,10 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
 
   const handleAddImage = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleCameraClick = () => {
+    cameraInputRef.current?.click();
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -677,14 +683,24 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Fotos do Local</h4>
-                    <button 
-                      type="button" 
-                      onClick={handleAddImage}
-                      className="flex items-center gap-1.5 text-xs font-bold text-[#00897b] hover:text-[#00796b] transition-colors"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      Anexar Fotos
-                    </button>
+                    <div className="flex items-center gap-4">
+                      <button 
+                        type="button" 
+                        onClick={handleCameraClick}
+                        className="flex items-center gap-1.5 text-xs font-bold text-[#00897b] hover:text-[#00796b] transition-colors"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        Usar Câmera
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={handleAddImage}
+                        className="flex items-center gap-1.5 text-xs font-bold text-[#00897b] hover:text-[#00796b] transition-colors"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        Anexar Fotos
+                      </button>
+                    </div>
                   </div>
                   
                   <input 
@@ -693,6 +709,15 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                     onChange={handleFileChange}
                     accept="image/*"
                     multiple
+                    className="hidden"
+                  />
+                  
+                  <input 
+                    type="file"
+                    ref={cameraInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*"
+                    capture="environment"
                     className="hidden"
                   />
                   
@@ -714,6 +739,14 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         </button>
                       </div>
                     ))}
+                    <button
+                      type="button"
+                      onClick={handleCameraClick}
+                      className="aspect-video rounded-2xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-[#00897b] hover:border-[#00897b] hover:bg-emerald-50/50 transition-all"
+                    >
+                      <Camera className="w-6 h-6" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Usar Câmera</span>
+                    </button>
                     <button
                       type="button"
                       onClick={handleAddImage}

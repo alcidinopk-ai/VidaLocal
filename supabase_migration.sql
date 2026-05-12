@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS establishments (
   is_verified BOOLEAN DEFAULT FALSE,
   is_premium BOOLEAN DEFAULT FALSE,
   is_open_24_hours BOOLEAN DEFAULT FALSE,
+  images TEXT[] DEFAULT '{}',
   short_id TEXT UNIQUE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -213,11 +214,12 @@ SELECT id, 'combustivel', 5 FROM search_intents WHERE name = 'Posto de Combustí
 ON CONFLICT DO NOTHING;
 
 -- Establishments (Seed Data)
-INSERT INTO establishments (name, category_id, sub_category, address, phone, whatsapp, rating, status, city_id, latitude, longitude, description)
-SELECT 'Espetinho do Adão B13', 1, 'Espetinho', 'Av. Goiás, 1438, Centro, Gurupi - TO', '6333121234', '63984551234', 4.8, 'approved', id, -11.7289, -49.0692, 'O melhor espetinho da região com acompanhamentos tradicionais.' FROM cities WHERE slug = 'gurupi' UNION ALL
-SELECT 'Delicias da Polly', 1, 'Restaurante', 'Av. Maranhão, 1245, Centro, Gurupi - TO', '6333124455', '63992334455', 4.9, 'approved', id, -11.7275, -49.0660, 'Comida caseira, lanches e sobremesas feitas com carinho.' FROM cities WHERE slug = 'gurupi' UNION ALL
-SELECT 'Mecânica do Neném', 6, 'Oficina / Centro Automotivo', 'Av. Maranhão, 2560, Setor Industrial, Gurupi - TO', '6333121122', '63984112233', 4.5, 'approved', id, -11.7350, -49.0720, 'Manutenção preventiva e corretiva para seu veículo com confiança.' FROM cities WHERE slug = 'gurupi' UNION ALL
-SELECT 'Pet Shop Amigão', 5, 'Pet Shop (varejo)', 'Av. Goiás, 2100, Centro, Gurupi - TO', '6333128877', '63999887766', 4.7, 'approved', id, -11.7320, -49.0685, 'Tudo para o seu pet: rações, acessórios e banho e tosa.' FROM cities WHERE slug = 'gurupi' UNION ALL
+INSERT INTO establishments (name, category_id, sub_category, address, phone, whatsapp, rating, status, city_id, latitude, longitude, description, is_premium, is_featured, is_verified, images)
+SELECT 'Espetinho do Adão B13', 1, 'Espetinho', 'Av. Goiás, 1438, Centro, Gurupi - TO', '6333121234', '63984551234', 4.8, 'approved', id, -11.7289, -49.0692, 'O melhor espetinho da região com acompanhamentos tradicionais.', true, true, true, ARRAY['https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80', 'https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=800&q=80'] FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Delicias da Polly', 1, 'Restaurante', 'Av. Maranhão, 1245, Centro, Gurupi - TO', '6333124455', '63992334455', 4.9, 'approved', id, -11.7275, -49.0660, 'Comida caseira, lanches e sobremesas feitas com carinho.', true, true, true, ARRAY['https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80', 'https://images.unsplash.com/photo-1476224483472-279815b0019e?w=800&q=80'] FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Mecânica do Neném', 6, 'Oficina / Centro Automotivo', 'Av. Maranhão, 2560, Setor Industrial, Gurupi - TO', '6333121122', '63984112233', 4.5, 'approved', id, -11.7350, -49.0720, 'Manutenção preventiva e corretiva para seu veículo com confiança.', false, false, false, ARRAY['https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800&q=80', 'https://images.unsplash.com/photo-1487754164641-a09bd0ec07aa?w=800&q=80'] FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Pet Shop Amigão', 5, 'Pet Shop (varejo)', 'Av. Goiás, 2100, Centro, Gurupi - TO', '6333128877', '63999887766', 4.7, 'approved', id, -11.7320, -49.0685, 'Tudo para o seu pet: rações, acessórios e banho e tosa.', false, false, false, ARRAY['https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800&q=80', 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=800&q=80'] FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Pizzaria Bella Italia', 1, 'Pizzaria', 'Av. Pará, 1500, Centro, Gurupi - TO', '6333129988', '63992112233', 4.6, 'approved', id, -11.7295, -49.0670, 'Pizzas artesanais com massa fina e ingredientes selecionados.', true, true, true, ARRAY['https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80', 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=80'] FROM cities WHERE slug = 'gurupi' UNION ALL
 SELECT 'Casa de Carnes Boi de Ouro', 1, 'Açougue', 'Av. Maranhão, 1500, Centro, Gurupi - TO', '6333124455', '63992113344', 4.9, 'approved', id, -11.7290, -49.0675, 'Carnes nobres e selecionadas para o seu churrasco.' FROM cities WHERE slug = 'gurupi' UNION ALL
 SELECT 'Supermercado Beira Rio', 1, 'Supermercado / Mercado', 'Av. Goiás, 2500, Gurupi - TO', '6333131000', '6333131000', 4.5, 'approved', id, -11.7360, -49.0710, 'O melhor preço e variedade para sua casa.' FROM cities WHERE slug = 'gurupi' UNION ALL
 SELECT 'Drogaria Ultra Popular', 1, 'Farmácia', 'Av. Goiás, 1100, Centro, Gurupi - TO', '6333122020', '6333122020', 4.7, 'approved', id, -11.7270, -49.0660, 'Farmácia com descontos reais em medicamentos.' FROM cities WHERE slug = 'gurupi' UNION ALL

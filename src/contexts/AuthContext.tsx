@@ -20,6 +20,8 @@ interface AuthContextType {
   profile: Profile | null;
   role: 'admin' | 'user' | null;
   isLoading: boolean;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (isOpen: boolean) => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -31,6 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<'admin' | 'user' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -129,7 +132,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, role, isLoading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      profile, 
+      role, 
+      isLoading, 
+      isAuthModalOpen, 
+      setIsAuthModalOpen, 
+      signOut, 
+      refreshProfile 
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -271,7 +271,7 @@ async function canUserEdit(supabase: any, userId: string, establishmentIdOrShort
 
 let establishments: Establishment[] = [
   { id: "e1", name: "Espetinho do Adão B13", category_id: 1, sub_category: "Espetinho", address: "Av. Goiás, 1438, Centro, Gurupi - TO", city_id: 1, latitude: -11.7289, longitude: -49.0692, rating: 4.8, whatsapp: "63984551234", phone: "6333121234", description: "O melhor espetinho da região com acompanhamentos tradicionais.", status: 'approved', is_featured: true, is_verified: true, is_premium: true, images: ["https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80", "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=800&q=80"], hours: "Segunda-feira: 18:00-00:00\nTerça-feira: 18:00-00:00\nQuarta-feira: 18:00-00:00\nQuinta-feira: 18:00-00:00\nSexta-feira: 18:00-01:00\nSábado: 18:00-01:00\nDomingo: Fechado" },
-  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Restaurante", address: "Av. Maranhão, 1245, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455", phone: "6333124455", description: "Comida caseira, lanches e sobremesas feitas com carinho.", status: 'approved', is_featured: true, is_verified: true, is_premium: false, images: ["https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80", "https://images.unsplash.com/photo-1476224483472-279815b0019e?w=800&q=80"], hours: "Segunda-feira: 11:00-14:30\nTerça-feira: 11:00-14:30\nQuarta-feira: 11:00-14:30\nQuinta-feira: 11:00-14:30\nSexta-feira: 11:00-14:30\nSábado: 11:00-15:00\nDomingo: 11:00-15:00" },
+  { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Lanchonete", address: "Rua 36 Qd. 92 Lt 24 N 310 Nova Fronteira, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455", phone: "6333124455", description: "Comida caseira, lanches e sobremesas feitas com carinho.", status: 'approved', is_featured: true, is_verified: true, is_premium: true, images: ["https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80", "https://images.unsplash.com/photo-1476224483472-279815b0019e?w=800&q=80"], hours: "Segunda-feira: 11:00-14:30\nTerça-feira: 11:00-14:30\nQuarta-feira: 11:00-14:30\nQuinta-feira: 11:00-14:30\nSexta-feira: 11:00-14:30\nSábado: 11:00-15:00\nDomingo: 11:00-15:00" },
   { id: "e3", name: "Mecânica do Neném", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Maranhão, 2560, Setor Industrial, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0720, rating: 4.5, whatsapp: "63984112233", phone: "6333121122", description: "Manutenção preventiva e corretiva para seu veículo com confiança.", status: 'approved', images: ["https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800&q=80", "https://images.unsplash.com/photo-1487754164641-a09bd0ec07aa?w=800&q=80"] },
   { id: "e4", name: "Pet Shop Amigão", category_id: 5, sub_category: "Pet Shop (varejo)", address: "Av. Goiás, 2100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0685, rating: 4.7, whatsapp: "63999887766", phone: "6333128877", description: "Tudo para o seu pet: rações, acessórios e banho e tosa.", status: 'approved', images: ["https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800&q=80", "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=800&q=80"] },
   { id: "e5", name: "Pizzaria Bella Italia", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7295, longitude: -49.0670, rating: 4.6, whatsapp: "63992112233", phone: "6333129988", description: "Pizzas artesanais com massa fina e ingredientes selecionados.", status: 'approved', is_featured: true, is_verified: true, is_premium: true, images: ["https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80", "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=80"], hours: "Aberto 24 horas" },
@@ -895,7 +895,11 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
         query = query.in('city_id', targetCityIds);
       }
       
-      const { data, error } = await query.order('rating', { ascending: false }).limit(20);
+      const { data, error } = await query
+        .order('is_premium', { ascending: false })
+        .order('is_featured', { ascending: false })
+        .order('rating', { ascending: false })
+        .limit(40);
       
       if (!error && data && data.length > 0) {
         setCache(cacheKey, data);
@@ -907,7 +911,17 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
     const results = establishments.filter(e => 
       e.category_id === Number(categoryId) && 
       (!cleanCityId || e.city_id === cityIdNum)
-    ).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 15);
+    ).sort((a, b) => {
+      const premA = a.is_premium ? 1 : 0;
+      const premB = b.is_premium ? 1 : 0;
+      if (premA !== premB) return premB - premA;
+
+      const featA = a.is_featured ? 1 : 0;
+      const featB = b.is_featured ? 1 : 0;
+      if (featA !== featB) return featB - featA;
+
+      return (b.rating || 0) - (a.rating || 0);
+    }).slice(0, 30);
 
     res.json(results);
   } catch (error: any) {
@@ -1011,6 +1025,12 @@ app.get("/api/establishments/featured", async (req, res) => {
       // If we have a city name, also match by that in case IDs shifted
       if (cityName && cities.find(c => c.id === e.city_id)?.name === cityName) return true;
       return false;
+    }).sort((a, b) => {
+      if (a.is_premium && !b.is_premium) return -1;
+      if (!a.is_premium && b.is_premium) return 1;
+      if (a.is_featured && !b.is_featured) return -1;
+      if (!a.is_featured && b.is_featured) return 1;
+      return 0;
     }).slice(0, 9);
     
     console.log(`[API] Fallback found ${results.length} results`);
@@ -1211,18 +1231,27 @@ app.get("/api/search", async (req, res) => {
             query = query.or(orConditions);
           }
           
+          // Order by: approved first, then premium, then featured, then rating
+          query = query
+            .order('status', { ascending: false }) // 'approved' starts with 'a', so false priority depends on strings. Better check below.
+            // Wait, Postgres order of 'approved' vs 'pending' vs 'rejected' might be tricky.
+            // Let's use numeric columns or multiple orders.
+            .order('is_premium', { ascending: false })
+            .order('is_featured', { ascending: false })
+            .order('rating', { ascending: false });
+
           // Fetch more than we need to allow for filtering/prioritization
           const result = await query.limit(50);
           if (result.error) return result;
 
-          // Prioritize approved, then featured, then premium
+          // Still sort in JS to handle status priority properly (approved > others)
           const sortedData = (result.data || []).sort((a: any, b: any) => {
             if (a.status === 'approved' && b.status !== 'approved') return -1;
             if (a.status !== 'approved' && b.status === 'approved') return 1;
-            if (a.is_featured && !b.is_featured) return -1;
-            if (!a.is_featured && b.is_featured) return 1;
             if (a.is_premium && !b.is_premium) return -1;
             if (!a.is_premium && b.is_premium) return 1;
+            if (a.is_featured && !b.is_featured) return -1;
+            if (!a.is_featured && b.is_featured) return 1;
             return 0;
           });
 
@@ -1344,7 +1373,16 @@ app.get("/api/search", async (req, res) => {
       return res.json(cityResults);
     }
     
-    return res.json(mockResults);
+    // Sort mock results: Premium -> Featured -> Others
+    const sortedMockResults = mockResults.sort((a, b) => {
+      if (a.is_premium && !b.is_premium) return -1;
+      if (!a.is_premium && b.is_premium) return 1;
+      if (a.is_featured && !b.is_featured) return -1;
+      if (!a.is_featured && b.is_featured) return 1;
+      return 0;
+    });
+
+    return res.json(sortedMockResults.slice(0, 20));
   } catch (error) {
     console.error("Search error:", error);
     // Fallback to mock data on error
