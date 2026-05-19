@@ -76,7 +76,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
 
   const rawImages = chunk.maps?.images || [];
   const images = Array.isArray(rawImages) 
-    ? rawImages.filter((img: any) => typeof img === 'string' && img.startsWith('http'))
+    ? rawImages.filter((img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/')))
     : [];
 
   const subCategoryStr = chunk.maps?.subCategory || chunk.maps?.sub_category;

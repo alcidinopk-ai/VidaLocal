@@ -824,74 +824,78 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                     Obter Localização Atual
                   </button>
                   
-                  <div className="relative">
-                    <input 
-                      type="url"
-                      value={formData.mapsLink}
-                      onChange={e => setFormData({...formData, mapsLink: e.target.value})}
-                      placeholder="Inserir Link do Google Maps"
-                      className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
-                    />
-                  </div>
-
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input 
-                        type="text"
-                        value={formData.plusCode}
-                        onChange={e => setFormData({...formData, plusCode: e.target.value})}
-                        placeholder="Inserir Plus Code (ex: 8FVC9G8F+6X)"
-                        className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
-                      />
-                    </div>
-                    <button 
-                      type="button"
-                      onClick={handleResolvePlusCode}
-                      className="px-6 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all flex items-center gap-2"
-                    >
-                      <Hash className="w-4 h-4" />
-                      Resolver
-                    </button>
-                  </div>
-
-                  <button 
-                    type="button"
-                    onClick={() => setShowManualCoords(!showManualCoords)}
-                    className={`w-full flex items-center justify-center gap-3 px-6 py-4 border rounded-2xl text-sm font-bold transition-all ${
-                      showManualCoords 
-                        ? "bg-zinc-900 text-white border-zinc-900" 
-                        : "bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50"
-                    }`}
-                  >
-                    <Compass className="w-5 h-5" />
-                    Inserir Coordenadas Manualmente
-                  </button>
-
-                  {showManualCoords && (
-                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 ml-1">Latitude</label>
+                  {isAdmin && (
+                    <>
+                      <div className="relative">
                         <input 
-                          type="number"
-                          step="any"
-                          value={formData.latitude || ''}
-                          onChange={e => setFormData({...formData, latitude: e.target.value ? parseFloat(e.target.value) : null})}
-                          placeholder="-23.5505"
-                          className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
+                          type="url"
+                          value={formData.mapsLink}
+                          onChange={e => setFormData({...formData, mapsLink: e.target.value})}
+                          placeholder="Inserir Link do Google Maps"
+                          className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                         />
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 ml-1">Longitude</label>
-                        <input 
-                          type="number"
-                          step="any"
-                          value={formData.longitude || ''}
-                          onChange={e => setFormData({...formData, longitude: e.target.value ? parseFloat(e.target.value) : null})}
-                          placeholder="-46.6333"
-                          className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
-                        />
+
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <input 
+                            type="text"
+                            value={formData.plusCode}
+                            onChange={e => setFormData({...formData, plusCode: e.target.value})}
+                            placeholder="Inserir Plus Code (ex: 8FVC9G8F+6X)"
+                            className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
+                          />
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={handleResolvePlusCode}
+                          className="px-6 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all flex items-center gap-2"
+                        >
+                          <Hash className="w-4 h-4" />
+                          Resolver
+                        </button>
                       </div>
-                    </div>
+
+                      <button 
+                        type="button"
+                        onClick={() => setShowManualCoords(!showManualCoords)}
+                        className={`w-full flex items-center justify-center gap-3 px-6 py-4 border rounded-2xl text-sm font-bold transition-all ${
+                          showManualCoords 
+                            ? "bg-zinc-900 text-white border-zinc-900" 
+                            : "bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50"
+                        }`}
+                      >
+                        <Compass className="w-5 h-5" />
+                        Inserir Coordenadas Manualmente
+                      </button>
+
+                      {showManualCoords && (
+                        <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 ml-1">Latitude</label>
+                            <input 
+                              type="number"
+                              step="any"
+                              value={formData.latitude || ''}
+                              onChange={e => setFormData({...formData, latitude: e.target.value ? parseFloat(e.target.value) : null})}
+                              placeholder="-23.5505"
+                              className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 ml-1">Longitude</label>
+                            <input 
+                              type="number"
+                              step="any"
+                              value={formData.longitude || ''}
+                              onChange={e => setFormData({...formData, longitude: e.target.value ? parseFloat(e.target.value) : null})}
+                              placeholder="-46.6333"
+                              className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                   
                   {formData.latitude && !showManualCoords && (
@@ -1093,11 +1097,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                 </div>
               )}
 
-              <div className="pt-8 border-t border-zinc-100 bg-white -mx-8 -mb-8 p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
-                <div className="flex items-center gap-3 text-zinc-400">
-                  <ImageIcon className="w-5 h-5" />
-                  <span className="text-xs font-medium uppercase tracking-wider">Fotos poderão ser adicionadas após validação</span>
-                </div>
+              <div className="pt-8 border-t border-zinc-100 bg-white -mx-8 -mb-8 p-8 flex flex-col sm:flex-row items-center justify-end gap-6">
                 <div className="flex gap-4 w-full sm:w-auto">
                   <button 
                     type="button"
