@@ -95,12 +95,11 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS user_permissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  user_email TEXT,
-  establishment_id UUID REFERENCES establishments(id) ON DELETE CASCADE,
+  user_email TEXT NOT NULL,
   establishment_short_id TEXT REFERENCES establishments(short_id) ON DELETE CASCADE,
   role TEXT DEFAULT 'editor', -- editor, owner
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(user_id, establishment_short_id)
+  UNIQUE(user_email, establishment_short_id)
 );
 
 -- 7. Seed Data (Optional but helpful for initial setup)

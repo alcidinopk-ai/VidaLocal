@@ -19,6 +19,10 @@ export const getSupabaseAdmin = () => {
       return null;
     }
 
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_KEY) {
+      console.warn('[Supabase Server] WARNING: SERVICE_ROLE_KEY missing. Falling back to ANON_KEY. RLS will be active!');
+    }
+
     // Ensure URL has protocol
     const finalUrl = url.startsWith('http') ? url : `https://${url}`;
     

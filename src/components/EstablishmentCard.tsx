@@ -74,7 +74,10 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isFullDetailsOpen, setIsFullDetailsOpen] = useState(defaultOpen);
 
-  const images = chunk.maps?.images || [];
+  const rawImages = chunk.maps?.images || [];
+  const images = Array.isArray(rawImages) 
+    ? rawImages.filter((img: any) => typeof img === 'string' && img.startsWith('http'))
+    : [];
 
   const subCategoryStr = chunk.maps?.subCategory || chunk.maps?.sub_category;
   const subCategories = typeof subCategoryStr === 'string' 
@@ -114,21 +117,15 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
         return;
       }
 
-      // If not owner/admin, check permissions table via API
       try {
-        const response = await fetch(`/api/search?id=${chunk.maps.id}`, {
+        const response = await fetch(`/api/establishments/${chunk.maps.id}/can-edit`, {
           headers: { 'x-user-id': user.id }
         });
-        // The search endpoint with x-user-id could potentially return permission info
-        // For now, if current location is editable by user, it should work.
-        // A better way is a dedicated check endpoint or including it in initial fetch.
-        // But since we already have canUserEdit on server for PUT/DELETE,
-        // we'll try a lightweight check.
-        if (chunk.maps.short_id) {
-          const permRes = await fetch(`/api/admin/permissions/${chunk.maps.short_id}`, {
-            headers: { 'x-user-id': user.id }
-          });
-          if (permRes.ok) setCanEdit(true);
+        if (response.ok) {
+          const data = await response.json();
+          setCanEdit(!!data.can_edit);
+        } else {
+          setCanEdit(false);
         }
       } catch (err) {
         setCanEdit(false);
@@ -581,21 +578,31 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
               className="relative w-full max-w-2xl bg-white h-fit sm:my-8 sm:rounded-[40px] overflow-hidden shadow-2xl"
             >
               {/* Image Header */}
-              <div className="relative w-full aspect-square sm:aspect-video bg-zinc-100">
-                <motion.img
-                  key={currentImageIndex}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  src={images[currentImageIndex] || "https://images.unsplash.com/photo-1544025162-d76694265947?w=1200"}
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
+              <div className="relative w-full aspect-square sm:aspect-video bg-zinc-100 flex items-center justify-center overflow-hidden">
+                {images.length > 0 ? (
+                  <motion.img
+                    key={currentImageIndex}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    src={images[currentImageIndex]}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-zinc-300 gap-3">
+                    <div className="w-20 h-20 rounded-full bg-zinc-50 border border-zinc-100 flex items-center justify-center">
+                      <Plus className="w-10 h-10 opacity-20" />
+                    </div>
+                    <span className="text-xs uppercase tracking-[0.2em] font-black opacity-40">Sem fotos disponíveis</span>
+                  </div>
+                )}
+                
                 <button 
                   onClick={() => {
                     setIsFullDetailsOpen(false);
                     if (onCloseDetails) onCloseDetails();
                   }}
-                  className="absolute top-4 right-4 p-2.5 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors z-10"
+                  className="absolute top-4 right-4 p-2.5 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors z-30"
                 >
                   <X className="w-5 h-5" />
                 </button>

@@ -15,6 +15,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { AdminPermissionsModal } from './AdminPermissionsModal';
+import { RegisterEstablishmentModal } from './RegisterEstablishmentModal';
 
 interface UserEstablishmentsModalProps {
   isOpen: boolean;
@@ -32,12 +33,14 @@ interface Establishment {
 }
 
 export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = ({ isOpen, onClose }) => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isAdmin = user && (role === 'admin' || user.email === 'alcidinopk@gmail.com');
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedEstablishment, setSelectedEstablishment] = useState<Establishment | null>(null);
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen && user) {
@@ -76,6 +79,43 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
   const openPermissions = (est: Establishment) => {
     setSelectedEstablishment(est);
     setIsPermissionsModalOpen(true);
+  };
+
+  const handleEdit = (est: any) => {
+    setSelectedEstablishment({
+      ...est,
+      categoryId: est.category_id,
+      uri: est.maps_link,
+      plusCode: est.plus_code,
+      location: {
+        latitude: est.latitude,
+        longitude: est.longitude
+      }
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleDelete = async (est: any) => {
+    if (!confirm(`Tem certeza que deseja excluir "${est.name}"?`)) return;
+
+    try {
+      const response = await fetch(`/api/establishments/${est.id}`, {
+        method: 'DELETE',
+        headers: { 'x-user-id': user?.id || '' }
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        alert("Estabelecimento excluído com sucesso!");
+        fetchUserEstablishments();
+      } else {
+        alert(data.error || "Erro ao excluir estabelecimento.");
+      }
+    } catch (err) {
+      console.error("[UserEst] Error deleting:", err);
+      alert("Não foi possível conectar ao servidor.");
+    }
   };
 
   if (!isOpen) return null;
@@ -163,15 +203,33 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
                           </span>
                         ))}
                       </div>
-                      {est.status === 'approved' && (
+                      <div className="flex flex-wrap gap-1.5 mt-2 justify-end">
                         <button 
-                          onClick={() => openPermissions(est)}
-                          className="mt-1 flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold hover:bg-emerald-100 transition-all border border-emerald-100"
+                          onClick={() => handleEdit(est)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-zinc-100 text-zinc-700 hover:bg-zinc-200 rounded-lg text-[10px] font-bold transition-all border border-zinc-200"
                         >
-                          <Shield className="w-3 h-3" />
-                          Gerenciar Acessos
+                          <Edit className="w-3 h-3 text-zinc-500" />
+                          Editar
                         </button>
-                      )}
+                        
+                        <button 
+                          onClick={() => handleDelete(est)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-[10px] font-bold transition-all border border-red-100"
+                        >
+                          <Trash2 className="w-3 h-3 text-red-500" />
+                          Excluir
+                        </button>
+
+                        {isAdmin && est.status === 'approved' && (
+                          <button 
+                            onClick={() => openPermissions(est)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-[10px] font-bold transition-all border border-emerald-100"
+                          >
+                            <Shield className="w-3 h-3 text-emerald-500" />
+                            Gerenciar Acessos
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -194,6 +252,20 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
         isOpen={isPermissionsModalOpen}
         onClose={() => setIsPermissionsModalOpen(false)}
         establishment={selectedEstablishment}
+      />
+
+      <RegisterEstablishmentModal 
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedEstablishment(null);
+        }}
+        initialData={selectedEstablishment}
+        onSuccess={() => {
+          setIsEditModalOpen(false);
+          setSelectedEstablishment(null);
+          fetchUserEstablishments();
+        }}
       />
     </div>
   );

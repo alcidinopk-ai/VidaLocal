@@ -12,6 +12,7 @@ interface Profile {
   city?: string | null;
   state?: string | null;
   phone?: string | null;
+  managed_establishment_short_id?: string | null;
 }
 
 export const UserManagementModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
@@ -96,15 +97,25 @@ export const UserManagementModal = ({ isOpen, onClose }: { isOpen: boolean; onCl
           full_name: editingUser.full_name,
           city: editingUser.city,
           state: editingUser.state,
-          phone: editingUser.phone
+          phone: editingUser.phone,
+          managed_establishment_short_id: editingUser.managed_establishment_short_id
         })
         .eq('id', editingUser.id);
 
-      if (error) throw error;
+      if (error) {
+        // Tratar erro específico de coluna inexistente (Schema Cache)
+        if (error.code === 'PGRST204' || error.message?.includes('managed_establishment_short_id')) {
+          alert("⚠️ Ação necessária no Supabase!\n\nA coluna 'managed_establishment_short_id' não foi encontrada no banco de dados.\n\nPor favor, execute este comando no SQL Editor do Supabase:\n\nALTER TABLE profiles ADD COLUMN managed_establishment_short_id TEXT;");
+          return;
+        }
+        throw error;
+      }
+      
       setUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
       setEditingUser(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating user:', err);
+      alert('Erro ao atualizar usuário: ' + (err.message || 'Erro desconhecido'));
     } finally {
       setIsUpdating(null);
     }
@@ -324,6 +335,19 @@ export const UserManagementModal = ({ isOpen, onClose }: { isOpen: boolean; onCl
                         className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#00897b]/10 focus:border-[#00897b] transition-all text-sm"
                       />
                     </div>
+
+                    {isAdmin && (
+                      <div className="space-y-1.5 p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
+                        <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest ml-1">Vincular Estabelecimentos (Somente Admin)</label>
+                        <input 
+                          value={editingUser.managed_establishment_short_id || ''}
+                          onChange={e => setEditingUser({ ...editingUser, managed_establishment_short_id: e.target.value })}
+                          placeholder="Ex: AD123, BC456 (IDs Curtos)"
+                          className="w-full px-4 py-3 bg-white border border-orange-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all text-sm font-mono mt-1"
+                        />
+                        <p className="text-[9px] text-orange-500 mt-1 ml-1 uppercase font-bold tracking-tight">Vincule um ou mais estabelecimentos por ID Curto (separados por vírgula) para conceder acesso total.</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-3 pt-4">

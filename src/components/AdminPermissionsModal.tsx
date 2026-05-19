@@ -56,9 +56,14 @@ export const AdminPermissionsModal: React.FC<AdminPermissionsModalProps> = ({
       const response = await fetch(`/api/admin/permissions/${establishment.short_id}`, {
         headers: { 'x-user-id': user.id }
       });
-      const data = await response.json();
-      if (response.ok) {
+      
+      const contentType = response.headers.get('content-type');
+      if (response.ok && contentType && contentType.includes('application/json')) {
+        const data = await response.json();
         setPermissions(data);
+      } else if (!response.ok) {
+        const text = await response.text();
+        console.error('Error fetching permissions:', text);
       }
     } catch (error) {
       console.error('Error fetching permissions:', error);
@@ -87,7 +92,16 @@ export const AdminPermissionsModal: React.FC<AdminPermissionsModalProps> = ({
         })
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.error('Server returned non-JSON response:', text);
+        throw new Error(`Servidor retornou resposta inesperada (${response.status})`);
+      }
+
       if (response.ok) {
         setPermissions(prev => [...prev, data]);
         setEmail('');
@@ -95,8 +109,9 @@ export const AdminPermissionsModal: React.FC<AdminPermissionsModalProps> = ({
       } else {
         setMessage({ type: 'error', text: data.error || 'Erro ao conceder permissão.' });
       }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Erro de conexão com o servidor.' });
+    } catch (error: any) {
+      console.error('Permission error:', error);
+      setMessage({ type: 'error', text: error.message || 'Erro de conexão com o servidor.' });
     } finally {
       setIsAdding(false);
     }

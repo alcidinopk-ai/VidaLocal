@@ -203,8 +203,17 @@ async function canUserEdit(supabase: any, userId: string, establishmentIdOrShort
   
   try {
     // 0. Check if user is admin (this bypasses everything else)
-    // First check by ID in profiles
-    const { data: profile } = await supabase.from('profiles').select('role, email').eq('id', userId).maybeSingle();
+    // First check by ID in profiles - Try fetching with the new column first
+    let profile: any = null;
+    try {
+      const { data } = await supabase.from('profiles').select('role, email, managed_establishment_short_id').eq('id', userId).maybeSingle();
+      profile = data;
+    } catch (e) {
+      // Fallback if column doesn't exist yet
+      const { data } = await supabase.from('profiles').select('role, email').eq('id', userId).maybeSingle();
+      profile = data;
+    }
+
     if (profile?.role === 'admin' || profile?.email === 'alcidinopk@gmail.com') {
       console.log(`[Permissions] User ${userId} is an admin or developer (via profile). Permission granted.`);
       return true;
@@ -248,16 +257,40 @@ async function canUserEdit(supabase: any, userId: string, establishmentIdOrShort
     console.log(`[Permissions] Establishment found. Owner: ${establishment.user_id}, Checking against: ${userId}`);
     if (establishment.user_id === userId) return true;
     
+    // Check if the user's profile has this establishment's short ID assigned specifically (requested feature)
+    // Support multiple IDs separated by comma
+    const managedIds = profile?.managed_establishment_short_id ? 
+      profile.managed_establishment_short_id.split(',').map((id: string) => id.trim()) : 
+      [];
+    
+    if (managedIds.includes(establishment.short_id)) {
+      console.log(`[Permissions] User ${userId} has direct profile permission for ${establishment.short_id} (via list). Permission granted.`);
+      return true;
+    }
+    
+    // Get user email for fallback check if not already loaded in profile step
+    const userEmail = profile?.email;
+
     // 2. Check user_permissions table
-    const { data: permission } = await supabase
+    let permQuery = supabase
       .from('user_permissions')
       .select('*')
-      .eq('user_id', userId)
-      .eq('establishment_short_id', establishment.short_id)
-      .maybeSingle();
+      .eq('establishment_short_id', establishment.short_id);
+    
+    if (userEmail) {
+      permQuery = permQuery.or(`user_id.eq.${userId},user_email.eq.${userEmail}`);
+    } else {
+      permQuery = permQuery.eq('user_id', userId);
+    }
+
+    const { data: permission } = await permQuery.maybeSingle();
       
     if (permission) {
       console.log(`[Permissions] User ${userId} has explicit permission for ${establishment.short_id}`);
+      // Auto-sync user_id if it was missing
+      if (!permission.user_id) {
+        await supabase.from('user_permissions').update({ user_id: userId }).eq('id', permission.id);
+      }
       return true;
     }
 
@@ -1396,39 +1429,92 @@ function cityResultsMap(data: any[]) {
 
 app.get("/api/establishments/user/:userId", async (req, res) => {
   const { userId } = req.params;
-  console.log(`[API] Fetching establishments for user: ${userId}`);
   
   if (!userId || userId === 'undefined' || userId === 'null') {
-    console.warn("[API] Invalid userId provided to fetch establishments");
     return res.json([]);
   }
 
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      const { data, error } = await supabase
-        .from('establishments')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error("[Supabase Error] Fetching user establishments:", error);
-        throw error;
+      // Get profile for managed_establishment_short_id and email - robust select
+      let profile: any = null;
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('email, managed_establishment_short_id')
+          .eq('id', userId)
+          .maybeSingle();
+        profile = data;
+      } catch (e) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', userId)
+          .maybeSingle();
+        profile = data;
       }
+
+      // Get explicit permissions
+      const { data: perms } = await supabase
+        .from('user_permissions')
+        .select('establishment_short_id')
+        .or(`user_id.eq.${userId}${profile?.email ? `,user_email.eq.${profile.email}` : ''}`);
+
+      const allowedIds = new Set<string>();
+      if (profile?.managed_establishment_short_id) {
+        profile.managed_establishment_short_id.split(',').forEach((id: string) => {
+          const trimmed = id.trim();
+          if (trimmed) allowedIds.add(trimmed);
+        });
+      }
+      perms?.forEach(p => {
+        if (p.establishment_short_id) allowedIds.add(p.establishment_short_id);
+      });
+
+      let query = supabase.from('establishments').select('*');
+      
+      if (allowedIds.size > 0) {
+        const ids = Array.from(allowedIds).map(id => `"${id}"`).join(',');
+        query = query.or(`user_id.eq.${userId},short_id.in.(${ids})`);
+      } else {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+      
+      if (error) throw error;
       return res.json(data || []);
     }
     
-    // Fallback to local establishments for this session
-    const userEsts = establishments.filter(e => e.user_id === userId);
-    console.log(`[API] Found ${userEsts.length} local establishments for user ${userId}`);
-    res.json(userEsts);
+    res.json(establishments.filter(e => e.user_id === userId));
   } catch (error: any) {
-    console.error("[API Error] Error fetching user establishments:", error);
-    res.status(500).json({ 
-      error: "Erro ao buscar seus cadastros", 
-      message: error.message || "Erro interno no servidor" 
-    });
+    console.error("[API Error] Fetching user establishments:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/establishments/:id/can-edit", async (req, res) => {
+  const { id } = req.params;
+  const userId = req.headers['x-user-id'] as string;
+  
+  if (!userId) {
+    return res.json({ can_edit: false });
+  }
+
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      // Mock mode fallback
+      const est = establishments.find(e => String(e.id) === String(id) || String(e.short_id) === String(id));
+      return res.json({ can_edit: est ? est.user_id === userId : false });
+    }
+
+    const hasPermission = await canUserEdit(supabase, userId, id);
+    res.json({ can_edit: hasPermission });
+  } catch (error: any) {
+    console.error("[API Error] Checking can-edit:", error);
+    res.status(500).json({ error: error.message, can_edit: false });
   }
 });
 
@@ -1826,33 +1912,107 @@ app.post("/api/admin/permissions", async (req, res) => {
   const { email, shortId, role } = req.body;
   const requesterId = req.headers['x-user-id'] as string;
 
-  try {
-    const supabase = getSupabaseAdmin();
-    if (!supabase) return res.status(503).json({ error: "Supabase not connected" });
+    try {
+      console.log(`[Admin API] Starting permission grant. Email: ${email}, ShortId: ${shortId}, Role: ${role}`);
+      
+      const supabase = getSupabaseAdmin();
+      if (!supabase) {
+        console.error('[Admin API] Supabase config missing');
+        return res.status(503).json({ error: "Supabase não configurado no servidor." });
+      }
 
-    // Verify ownership
-    const { data: est } = await supabase.from('establishments').select('user_id').eq('short_id', shortId).maybeSingle();
-    if (!est || est.user_id !== requesterId) {
-      return res.status(403).json({ error: "Acesso negado." });
+      // 1. Verify establishment ownership
+      const { data: est, error: estError } = await supabase
+        .from('establishments')
+        .select('id, user_id')
+        .eq('short_id', shortId)
+        .maybeSingle();
+      
+      if (estError) {
+        console.error('[Admin API] Error fetching establishment:', estError);
+        return res.status(500).json({ error: "Erro ao consultar estabelecimento: " + estError.message });
+      }
+
+      if (!est) {
+        return res.status(404).json({ error: "Estabelecimento não encontrado." });
+      }
+
+      if (est.user_id !== requesterId) {
+        console.warn(`[Admin API] Unauthorized access attempt: ${requesterId} for ${shortId}`);
+        return res.status(403).json({ error: "Acesso negado: Você não é o proprietário desta conta." });
+      }
+
+      // 2. Resolve user by email
+      const { data: profile, error: profError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', email.trim())
+        .maybeSingle();
+        
+      if (profError) {
+        console.warn('[Admin API] Profile lookup error (non-fatal):', profError);
+      }
+      
+      const userId = profile?.id || null;
+      console.log(`[Admin API] Profile resolved. ID: ${userId}`);
+
+      // 3. Upsert permission using manual check to be safer with RLS/Constraints
+      const { data: existing, error: findError } = await supabase
+        .from('user_permissions')
+        .select('id')
+        .eq('user_email', email.trim())
+        .eq('establishment_short_id', shortId)
+        .maybeSingle();
+
+      if (findError) {
+        console.error('[Admin API] Error checking existing permissions:', findError);
+        throw findError;
+      }
+
+      let opResult;
+      if (existing) {
+        console.log(`[Admin API] Updating existing permission: ${existing.id}`);
+        opResult = await supabase
+          .from('user_permissions')
+          .update({
+            user_id: userId,
+            role: role || 'editor'
+          })
+          .eq('id', existing.id)
+          .select();
+      } else {
+        console.log('[Admin API] Inserting new permission');
+        opResult = await supabase
+          .from('user_permissions')
+          .insert([{
+            user_id: userId,
+            user_email: email.trim(),
+            establishment_short_id: shortId,
+            role: role || 'editor'
+          }])
+          .select();
+      }
+
+      if (opResult.error) {
+        console.error('[Admin API] Database operation failed:', opResult.error);
+        
+        if (opResult.error.code === '42501' || opResult.error.message.includes('row-level security')) {
+          return res.status(403).json({ 
+            error: "Erro de Permissão (RLS). Por favor, execute o script SQL atualizado no Dashboard do Supabase.",
+            details: opResult.error.message
+          });
+        }
+        return res.status(500).json({ error: "Erro no banco de dados: " + opResult.error.message });
+      }
+
+      console.log('[Admin API] Permission granted successfully');
+      res.json(opResult.data ? opResult.data[0] : {});
+    } catch (error: any) {
+      console.error('[Admin API] CRITICAL UNEXPECTED ERROR:', error);
+      res.status(500).json({ 
+        error: "Erro interno no servidor: " + (error.message || "Ocorreu um erro inesperado")
+      });
     }
-
-    // Find user by email (we need their ID if possible, otherwise we use email)
-    // Note: Supabase auth.users is protected, usually we'd have a public users table
-    // For now we'll store user_email in the permissions table as requested
-    const { data, error } = await supabase
-      .from('user_permissions')
-      .insert([{
-        user_email: email,
-        establishment_short_id: shortId,
-        role: role || 'editor'
-      }])
-      .select();
-
-    if (error) throw error;
-    res.json(data[0]);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
 });
 
 app.delete("/api/admin/permissions/:permissionId", async (req, res) => {
@@ -2136,6 +2296,8 @@ app.post("/api/establishments/register", async (req, res) => {
         let userMessage = "Erro ao salvar no banco de dados";
         if (error.code === '42P01') {
           userMessage = "Tabela 'establishments' não encontrada no Supabase. Por favor, crie a tabela no seu painel do Supabase.";
+        } else if (error.code === '42501') {
+          userMessage = "Erro de permissão (RLS). Por favor, execute o script SQL atualizado no painel do Supabase para liberar o cadastro de novos estabelecimentos.";
         } else if (error.code === '42703' || (error.message && error.message.includes('user_id'))) {
           userMessage = "Erro de esquema: A coluna 'user_id' não foi encontrada na tabela 'establishments'. Certifique-se de que ela existe e é do tipo UUID.";
         } else if (error.code === '42703' && error.message && error.message.includes('maps_link')) {
