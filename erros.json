@@ -1,0 +1,10 @@
+[
+  {
+    "id": "12543e91-20b7-4b0d-8a01-a04dc2bb0065",
+    "name": "Posto Central",
+    "address": "Av. Goiás, 500, Centro, Gurupi - TO",
+    "city": "Gurupi - TO",
+    "reason_skipped": "Falha na requisição/parsing do Gemini: {\"error\":{\"code\":429,\"message\":\"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \",\"status\":\"RESOURCE_EXHAUSTED\",\"details\":[{\"@type\":\"type.googleapis.com/google.rpc.Help\",\"links\":[{\"description\":\"Learn more about Gemini API quotas\",\"url\":\"https://ai.google.dev/gemini-api/docs/rate-limits\"}]}]}}",
+    "timestamp": "2026-05-20T17:28:08.010Z"
+  }
+]

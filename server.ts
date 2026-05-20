@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { getSupabaseAdmin } from "./src/lib/supabase-server.js";
 import Fuse from "fuse.js";
 import { CATEGORIES, SUB_CATEGORIES } from "./src/constants/taxonomy.js";
@@ -1799,6 +1799,242 @@ app.post("/api/maintenance/backfill-geo", async (req, res) => {
     processed: processedCount,
     errors: errorCount 
   });
+});
+
+// --- NEW CORRECTION PIPELINE ---
+app.get("/api/admin/auto-establishments", async (req, res) => {
+  const userId = req.headers['x-user-id'] as string;
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return res.status(503).json({ error: "DB not connected" });
+
+  try {
+    const { data: profile } = await supabase.from('profiles').select('role, email').eq('id', userId).maybeSingle();
+    const isAdmin = profile?.role === 'admin' || profile?.email === 'alcidinopk@gmail.com';
+    if (!isAdmin) {
+      return res.status(403).json({ error: "Permissão negada. Apenas administradores podem acessar." });
+    }
+
+    const { data, error } = await supabase
+      .from('establishments')
+      .select(`
+        id,
+        name,
+        address,
+        latitude,
+        longitude,
+        city_id,
+        cities (
+          name,
+          latitude,
+          longitude,
+          states (
+            uf
+          )
+        )
+      `);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    // Filter by UUIDs only
+    const autoIntegrated = (data || []).filter(item => item.id.includes("-") && item.id.length > 10);
+
+    const formatted = autoIntegrated.map(item => {
+      const latStr = String(item.latitude || "");
+      const lngStr = String(item.longitude || "");
+      const decimalsLat = latStr.split(".")[1] || "";
+      const decimalsLng = lngStr.split(".")[1] || "";
+      const isHighPrecision = decimalsLat.length > 4 || decimalsLng.length > 4;
+
+      const cityInfo: any = item.cities;
+      const stateInfo: any = cityInfo?.states;
+
+      return {
+        id: item.id,
+        name: item.name,
+        address: item.address,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        cityName: cityInfo?.name || "Gurupi",
+        cityUf: stateInfo?.uf || "TO",
+        isHighPrecision
+      };
+    });
+
+    res.json(formatted);
+  } catch (err: any) {
+    console.error("[API] Error auto-establishments:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/admin/correct-coordinates", async (req, res) => {
+  const userId = req.headers['x-user-id'] as string;
+  const { establishmentId } = req.body;
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return res.status(503).json({ error: "DB not connected" });
+
+  try {
+    const { data: profile } = await supabase.from('profiles').select('role, email').eq('id', userId).maybeSingle();
+    const isAdmin = profile?.role === 'admin' || profile?.email === 'alcidinopk@gmail.com';
+    if (!isAdmin) {
+      return res.status(403).json({ error: "Permissão negada. Apenas administradores podem acessar." });
+    }
+
+    if (!establishmentId) {
+      return res.status(400).json({ error: "establishmentId é obrigatório." });
+    }
+
+    const { data: est, error: fetchErr } = await supabase
+      .from('establishments')
+      .select(`
+        id,
+        name,
+        address,
+        latitude,
+        longitude,
+        cities (
+          name,
+          states (
+            uf
+          )
+        )
+      `)
+      .eq('id', establishmentId)
+      .maybeSingle();
+
+    if (fetchErr || !est) {
+      return res.status(404).json({ error: "Estabelecimento não encontrado." });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "GEMINI_API_KEY não configurada no servidor." });
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
+
+    const cityInfo: any = est.cities;
+    const stateInfo: any = cityInfo?.states;
+    const cityName = cityInfo?.name || "Gurupi";
+    const cityUf = stateInfo?.uf || "TO";
+
+    const query = `Encontre a latitude e longitude reais e exatas para o estabelecimento/local comercial "${est.name}" localizado na cidade "${cityName} - ${cityUf}", Brasil. O endereço registrado é: "${est.address || "Centro"}". Use a busca do Google para obter o pin de geolocalização mais preciso do Maps ou de páginas locais da empresa.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: query,
+      config: {
+        systemInstruction: `
+Você é uma inteligência de SIG focada em conversão precisa de estabelecimentos locais brasileiros em coordenadas de mapa exatas.
+Utilize a ferramenta Google Search Grounding integrada para encontrar as coordenadas reais de latitude e longitude do estabelecimento do mundo real correspondente à cidade especificada.
+Você DEVE SEMPRE retornar estritamente no formato JSON estruturado com as chaves 'latitude' e 'longitude' como dados numéricos flutuantes.
+Se você identificar que o nome do comércio é fictício ou genérico e não possui localização física de verdade, você pode atribuir uma variação geográfica pequena aleatória próxima ao centro da cidade para não sobrepor tudo, mas para comércios reais, retorne a coordenada de satélite/Maps real.
+`,
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            latitude: { type: Type.NUMBER, description: "Precision GPS latitude coordinate" },
+            longitude: { type: Type.NUMBER, description: "Precision GPS longitude coordinate" },
+            error: { type: Type.STRING, description: "Optional description of search reason if generic" }
+          },
+          required: ["latitude", "longitude"]
+        },
+      },
+    });
+
+    const responseText = response.text;
+    if (!responseText) {
+      return res.status(502).json({ error: "O modelo Gemini retornou uma resposta vazia." });
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(responseText.trim());
+    } catch (parseError) {
+      // Fallback regex to capture latitude and longitude from response text
+      const latMatch = responseText.match(/"latitude"\s*:\s*(-?\d+\.\d+)/);
+      const lngMatch = responseText.match(/"longitude"\s*:\s*(-?\d+\.\d+)/);
+      if (latMatch && lngMatch) {
+        parsed = {
+          latitude: parseFloat(latMatch[1]),
+          longitude: parseFloat(lngMatch[1])
+        };
+      } else {
+        return res.status(502).json({ error: "Falha ao analisar a resposta JSON estruturada do modelo." });
+      }
+    }
+
+    if (parsed.latitude && parsed.longitude) {
+      if (Math.abs(parsed.latitude) < 1 || Math.abs(parsed.longitude) < 1) {
+        return res.status(502).json({ error: `Coordenadas inválidas: ${parsed.latitude}, ${parsed.longitude}` });
+      }
+
+      const { error: updateErr } = await supabase
+        .from('establishments')
+        .update({
+          latitude: parsed.latitude,
+          longitude: parsed.longitude
+        })
+        .eq('id', establishmentId);
+
+      if (updateErr) {
+        return res.status(500).json({ error: `Erro ao salvar no banco: ${updateErr.message}` });
+      }
+
+      return res.json({
+        success: true,
+        latitude: parsed.latitude,
+        longitude: parsed.longitude,
+        name: est.name
+      });
+    }
+
+    return res.status(502).json({ error: parsed.error || "Coordenadas não retornadas na resposta estruturada." });
+  } catch (err: any) {
+    console.error("[API] Error correct coordinates:", err);
+    
+    let userFriendlyMessage = "Erro de comunicação com o Gemini.";
+    const status = err.status || 500;
+    
+    const isQuotaError = 
+      status === 429 || 
+      (err.message && (
+        err.message.includes("429") || 
+        err.message.includes("quota") || 
+        err.message.includes("RESOURCE_EXHAUSTED") ||
+        err.message.includes("exceeded your current quota")
+      ));
+
+    if (isQuotaError) {
+      userFriendlyMessage = "Limite de cota excedido (Erro 429). Aguarde alguns minutos ou reduza o ritmo para tentar novamente.";
+    } else if (err.message) {
+      try {
+        const parsedErr = JSON.parse(err.message);
+        if (parsedErr?.error?.message) {
+          userFriendlyMessage = parsedErr.error.message;
+        } else {
+          userFriendlyMessage = err.message;
+        }
+      } catch (pErr) {
+        userFriendlyMessage = err.message;
+      }
+    }
+    
+    res.status(status >= 400 && status < 600 ? status : 500).json({ 
+      error: userFriendlyMessage 
+    });
+  }
 });
 
 app.delete("/api/establishments/:id", async (req, res) => {
