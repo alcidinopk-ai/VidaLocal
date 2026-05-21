@@ -28,6 +28,43 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORIES, SUB_CATEGORIES } from '../constants/taxonomy';
+import { extractCoordinatesFromMapsLink } from '../utils/maps';
+
+// Helper to clean and parse coordinate input supporting empty, number, comma, and dot representations.
+// Automatically heals coordinates that are missing decimal separators (e.g. -490669319 -> -49.0669319) based on typical values and optional reference coordinate
+const cleanAndParseCoordinate = (val: any, referenceValue?: number): number | null => {
+  if (val === null || val === undefined) return null;
+  
+  // Convert any input format to clean string
+  let str = String(val).replace(',', '.').trim();
+  if (!str) return null;
+
+  let num = parseFloat(str);
+  if (isNaN(num)) return null;
+
+  // Let's check if the absolute value is too large, indicating a missing dot/separator
+  if (Math.abs(num) > 180) {
+    const isNegative = str.startsWith('-');
+    const digitsOnly = str.replace(/[^0-9]/g, '');
+    if (digitsOnly.length > 2) {
+      // Determine how many digits should be in the integer part.
+      let intDigits = 2; // Default to 2 digits (e.g., -49, -11)
+      if (referenceValue !== undefined && referenceValue !== null) {
+        const absRef = Math.max(1, Math.floor(Math.abs(referenceValue)));
+        intDigits = String(absRef).length;
+      }
+
+      const intPart = digitsOnly.substring(0, intDigits);
+      const decPart = digitsOnly.substring(intDigits);
+      const reconstructed = parseFloat(`${isNegative ? '-' : ''}${intPart}.${decPart}`);
+      if (!isNaN(reconstructed)) {
+        return reconstructed;
+      }
+    }
+  }
+
+  return num;
+};
 
 interface RegisterEstablishmentModalProps {
   isOpen: boolean;
@@ -61,8 +98,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     hours: '',
     is_open_24_hours: false,
     description: '',
-    latitude: null as number | null,
-    longitude: null as number | null,
+    latitude: null as number | string | null,
+    longitude: null as number | string | null,
     mapsLink: '',
     plusCode: '',
     is_featured: false,
@@ -105,9 +142,27 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         }
       }
 
+      let lat: any = null;
+      if (initialData.latitude !== undefined && initialData.latitude !== null) {
+        lat = String(initialData.latitude);
+      } else if (initialData.location?.latitude !== undefined && initialData.location?.latitude !== null) {
+        lat = String(initialData.location.latitude);
+      }
+
+      let lng: any = null;
+      if (initialData.longitude !== undefined && initialData.longitude !== null) {
+        lng = String(initialData.longitude);
+      } else if (initialData.location?.longitude !== undefined && initialData.location?.longitude !== null) {
+        lng = String(initialData.location.longitude);
+      }
+
+      // Automatically clean and parse numeric coordinates to safely recover missing decimal layout
+      const cleanedLat = cleanAndParseCoordinate(lat, currentCity?.latitude);
+      const cleanedLng = cleanAndParseCoordinate(lng, currentCity?.longitude);
+
       setFormData({
         name: initialData.name || initialData.title || '',
-        categoryId: String(initialData.categoryId || ''),
+        categoryId: String(initialData.category_id || initialData.categoryId || ''),
         subCategory: subCats,
         address: initialData.address || '',
         phone: initialData.phone || '',
@@ -116,10 +171,10 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         hours: initialData.hours || '',
         is_open_24_hours: initialData.is_open_24_hours || false,
         description: initialData.description || '',
-        latitude: initialData.location?.latitude || null,
-        longitude: initialData.location?.longitude || null,
-        mapsLink: initialData.uri || '',
-        plusCode: initialData.plusCode || '',
+        latitude: cleanedLat !== null ? String(cleanedLat) : '',
+        longitude: cleanedLng !== null ? String(cleanedLng) : '',
+        mapsLink: initialData.maps_link || initialData.uri || initialData.mapsLink || '',
+        plusCode: initialData.plus_code || initialData.plusCode || '',
         is_featured: initialData.is_featured || false,
         is_verified: initialData.is_verified || false,
         is_premium: initialData.is_premium || false,
@@ -324,24 +379,50 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     }));
   };
 
+  const resolveAndSetPlusCode = (inputCode: string, showAlert = false) => {
+    const trimmed = inputCode.trim();
+    if (!trimmed) return false;
+
+    try {
+      const olc = new OpenLocationCode();
+      if (olc.isValid(trimmed)) {
+        let fullCode = trimmed;
+        if (olc.isShort(trimmed)) {
+          const refLat = cleanAndParseCoordinate(formData.latitude, currentCity?.latitude) || currentCity?.latitude || -11.7298;
+          const refLng = cleanAndParseCoordinate(formData.longitude, currentCity?.longitude) || currentCity?.longitude || -49.0678;
+          fullCode = olc.recoverNearest(trimmed, refLat, refLng);
+        }
+
+        if (olc.isFull(fullCode)) {
+          const decoded = olc.decode(fullCode);
+          setFormData(prev => ({
+            ...prev,
+            latitude: decoded.latitudeCenter,
+            longitude: decoded.longitudeCenter
+          }));
+          if (showAlert) {
+            alert(`Plus Code resolvido com sucesso!\nCoordenadas: ${decoded.latitudeCenter}, ${decoded.longitudeCenter}`);
+          }
+          return true;
+        }
+      }
+    } catch (err) {
+      if (showAlert) {
+        console.error("Plus Code error:", err);
+        alert("Erro ao decodificar o Plus Code. Verifique o formato.");
+      }
+    }
+    return false;
+  };
+
   const handleResolvePlusCode = () => {
     if (!formData.plusCode.trim()) {
       alert("Por favor, insira um Plus Code.");
       return;
     }
-
-    try {
-      const olc = new OpenLocationCode();
-      const decoded = olc.decode(formData.plusCode.trim());
-      setFormData(prev => ({
-        ...prev,
-        latitude: decoded.latitudeCenter,
-        longitude: decoded.longitudeCenter
-      }));
-      alert("Plus Code resolvido com sucesso!");
-    } catch (err) {
-      console.error("Plus Code resolution error:", err);
-      alert("Plus Code inválido. Certifique-se de que é um código completo (ex: 8FVC9G8F+6X).");
+    const resolved = resolveAndSetPlusCode(formData.plusCode, true);
+    if (!resolved) {
+      alert("Plus Code inválido ou incompleto. Certifique-se de que é um código válido.");
     }
   };
 
@@ -432,10 +513,23 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
       setIsLoading(false);
       return;
     }
+
+    const parsedLat = cleanAndParseCoordinate(formData.latitude, currentCity?.latitude);
+    const parsedLng = cleanAndParseCoordinate(formData.longitude, currentCity?.longitude);
+
+    if (showManualCoords && (formData.latitude || formData.longitude)) {
+      if (parsedLat === null || parsedLng === null) {
+        setError("Por favor, insira coordenadas geográficas válidas (ex: -11.7289 ou -11,7289). Use ponto ou vírgula decimal.");
+        setIsLoading(false);
+        return;
+      }
+    }
     
     try {
       const payload = {
         ...formData,
+        latitude: parsedLat,
+        longitude: parsedLng,
         subCategory: formData.subCategory.join(' | '),
         hours: formatHoursSummary(),
         openingHours: openingHours.flatMap(h => 
@@ -824,38 +918,59 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                     Obter Localização Atual
                   </button>
                   
+                  <div className="relative">
+                    <input 
+                      type="url"
+                      value={formData.mapsLink}
+                      onChange={e => {
+                        const val = e.target.value;
+                        const coords = extractCoordinatesFromMapsLink(val);
+                        if (coords) {
+                          const cleanedLat = cleanAndParseCoordinate(coords.latitude, currentCity?.latitude) || coords.latitude;
+                          const cleanedLng = cleanAndParseCoordinate(coords.longitude, currentCity?.longitude) || coords.longitude;
+                          setFormData(prev => ({
+                            ...prev,
+                            mapsLink: val,
+                            latitude: cleanedLat,
+                            longitude: cleanedLng
+                          }));
+                          alert("Coordenadas geográficas extraídas com sucesso do link do Google Maps!");
+                        } else {
+                          setFormData(prev => ({...prev, mapsLink: val}));
+                        }
+                      }}
+                      placeholder="Inserir Link do Google Maps"
+                      className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input 
+                        type="text"
+                        value={formData.plusCode}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setFormData(prev => ({...prev, plusCode: val}));
+                          // Silently auto-resolve coordinates when valid codes are pasted or typed
+                          resolveAndSetPlusCode(val, false);
+                        }}
+                        placeholder="Inserir Plus Code (ex: 8FVC9G8F+6X)"
+                        className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
+                      />
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={handleResolvePlusCode}
+                      className="px-6 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all flex items-center gap-2"
+                    >
+                      <Hash className="w-4 h-4" />
+                      Resolver
+                    </button>
+                  </div>
+
                   {isAdmin && (
                     <>
-                      <div className="relative">
-                        <input 
-                          type="url"
-                          value={formData.mapsLink}
-                          onChange={e => setFormData({...formData, mapsLink: e.target.value})}
-                          placeholder="Inserir Link do Google Maps"
-                          className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
-                        />
-                      </div>
-
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <input 
-                            type="text"
-                            value={formData.plusCode}
-                            onChange={e => setFormData({...formData, plusCode: e.target.value})}
-                            placeholder="Inserir Plus Code (ex: 8FVC9G8F+6X)"
-                            className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
-                          />
-                        </div>
-                        <button 
-                          type="button"
-                          onClick={handleResolvePlusCode}
-                          className="px-6 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all flex items-center gap-2"
-                        >
-                          <Hash className="w-4 h-4" />
-                          Resolver
-                        </button>
-                      </div>
-
                       <button 
                         type="button"
                         onClick={() => setShowManualCoords(!showManualCoords)}
@@ -874,10 +989,9 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                           <div>
                             <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 ml-1">Latitude</label>
                             <input 
-                              type="number"
-                              step="any"
-                              value={formData.latitude || ''}
-                              onChange={e => setFormData({...formData, latitude: e.target.value ? parseFloat(e.target.value) : null})}
+                              type="text"
+                              value={formData.latitude === null || formData.latitude === undefined ? '' : String(formData.latitude)}
+                              onChange={e => setFormData({...formData, latitude: e.target.value})}
                               placeholder="-23.5505"
                               className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                             />
@@ -885,10 +999,9 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                           <div>
                             <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 ml-1">Longitude</label>
                             <input 
-                              type="number"
-                              step="any"
-                              value={formData.longitude || ''}
-                              onChange={e => setFormData({...formData, longitude: e.target.value ? parseFloat(e.target.value) : null})}
+                              type="text"
+                              value={formData.longitude === null || formData.longitude === undefined ? '' : String(formData.longitude)}
+                              onChange={e => setFormData({...formData, longitude: e.target.value})}
                               placeholder="-46.6333"
                               className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                             />
@@ -900,7 +1013,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                   
                   {formData.latitude && !showManualCoords && (
                     <p className="text-xs text-emerald-600 font-medium text-center">
-                      Coordenadas capturadas: {formData.latitude.toFixed(4)}, {formData.longitude?.toFixed(4)}
+                      Coordenadas capturadas: {cleanAndParseCoordinate(formData.latitude, currentCity?.latitude)?.toFixed(4)}, {cleanAndParseCoordinate(formData.longitude, currentCity?.longitude)?.toFixed(4)}
                     </p>
                   )}
                 </div>

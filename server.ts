@@ -179,6 +179,7 @@ interface Establishment {
   is_verified?: boolean;
   is_premium?: boolean;
   plus_code?: string;
+  maps_link?: string;
   created_at?: string;
   images?: string[];
 }
@@ -307,7 +308,7 @@ let establishments: Establishment[] = [
   { id: "e2", name: "Delicias da Polly", category_id: 1, sub_category: "Lanchonete", address: "Rua 36 Qd. 92 Lt 24 N 310 Nova Fronteira, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0660, rating: 4.9, whatsapp: "63992334455", phone: "6333124455", description: "Comida caseira, lanches e sobremesas feitas com carinho.", status: 'approved', is_featured: true, is_verified: true, is_premium: true, images: ["https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80", "https://images.unsplash.com/photo-1476224483472-279815b0019e?w=800&q=80"], hours: "Segunda-feira: 11:00-14:30\nTerça-feira: 11:00-14:30\nQuarta-feira: 11:00-14:30\nQuinta-feira: 11:00-14:30\nSexta-feira: 11:00-14:30\nSábado: 11:00-15:00\nDomingo: 11:00-15:00" },
   { id: "e3", name: "Mecânica do Neném", category_id: 6, sub_category: "Oficina / Centro Automotivo", address: "Av. Maranhão, 2560, Setor Industrial, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0720, rating: 4.5, whatsapp: "63984112233", phone: "6333121122", description: "Manutenção preventiva e corretiva para seu veículo com confiança.", status: 'approved', images: ["https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800&q=80", "https://images.unsplash.com/photo-1487754164641-a09bd0ec07aa?w=800&q=80"] },
   { id: "e4", name: "Pet Shop Amigão", category_id: 5, sub_category: "Pet Shop (varejo)", address: "Av. Goiás, 2100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0685, rating: 4.7, whatsapp: "63999887766", phone: "6333128877", description: "Tudo para o seu pet: rações, acessórios e banho e tosa.", status: 'approved', images: ["https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800&q=80", "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=800&q=80"] },
-  { id: "e5", name: "Pizzaria Bella Italia", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7295, longitude: -49.0670, rating: 4.6, whatsapp: "63992112233", phone: "6333129988", description: "Pizzas artesanais com massa fina e ingredientes selecionados.", status: 'approved', is_featured: true, is_verified: true, is_premium: true, images: ["https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80", "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=80"], hours: "Aberto 24 horas" },
+  { id: "e5", name: "Pizzaria Bella Italia", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7295, longitude: -49.0670, rating: 4.6, whatsapp: "63992112233", phone: "6333129988", description: "Pizzas artesanais com masa fina e ingredientes selecionados.", status: 'approved', is_featured: true, is_verified: true, is_premium: true, images: ["https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80", "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=80"], hours: "Aberto 24 horas" },
   { id: "e6", name: "Farmácia Preço Baixo", category_id: 1, sub_category: "Farmácia", address: "Rua 5, 800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7310, longitude: -49.0695, rating: 4.4, whatsapp: "63992445566", phone: "6333127766", description: "Medicamentos e perfumaria com os melhores preços da cidade.", status: 'approved', images: ["https://images.unsplash.com/photo-1587854692152-cbe660dbbb88?w=800&q=80"] },
   { id: "e7", name: "Supermercado Araguaia", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Goiás, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7260, longitude: -49.0650, rating: 4.3, whatsapp: "63992556677", phone: "6333126655", description: "Variedade em hortifruti, açougue e mercearia para sua família.", status: 'approved', images: ["https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&q=80"] },
   { id: "e8", name: "Barbearia do Zé", category_id: 4, sub_category: "Salão de Beleza / Barbearia", address: "Rua 3, 450, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0680, rating: 4.9, whatsapp: "63992667788", phone: "6333125544", description: "Corte de cabelo e barba com estilo e atendimento personalizado.", status: 'approved', is_featured: true, is_verified: true, is_premium: false, images: ["https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&q=80", "https://images.unsplash.com/photo-1599351474290-288d848c3fdf?w=800&q=80"] },
@@ -317,12 +318,12 @@ let establishments: Establishment[] = [
   { id: "e12", name: "Lanchonete Central", category_id: 1, sub_category: "Lanchonete", address: "Rua 4, 600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0675, rating: 4.7, whatsapp: "63992001122", phone: "6333121100", description: "Salgados frescos, sucos naturais e o melhor café da manhã.", status: 'approved', images: ["https://images.unsplash.com/photo-1550507992-eb63ffee0847?w=800&q=80"] },
   { id: "e13", name: "Pizzaria do Vale", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 2000, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0700, rating: 4.8, whatsapp: "63992112233", phone: "6333120099", description: "Pizzas no forno a lenha com bordas recheadas e muito sabor.", status: 'approved' },
   { id: "e14", name: "Hospital Regional de Gurupi", category_id: 3, sub_category: "Hospital / Clínica / UPA", address: "Av. Pará, S/N, Gurupi - TO", city_id: 1, latitude: -11.7350, longitude: -49.0750, rating: 4.1, whatsapp: "6333150200", phone: "6333150200", description: "Atendimento hospitalar de urgência e emergência para a região.", status: 'approved' },
-  { id: "e15", name: "Prefeitura Municipal", category_id: 3, sub_category: "Prefeitura / Câmara / Secretarias", address: "Rua 1, Centro, Gurupi - TO", city_id: 1, latitude: -11.7250, longitude: -49.0650, rating: 4.0, whatsapp: "6333150000", phone: "6333150000", description: "Sede administrativa do poder executivo municipal de Gurupi.", status: 'approved' },
+  { id: "e15", name: "Prefeitura Municipal", category_id: 3, sub_category: "Prefeitura / Câmara / Secretarias", address: "Rua 1, Centro, Gurupi - TO", city_id: 1, latitude: -11.7252, longitude: -49.0648, rating: 4.0, whatsapp: "6333150000", phone: "6333150000", description: "Sede administrativa do poder executivo municipal de Gurupi.", status: 'approved' },
   { id: "e16", name: "Escola Municipal de Gurupi", category_id: 10, sub_category: "Escola (infantil ao médio)", address: "Rua 10, Centro, Gurupi - TO", city_id: 1, latitude: -11.7280, longitude: -49.0660, rating: 4.5, whatsapp: "6333151111", phone: "6333151111", description: "Educação de qualidade para crianças e jovens da nossa cidade.", status: 'approved' },
   { id: "e17", name: "Igreja Matriz de Gurupi", category_id: 9, sub_category: "Igrejas / Templos / Comunidades Religiosas", address: "Praça da Matriz, Centro, Gurupi - TO", city_id: 1, latitude: -11.7290, longitude: -49.0670, rating: 4.9, whatsapp: "6333152222", phone: "6333152222", description: "Comunidade religiosa acolhedora no coração de Gurupi.", status: 'approved' },
-  { id: "e18", name: "Academia Fitness", category_id: 9, sub_category: "Clube / Academia / Quadra", address: "Av. Goiás, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7300, longitude: -49.0680, rating: 4.7, whatsapp: "63992113344", phone: "6333123344", description: "Equipamentos modernos e profissionais qualificados para seu treino.", status: 'approved' },
+  { id: "e18", name: "Academia Fitness", category_id: 9, sub_category: "Clube / Academia / Quadra", address: "Av. Goiás, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7303, longitude: -49.0683, rating: 4.7, whatsapp: "63992113344", phone: "6333123344", description: "Equipamentos modernos e profissionais qualificados para seu treino.", status: 'approved' },
   { id: "e19", name: "Móveis Estrela", category_id: 12, sub_category: "Móveis / Eletrodomésticos / Eletrônicos", address: "Av. Maranhão, 1800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7310, longitude: -49.0690, rating: 4.4, whatsapp: "63992224455", phone: "6333124455", description: "Móveis de qualidade para todos os ambientes da sua casa.", status: 'approved' },
-  { id: "e20", name: "Moda Fashion", category_id: 12, sub_category: "Moda (feminina, masculina, infantil, fitness)", address: "Rua 5, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0700, rating: 4.6, whatsapp: "63992335566", phone: "6333125566", description: "As últimas tendências da moda com os melhores preços.", status: 'approved' },
+  { id: "e20", name: "Moda Fashion", category_id: 12, sub_category: "Moda (feminina, masculina, infantil, fitness)", address: "Rua 5, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7324, longitude: -49.0697, rating: 4.6, whatsapp: "63992335566", phone: "6333125566", description: "As últimas tendências da moda com os melhores preços.", status: 'approved' },
   { id: "e21", name: "Ponto de Táxi Central", category_id: 11, sub_category: "Táxi / Motorista de Aplicativo", address: "Praça do Rato, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0650, rating: 4.8, whatsapp: "63992446677", phone: "6333126677", description: "Transporte rápido e seguro 24 horas por dia.", status: 'approved' },
   { id: "e22", name: "Farmácia DrogaMais", category_id: 1, sub_category: "Farmácia", address: "Av. Goiás, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7330, longitude: -49.0690, rating: 4.6, whatsapp: "63992557788", phone: "6333127788", description: "Sua saúde em primeiro lugar com atendimento especializado.", status: 'approved' },
   { id: "e23", name: "Casa de Carnes Boi de Ouro", category_id: 1, sub_category: "Açougue", address: "Av. Maranhão, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7290, longitude: -49.0675, rating: 4.9, whatsapp: "63992113344", phone: "6333124455", description: "Carnes nobres e selecionadas para o seu churrasco.", status: 'approved' },
@@ -331,11 +332,11 @@ let establishments: Establishment[] = [
   { id: "e26", name: "Gurupi Net", category_id: 2, sub_category: "Provedor de Internet / Automação / Suporte TI", address: "Rua 7, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7300, longitude: -49.0680, rating: 4.4, whatsapp: "6333153000", phone: "6333153000", description: "Internet ultraveloz em fibra óptica para sua casa ou empresa.", status: 'approved' },
   { id: "e27", name: "Fórum de Gurupi", category_id: 3, sub_category: "Fórum / Tribunal", address: "Av. Pará, Centro, Gurupi - TO", city_id: 1, latitude: -11.7340, longitude: -49.0740, rating: 4.2, phone: "6333112300", description: "Comarca de Gurupi - Tribunal de Justiça do Estado do Tocantins.", status: 'approved' },
   { id: "e28", name: "4º Batalhão da Polícia Militar", category_id: 3, sub_category: "Delegacia / Polícia / Bombeiros", address: "Av. Maranhão, Gurupi - TO", city_id: 1, latitude: -11.7400, longitude: -49.0800, rating: 4.8, phone: "6333121190", description: "Segurança pública e policiamento ostensivo em Gurupi.", status: 'approved' },
-  { id: "e29", name: "Barbearia Vip", category_id: 4, sub_category: "Salão de Beleza / Barbearia", address: "Av. Goiás, 1800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7310, longitude: -49.0690, rating: 4.9, whatsapp: "63992008877", description: "Corte moderno e ambiente climatizado para o homem de estilo.", status: 'approved' },
+  { id: "e29", name: "Barbearia Vip", category_id: 4, sub_category: "Salão de Beleza / Barbearia", address: "Av. Goiás, 1800, Centro, Gurupi - TO", city_id: 1, latitude: -11.7308, longitude: -49.0692, rating: 4.9, whatsapp: "63992008877", description: "Corte moderno e ambiente climatizado para o homem de estilo.", status: 'approved' },
   { id: "e30", name: "Clínica Veterinária São Francisco", category_id: 5, sub_category: "Clínica Veterinária", address: "Av. Maranhão, 2200, Gurupi - TO", city_id: 1, latitude: -11.7330, longitude: -49.0700, rating: 4.8, phone: "6333125566", description: "Atendimento veterinário com amor e dedicação aos animais.", status: 'approved' },
   { id: "e31", name: "Posto Décio Gurupi", category_id: 6, sub_category: "Posto de Combustível", address: "Rodovia BR-153, Gurupi - TO", city_id: 1, latitude: -11.7500, longitude: -49.0900, rating: 4.6, phone: "6333128800", description: "Posto de serviços completo na BR-153.", status: 'approved' },
   { id: "e32", name: "Constrular Materiais de Construção", category_id: 7, sub_category: "Material de Construção / Ferragista", address: "Av. Goiás, 3000, Gurupi - TO", city_id: 1, latitude: -11.7400, longitude: -49.0750, rating: 4.4, phone: "6333124400", description: "Do alicerce ao acabamento, tudo para sua obra.", status: 'approved' },
-  { id: "e33", name: "Imobiliária Terra", category_id: 8, sub_category: "Imobiliária / Corretor", address: "Av. Maranhão, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7260, longitude: -49.0650, rating: 4.7, phone: "6333121010", description: "Venda e aluguel de imóveis com transparência e segurança.", status: 'approved' },
+  { id: "e33", name: "Imobiliária Terra", category_id: 8, sub_category: "Imobiliária / Corretor", address: "Av. Maranhão, 1000, Centro, Gurupi - TO", city_id: 1, latitude: -11.7261, longitude: -49.0653, rating: 4.7, phone: "6333121010", description: "Venda e aluguel de imóveis com transparência e segurança.", status: 'approved' },
   { id: "e34", name: "UNIRG - Campus I", category_id: 10, sub_category: "Universidade / Instituto Federal", address: "Av. Antônio Nunes da Silva, Gurupi - TO", city_id: 1, latitude: -11.7450, longitude: -49.0600, rating: 4.5, phone: "6333112700", description: "Universidade de Gurupi - Ensino superior de excelência.", status: 'approved' },
   { id: "e35", name: "IFTO - Campus Gurupi", category_id: 10, sub_category: "Universidade / Instituto Federal", address: "Alameda Madrid, Gurupi - TO", city_id: 1, latitude: -11.7600, longitude: -49.0500, rating: 4.8, phone: "6333115400", description: "Instituto Federal do Tocantins - Educação técnica e superior.", status: 'approved' },
   { id: "e36", name: "Ponto de Táxi Rodoviária", category_id: 11, sub_category: "Táxi / Motorista de Aplicativo", address: "Rodoviária de Gurupi, Gurupi - TO", city_id: 1, latitude: -11.7420, longitude: -49.0780, rating: 4.3, description: "Serviço de táxi disponível 24h na rodoviária.", status: 'approved' },
@@ -356,7 +357,7 @@ let establishments: Establishment[] = [
   { id: "e51", name: "Mercearia Mato Grosso", category_id: 1, sub_category: "Supermercado / Mercado", address: "Av. Mato Grosso, 1300, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0665, rating: 4.1, phone: "6333120011", description: "Produtos de mercearia e utilidades domésticas.", status: 'approved' },
   // Alimentação
   { id: "e52", name: "Churrascaria do Gaúcho", category_id: 1, sub_category: "Restaurante", address: "Av. Goiás, 2200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7330, longitude: -49.0695, rating: 4.7, phone: "6333121515", description: "O melhor rodízio de carnes de Gurupi.", status: 'approved' },
-  { id: "e53", name: "Lanchonete do Ponto", category_id: 1, sub_category: "Lanchonete", address: "Av. Maranhão, 1400, Centro, Gurupi - TO", city_id: 1, latitude: -11.7285, longitude: -49.0675, rating: 4.5, phone: "6333122525", description: "Salgados fritos e assados na hora.", status: 'approved' },
+  { id: "e53", name: "Lanchonete do Ponto", category_id: 1, sub_category: "Lanchonete", address: "Av. Maranhão, 1400, Centro, Gurupi - TO", city_id: 1, latitude: -11.7288, longitude: -49.0672, rating: 4.5, phone: "6333122525", description: "Salgados fritos e assados na hora.", status: 'approved' },
   { id: "e54", name: "Pizzaria Di Napoli", category_id: 1, sub_category: "Pizzaria", address: "Av. Pará, 1600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7305, longitude: -49.0685, rating: 4.8, phone: "6333123535", description: "Pizzas tradicionais com borda recheada.", status: 'approved' },
   { id: "e55", name: "Restaurante Sabor de Minas", category_id: 1, sub_category: "Restaurante", address: "Av. Piauí, 1200, Centro, Gurupi - TO", city_id: 1, latitude: -11.7275, longitude: -49.0665, rating: 4.6, phone: "6333124545", description: "Comida mineira autêntica no fogão a lenha.", status: 'approved' },
   // Serviços Automotivos
@@ -370,8 +371,8 @@ let establishments: Establishment[] = [
   { id: "e62", name: "Igreja Presbiteriana de Gurupi", category_id: 9, sub_category: "Igrejas / Templos / Comunidades Religiosas", address: "Av. Maranhão, 1600, Centro, Gurupi - TO", city_id: 1, latitude: -11.7305, longitude: -49.0685, rating: 4.7, phone: "6333120101", description: "Comunidade cristã reformada.", status: 'approved' },
   { id: "e63", name: "Clube da OAB Gurupi", category_id: 9, sub_category: "Clube / Academia / Quadra", address: "Av. Mato Grosso, Gurupi - TO", city_id: 1, latitude: -11.7450, longitude: -49.0800, rating: 4.6, description: "Lazer e esportes para advogados e convidados.", status: 'approved' },
   // Educação
-  { id: "e64", name: "Colégio Objetivo Gurupi", category_id: 10, sub_category: "Escola (infantil ao médio)", address: "Av. Goiás, 1100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7270, longitude: -49.0660, rating: 4.8, phone: "6333121212", description: "Ensino de qualidade do infantil ao pré-vestibular.", status: 'approved' },
-  { id: "e65", name: "Faculdade Unicamps", category_id: 10, sub_category: "Universidade / Instituto Federal", address: "Av. Maranhão, 2000, Gurupi - TO", city_id: 1, latitude: -11.7320, longitude: -49.0700, rating: 4.5, phone: "6333122323", description: "Cursos superiores e pós-graduação.", status: 'approved' },
+  { id: "e64", name: "Colégio Objetivo Gurupi", category_id: 10, sub_category: "Escola (infantil ao médio)", address: "Av. Goiás, 1100, Centro, Gurupi - TO", city_id: 1, latitude: -11.7268, longitude: -49.0662, rating: 4.8, phone: "6333121212", description: "Ensino de qualidade do infantil ao pré-vestibular.", status: 'approved' },
+  { id: "e65", name: "Faculdade Unicamps", category_id: 10, sub_category: "Universidade / Instituto Federal", address: "Av. Maranhão, 2000, Gurupi - TO", city_id: 1, latitude: -11.7316, longitude: -49.0703, rating: 4.5, phone: "6333122323", description: "Cursos superiores e pós-graduação.", status: 'approved' },
   { id: "e66", name: "Escola Estadual Costa e Silva", category_id: 10, sub_category: "Escola (infantil ao médio)", address: "Av. Pará, Centro, Gurupi - TO", city_id: 1, latitude: -11.7330, longitude: -49.0720, rating: 4.3, phone: "6333123434", description: "Educação pública tradicional em Gurupi.", status: 'approved' },
   { id: "e67", name: "CNA Inglês e Espanhol", category_id: 10, sub_category: "Escola de Idiomas", address: "Av. Piauí, 1500, Centro, Gurupi - TO", city_id: 1, latitude: -11.7300, longitude: -49.0690, rating: 4.9, phone: "6333124545", description: "Aprenda um novo idioma com metodologia dinâmica.", status: 'approved' },
   // Palmas Establishments
@@ -475,6 +476,85 @@ app.get("/api/vercel-debug", async (req, res) => {
   res.json(result);
 });
 
+// Automatic duplicate-coordinate stacking (jitter) mitigation function
+async function jitterDuplicateCoordinates() {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { count: 0, message: "Supabase not connected" };
+  try {
+    console.log("[Maintenance] Running automatic coordinate duplicate-stacking mitigation...");
+    const { data: allEsts, error } = await supabase
+      .from('establishments')
+      .select('id, name, latitude, longitude, city_id');
+      
+    if (error) {
+      console.error("[Maintenance] Error fetching establishments:", error);
+      return { count: 0, message: `Error fetching: ${error.message}` };
+    }
+    
+    if (!allEsts || allEsts.length === 0) {
+      return { count: 0, message: "No establishments found in Supabase" };
+    }
+    
+    // Group by exact parsed lat/long
+    const coordinateGroups: { [key: string]: typeof allEsts } = {};
+    for (const est of allEsts) {
+      if (est.latitude && est.longitude) {
+        // Round to 5 decimal places (~1.1 meter resolution) to find overlaps
+        const key = `${est.latitude.toFixed(5)}_${est.longitude.toFixed(5)}`;
+        if (!coordinateGroups[key]) {
+          coordinateGroups[key] = [];
+        }
+        coordinateGroups[key].push(est);
+      }
+    }
+    
+    let updatedCount = 0;
+    const details: string[] = [];
+    
+    for (const [key, group] of Object.entries(coordinateGroups)) {
+      if (group.length > 1) {
+        console.log(`[Maintenance] Found ${group.length} overlapping establishments at [${key.replace('_', ', ')}]:`, group.map(g => g.name));
+        for (let i = 0; i < group.length; i++) {
+          const est = group[i];
+          // Determine spiral offset based on index: first one stays at original, subsequent ones are spread out
+          if (i > 0) {
+            // Spiral math: angle increases, radius increases slightly
+            const angle = (i * 2 * Math.PI) / (group.length - 1);
+            // Approx 15-40 meters offset (0.00018 to 0.00040 decimal degrees)
+            const radius = 0.00018 + (i * 0.00007); 
+            const newLat = Number((est.latitude + Math.sin(angle) * radius).toFixed(6));
+            const newLng = Number((est.longitude + Math.cos(angle) * radius).toFixed(6));
+            
+            const { error: updateErr } = await supabase
+              .from('establishments')
+              .update({ latitude: newLat, longitude: newLng })
+              .eq('id', est.id);
+              
+            if (!updateErr) {
+              updatedCount++;
+              details.push(`Ajustado: ${est.name} de [${est.latitude}, ${est.longitude}] para [${newLat}, ${newLng}]`);
+            } else {
+              details.push(`Falha ao ajustar ${est.name}: ${updateErr.message}`);
+            }
+          }
+        }
+      }
+    }
+    
+    console.log(`[Maintenance] Completed duplicate mitigation. ${updatedCount} items dispersed.`);
+    return { count: updatedCount, details };
+  } catch (err: any) {
+    console.error("[Maintenance] Error in coordinate mitigation runner:", err);
+    return { count: 0, error: err.message };
+  }
+}
+
+// Admin Trigger to jitter existing overlapping coordinates
+app.get("/api/admin/jitter-coordinates", async (req, res) => {
+  const result = await jitterDuplicateCoordinates();
+  res.json({ success: true, ...result });
+});
+
 // API Routes
 app.get("/api/admin/sync-mock-data", async (req, res) => {
   const supabase = getSupabaseAdmin();
@@ -559,6 +639,15 @@ app.get("/api/admin/sync-mock-data", async (req, res) => {
       } else {
         results.establishments.push({ name: est.name, status: 'already_exists' });
       }
+    }
+
+    // Run automated coordinate jittering mitigation to disperse stacked entries after seeding
+    try {
+      const jitterResult = await jitterDuplicateCoordinates();
+      results.jitter_mitigation = jitterResult;
+    } catch (jitterErr: any) {
+      console.error("[Sync] Post-sync coordinate jittering failed:", jitterErr);
+      results.jitter_mitigation_error = jitterErr?.message || String(jitterErr);
     }
 
     res.json({ success: true, results });
@@ -785,6 +874,57 @@ const cleanQuery = (text: string) => {
   return normalize(text).replace(/[^\w\s]/gi, ' ').replace(/\s+/g, ' ').trim();
 };
 
+const cleanQueryPreservingAccents = (text: string) => {
+  // Keeps all letters (including accented characters in any language) and numbers, removes punctuation
+  return text.toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const getSynonymsForQuery = (query: string): string[] => {
+  const norm = normalize(query);
+  const synonyms: string[] = [];
+
+  // 1. Optics / Eyewear category expansion
+  const opticalWords = ["otica", "oticas", "optica", "opticas", "oculos", "visao", "vista", "lente", "lentes", "oculo", "oftalmo", "oftalmologista"];
+  if (opticalWords.some(word => norm.includes(word))) {
+    synonyms.push("ótica", "otica", "óticas", "óptica", "optica", "ópticas", "óculos", "oculos", "visão", "visao", "vista", "lente", "lentes", "oculo");
+  }
+
+  // 2. Food & Restaurants
+  const foodWords = ["comer", "fome", "comida", "janta", "almoço", "rango", "gastronomia", "refeicao", "refeições", "prato"];
+  if (foodWords.some(word => norm.includes(word))) {
+    synonyms.push("restaurante", "lanchonete", "churrascaria", "pizzaria", "marmitaria", "espetinho", "gastronomia", "refeição");
+  }
+
+  // 3. Bakeries & Cafes
+  const bakeryWords = ["pao", "cafesinho", "cafe", "doce", "bolo", "confeitaria", "pão", "confeito", "panificadora", "panificio"];
+  if (bakeryWords.some(word => norm.includes(word))) {
+    synonyms.push("padaria", "confeitaria", "cafeteria", "panificadora", "panifício", "pão");
+  }
+
+  // 4. Car / Motorcycle Repairs
+  const repairWords = ["conserto", "carro", "moto", "mecanico", "mecanica", "oficina", "pneu", "automovel", "veiculo"];
+  if (repairWords.some(word => norm.includes(word))) {
+    synonyms.push("oficina", "mecânica", "mecanico", "mecanica", "borracharia", "auto elétrica", "auto eletrica", "autopeças", "auto peças");
+  }
+
+  // 5. Pets
+  const petWords = ["pet", "racao", "cachorro", "gato", "veterinario", "banho e tosa", "animal", "animais"];
+  if (petWords.some(word => norm.includes(word))) {
+    synonyms.push("pet", "pet shop", "veterinario", "veterinária", "ração", "banho e tosa");
+  }
+
+  // 6. Markets & Grocery
+  const groceryWords = ["mercado", "supermercado", "sacolao", "hortifruti", "compras", "mercearia", "rancho", "feira"];
+  if (groceryWords.some(word => norm.includes(word))) {
+    synonyms.push("mercado", "supermercado", "hortifruti", "sacolão", "feira", "mercearia", "minimercado", "armazém");
+  }
+
+  return synonyms;
+};
+
 // Fuzzy search dictionary for "smart" matching
 let fuseInstance: Fuse<string> | null = null;
 const getFuseInstance = () => {
@@ -804,7 +944,8 @@ const getFuseInstance = () => {
     "papelaria", "livraria", "brinquedos", "presentes", "floricultura",
     "sorveteria", "açaí", "cafeteria", "bar", "pub", "boate", "cervejaria",
     "espetinho", "churrascaria", "japonês", "sushi", "chinês", "italiano",
-    "hamburgueria", "pastelaria", "lanche", "comida caseira", "marmitex"
+    "hamburgueria", "pastelaria", "lanche", "comida caseira", "marmitex",
+    "ótica", "óticas", "óptica", "ópticas", "otica", "oticas"
   ];
   const dictionary = Array.from(new Set([...subCategories, ...commonTerms]));
   
@@ -1243,25 +1384,71 @@ app.get("/api/search", async (req, res) => {
           }
 
           if (currentQ) {
-            const sanitizedQ = sanitizeSupabaseQuery(currentQ);
             const cityNames = [cityName, "Gurupi", "Palmas", "Araguaína"];
-            let searchTerms = sanitizedQ;
+            
+            // Generate accent-preserving and normalized search terms
+            const qAccented = cleanQueryPreservingAccents(currentQ);
+            const qNormalized = normalize(qAccented);
+            
+            let searchTerms = qAccented;
             cityNames.forEach(cn => {
+              searchTerms = searchTerms.replace(new RegExp(normalize(cn), 'gi'), '');
               searchTerms = searchTerms.replace(new RegExp(cn, 'gi'), '');
             });
             searchTerms = searchTerms.replace(/\b(em|no|na|de|do|da|para|com)\b/gi, '').trim();
 
-            const queryWords = searchTerms.split(/\s+/).filter(w => w.length > 2);
+            const wordsAccented = searchTerms.split(/\s+/).filter(w => w.length > 2);
+            const wordsNormalized = wordsAccented.map(w => normalize(w));
+
+            // Generate search terms (phrases + words)
+            const originalTerms = new Set<string>();
+            const synonymTerms = new Set<string>();
             
-            let orConditions = `name.ilike.%${sanitizedQ}%,description.ilike.%${sanitizedQ}%,address.ilike.%${sanitizedQ}%,sub_category.ilike.%${sanitizedQ}%`;
+            // 1. Add full phrase variations (with accents & normalized)
+            if (qAccented) originalTerms.add(sanitizeSupabaseQuery(qAccented));
+            if (qNormalized) originalTerms.add(sanitizeSupabaseQuery(qNormalized));
             
-            if (queryWords.length > 0) {
-              const wordConditions = queryWords.map(w => 
-                `name.ilike.%${w}%,description.ilike.%${w}%,address.ilike.%${w}%,sub_category.ilike.%${w}%`
-              ).join(',');
-              orConditions += `,${wordConditions}`;
+            // 2. Add individual words (with accents & normalized)
+            wordsAccented.forEach(w => originalTerms.add(sanitizeSupabaseQuery(w)));
+            wordsNormalized.forEach(w => originalTerms.add(sanitizeSupabaseQuery(w)));
+            
+            // 3. Add smart synonyms to expand the searched terms set
+            const synonyms = getSynonymsForQuery(currentQ);
+            synonyms.forEach(syn => {
+              const sanitized = sanitizeSupabaseQuery(syn);
+              if (sanitized && !originalTerms.has(sanitized)) {
+                synonymTerms.add(sanitized);
+              }
+            });
+
+            const uniqueOriginals = Array.from(originalTerms).filter(t => t.length > 0);
+            const uniqueSynonyms = Array.from(synonymTerms).filter(t => t.length > 0);
+            
+            const conditions: string[] = [];
+            
+            // Original user search terms can match any field
+            uniqueOriginals.forEach(term => {
+              conditions.push(
+                `name.ilike.%${term}%`,
+                `description.ilike.%${term}%`,
+                `address.ilike.%${term}%`,
+                `sub_category.ilike.%${term}%`
+              );
+            });
+            
+            // Synonym expansions match Name, Sub-category, or Description (avoiding accidental address field hits)
+            uniqueSynonyms.forEach(term => {
+              conditions.push(
+                `name.ilike.%${term}%`,
+                `description.ilike.%${term}%`,
+                `sub_category.ilike.%${term}%`
+              );
+            });
+            
+            if (conditions.length > 0) {
+              let orConditions = conditions.join(',');
+              query = query.or(orConditions);
             }
-            query = query.or(orConditions);
           }
           
           // Order by: approved first, then premium, then featured, then rating
@@ -1300,8 +1487,8 @@ app.get("/api/search", async (req, res) => {
       };
 
       const start = Date.now();
-      let { data, error } = await fetchFromSupabase(q);
-      console.log(`[API Search] Supabase query for "${q}" took ${Date.now() - start}ms`);
+      let { data, error } = await fetchFromSupabase(rawQ);
+      console.log(`[API Search] Supabase query for "${rawQ}" took ${Date.now() - start}ms`);
       
       // If no results, try fuzzy correction
       if ((!data || data.length === 0) && q && !category_id && !sub_category) {
@@ -1375,10 +1562,21 @@ app.get("/api/search", async (req, res) => {
       const normAddr = normalize(e.address || "");
       
       const queryWords = q.split(/\s+/).filter(w => w.length > 2);
-      const matchText = normName.includes(q) || normSub.includes(q) || normDesc.includes(q) || normAddr.includes(q) ||
-                        queryWords.some(w => normName.includes(w) || normSub.includes(w) || normDesc.includes(w) || normAddr.includes(w));
+      
+      // Standard search matching
+      const matchOriginal = normName.includes(q) || normSub.includes(q) || normDesc.includes(q) || normAddr.includes(q) ||
+                            queryWords.some(w => normName.includes(w) || normSub.includes(w) || normDesc.includes(w) || normAddr.includes(w));
 
-      return matchCity && matchCategory && matchSub && matchText;
+      if (matchOriginal) return matchCity && matchCategory && matchSub;
+
+      // Synonym-based search matching (Name, Sub-category, or Description)
+      const synonyms = getSynonymsForQuery(q);
+      const matchSynonym = synonyms.some(syn => {
+        const normSyn = normalize(syn);
+        return normName.includes(normSyn) || normSub.includes(normSyn) || normDesc.includes(normSyn);
+      });
+
+      return matchCity && matchCategory && matchSub && matchSynonym;
     });
 
     // If no mock results, try fuzzy correction for mock data too
@@ -1554,8 +1752,8 @@ app.put("/api/establishments/:id", async (req, res) => {
         description: registration.description,
         latitude: registration.latitude,
         longitude: registration.longitude,
-        maps_link: registration.mapsLink,
-        plus_code: registration.plusCode,
+        maps_link: registration.mapsLink || registration.maps_link,
+        plus_code: registration.plusCode || registration.plus_code,
         city_id: registration.cityId ? Number(registration.cityId) : null,
         state_id: registration.stateId ? Number(registration.stateId) : null,
         images: registration.images || []
@@ -1694,6 +1892,8 @@ app.put("/api/establishments/:id", async (req, res) => {
           description: registration.description,
           latitude: registration.latitude || establishments[index].latitude,
           longitude: registration.longitude || establishments[index].longitude,
+          maps_link: registration.mapsLink || registration.maps_link,
+          plus_code: registration.plusCode || registration.plus_code,
           city_id: Number(registration.cityId),
           is_featured: registration.is_featured,
           is_verified: registration.is_verified,
@@ -2514,8 +2714,8 @@ app.post("/api/establishments/register", async (req, res) => {
         description: registration.description,
         latitude: registration.latitude || registration.cityLat || -11.7298,
         longitude: registration.longitude || registration.cityLng || -49.0678,
-        maps_link: registration.mapsLink,
-        plus_code: registration.plusCode,
+        maps_link: registration.mapsLink || registration.maps_link,
+        plus_code: registration.plusCode || registration.plus_code,
         city_id: targetCityId,
         state_id: targetStateId,
         user_id: userId,
@@ -2594,6 +2794,8 @@ app.post("/api/establishments/register", async (req, res) => {
         description: registration.description,
         latitude: registration.latitude || -11.7298,
         longitude: registration.longitude || -49.0678,
+        maps_link: registration.mapsLink || registration.maps_link,
+        plus_code: registration.plusCode || registration.plus_code,
         city_id: Number(registration.cityId),
         user_id: registration.userId,
         rating: 5.0,
@@ -2659,7 +2861,15 @@ if (!isProd) {
 // Only listen if not on Vercel
 if (!process.env.VERCEL) {
   const PORT = 3000;
-  app.listen(PORT, "0.0.0.0", () => console.log(`Server running on http://localhost:${PORT}`));
+  app.listen(PORT, "0.0.0.0", async () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    // Boot-up maintenance: Automatically search and resolve any overlapping coordinate stacking in the active database
+    try {
+      await jitterDuplicateCoordinates();
+    } catch (err) {
+      console.error("[Startup Maintenance] Coordinate de-duplication check failed:", err);
+    }
+  });
 }
 
 // Global error handler

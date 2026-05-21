@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Star, MapPin, Share2, ExternalLink, MessageCircle, Navigation2, Crown, CheckCircle2, Clock, X } from 'lucide-react';
 import { useCity } from '../contexts/CityContext';
 import { getBusinessStatus } from '../utils/hours';
+import { getDirectionsUrl } from '../utils/maps';
 import { EstablishmentCard } from './EstablishmentCard';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -21,6 +22,7 @@ interface Establishment {
   is_verified?: boolean;
   is_featured?: boolean;
   images?: string[];
+  maps_link?: string;
 }
 
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -202,7 +204,7 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
 
                     <div className="absolute bottom-3 inset-x-3 flex items-center justify-between gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       <a 
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${est.latitude},${est.longitude}`}
+                        href={getDirectionsUrl(est.maps_link, est.latitude, est.longitude, userLocation)}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => {
@@ -243,7 +245,7 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
                         onClick={(e) => {
                           handleAction(e, () => {
                             const text = `Confira ${est.name} no VidaLocal!`;
-                            const url = `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`;
+                            const url = est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`;
                             if (navigator.share) {
                               navigator.share({ title: est.name, text, url });
                             } else {
@@ -318,7 +320,7 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
                   maps: {
                     id: selectedEst.id,
                     title: selectedEst.name,
-                    uri: `https://www.google.com/maps/search/?api=1&query=${selectedEst.latitude},${selectedEst.longitude}`,
+                    uri: selectedEst.maps_link || `https://www.google.com/maps/search/?api=1&query=${selectedEst.latitude},${selectedEst.longitude}`,
                     location: {
                       latitude: selectedEst.latitude,
                       longitude: selectedEst.longitude

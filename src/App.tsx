@@ -286,6 +286,7 @@ export default function App() {
             is_premium: est.is_premium,
             opening_hours: est.opening_hours,
             images: est.images || [],
+            plusCode: est.plus_code || est.plusCode,
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -506,6 +507,7 @@ export default function App() {
             is_premium: est.is_premium,
             opening_hours: est.opening_hours,
             images: est.images || [],
+            plusCode: est.plus_code || est.plusCode,
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -620,6 +622,7 @@ export default function App() {
                   phone: est.phone, whatsapp: est.whatsapp, user_id: est.user_id, is_featured: est.is_featured,
                   is_verified: est.is_verified, is_premium: est.is_premium, opening_hours: est.opening_hours,
                   images: est.images || [],
+                  plusCode: est.plus_code || est.plusCode,
                   location: { latitude: est.latitude, longitude: est.longitude }
                 }
               }));
@@ -1216,7 +1219,8 @@ export default function App() {
                               is_featured: est.is_featured,
                               is_verified: est.is_verified,
                               is_premium: est.is_premium,
-                              images: est.images || (typeof est.image === 'string' ? [est.image] : [])
+                              images: est.images || (typeof est.image === 'string' ? [est.image] : []),
+                              plusCode: est.plus_code || est.plusCode
                             }
                           };
                           

@@ -30,6 +30,7 @@ import { supabase } from '../lib/supabase';
 import { InteractionHistory } from './InteractionHistory';
 import { RegisterEstablishmentModal } from './RegisterEstablishmentModal';
 import { getBusinessStatus } from '../utils/hours';
+import { getDirectionsUrl } from '../utils/maps';
 
 interface EstablishmentCardProps {
   chunk: GroundingChunk;
@@ -102,9 +103,10 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
     
   const whatsappUrl = formattedWhatsapp ? `https://wa.me/${formattedWhatsapp}` : "#";
   const telUrl = rawPhone ? `tel:${rawPhone.replace(/\D/g, '')}` : "#";
-  const routeUrl = location 
-    ? `https://www.google.com/maps/dir/?api=1&destination=${location.latitude},${location.longitude}${userLocation ? `&origin=${userLocation.latitude},${userLocation.longitude}` : ''}`
-    : uri;
+  
+  // Obtém a URL de rota corretíssima traçada a partir do link do Google Maps salvo se disponível,
+  // ou através das coordenadas cadastradas, integrando a localização de origem do usuário para traçar a rota perfeita.
+  const routeUrl = getDirectionsUrl(uri, location?.latitude, location?.longitude, userLocation);
   const shareText = `Confira ${title} no VidaLocal: ${uri}`;
 
   const statusInfo = getBusinessStatus(chunk.maps?.hours);
