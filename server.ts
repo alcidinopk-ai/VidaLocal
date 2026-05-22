@@ -755,32 +755,103 @@ app.get("/api/cities", async (req, res) => {
 });
 
 app.get("/api/cities/search", async (req, res) => {
-  const q = String(req.query.q || "").toLowerCase();
+  const q = String(req.query.q || "").trim();
   if (!q) return res.json([]);
+  
+  // Normalization helper to strip accents, make lowercase, and clean spelling (cedilla -> c)
+  const normalizeString = (str: string): string => {
+    return str
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // Remove all diacritic marks
+      .replace(/ç/g, "c")
+      .replace(/Ç/g, "c")
+      .toLowerCase()
+      .trim();
+  };
+
+  const normalizedQuery = normalizeString(q);
+  const words = normalizedQuery.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return res.json([]);
   
   try {
     const supabase = getSupabaseAdmin();
+    let allCities: any[] = [];
+    
     if (supabase) {
-      const sanitizedQ = sanitizeSupabaseQuery(q);
+      // Fetch active cities to filter with perfect client-side normalization
       const { data, error } = await supabase
         .from('cities')
         .select('*, states!inner(uf)')
-        .or(`name.ilike.%${sanitizedQ}%,states.uf.ilike.%${sanitizedQ}%`)
-        .eq('active', true)
-        .limit(10);
-      if (error) throw error;
-      return res.json(data || []);
+        .eq('active', true);
+      
+      if (error) {
+        console.warn("[API] Supabase cities fetch failed, falling back to mock data:", error);
+      } else if (data && data.length > 0) {
+        allCities = data.map((c: any) => ({
+          ...c,
+          uf: c.states?.uf || c.states?.[0]?.uf || ""
+        }));
+      }
     }
 
-    const results = cities.filter(c => {
-      const state = states.find(s => s.id === c.state_id);
-      const fullName = `${c.name} ${state?.uf}`.toLowerCase();
-      return fullName.includes(q) || c.name.toLowerCase().includes(q);
+    // High-resilience fallback to local mock data if Supabase is offline or empty
+    if (allCities.length === 0) {
+      allCities = cities.map(c => {
+        const state = states.find(s => s.id === c.state_id);
+        return {
+          ...c,
+          uf: state?.uf || ""
+        };
+      });
+    }
+
+    // Filter cities using the normalized query words
+    const filtered = allCities.filter(city => {
+      const cityNameNormalized = normalizeString(city.name);
+      const stateUfNormalized = normalizeString(city.uf);
+      const combinedNormalized = `${cityNameNormalized} ${stateUfNormalized}`;
+
+      // Check if all search words are present in the city name or state UF
+      return words.every(word => {
+        // If the query word is state UF (e.g. SP, TO), check state match
+        if (word.length === 2 && stateUfNormalized === word) {
+          return true;
+        }
+        return combinedNormalized.includes(word);
+      });
     });
-    res.json(results);
+
+    // Smart sorting: prioritize city names that start with the search query words
+    filtered.sort((a, b) => {
+      const normA = normalizeString(a.name);
+      const normB = normalizeString(b.name);
+      
+      const startsA = normA.startsWith(normalizedQuery) ? 1 : 0;
+      const startsB = normB.startsWith(normalizedQuery) ? 1 : 0;
+      
+      if (startsA !== startsB) {
+        return startsB - startsA; // Prioritize starts-with
+      }
+      return normA.localeCompare(normB);
+    });
+
+    res.json(filtered.slice(0, 15));
   } catch (error) {
     console.error("Error searching cities:", error);
-    res.json([]);
+    
+    // Ultimate resilience: process local cities array directly as safety net
+    const normalizedQueryFallback = normalizeString(q);
+    const results = cities.filter(c => {
+      const state = states.find(s => s.id === c.state_id);
+      const normCName = normalizeString(c.name);
+      const normSUF = normalizeString(state?.uf || "");
+      const normCombined = `${normCName} ${normSUF}`;
+      return normCombined.includes(normalizedQueryFallback);
+    }).map(c => {
+      const state = states.find(s => s.id === c.state_id);
+      return { ...c, uf: state?.uf || "" };
+    });
+    res.json(results);
   }
 });
 

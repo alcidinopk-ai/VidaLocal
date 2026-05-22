@@ -29,6 +29,7 @@ import { useCity } from '../contexts/CityContext';
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORIES, SUB_CATEGORIES } from '../constants/taxonomy';
 import { extractCoordinatesFromMapsLink } from '../utils/maps';
+import { compressAndUploadImage } from '../utils/imageCompression';
 
 // Helper to clean and parse coordinate input supporting empty, number, comma, and dot representations.
 // Automatically heals coordinates that are missing decimal separators (e.g. -490669319 -> -49.0669319) based on typical values and optional reference coordinate
@@ -86,6 +87,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -313,63 +315,58 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     cameraInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
-    Array.from(files).forEach(file => {
-      // Compress image before adding to state to avoid 403 Forbidden (payload too large)
-      // Limit to 5 images total
-      setFormData(prev => {
-        if (prev.images.length >= 5) {
-          alert("Limite de 5 fotos atingido.");
-          return prev;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const img = new Image();
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            let width = img.width;
-            let height = img.height;
-
-            // Reduce to 400px max dimension for extremely small payload
-            const MAX_SIZE = 400;
-            if (width > height) {
-              if (width > MAX_SIZE) {
-                height *= MAX_SIZE / width;
-                width = MAX_SIZE;
-              }
-            } else {
-              if (height > MAX_SIZE) {
-                width *= MAX_SIZE / height;
-                height = MAX_SIZE;
-              }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx?.drawImage(img, 0, 0, width, height);
-            
-            // Compress to JPEG with 0.4 quality (tiny file size)
-            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.4);
-            
-            setFormData(current => ({
-              ...current,
-              images: [...current.images, compressedBase64]
-            }));
-          };
-          img.src = event.target?.result as string;
-        };
-        reader.readAsDataURL(file);
-        return prev;
-      });
-    });
+    const fileList = Array.from(files);
     
-    // Reset input value so same file can be selected again
-    e.target.value = '';
+    // Check total images limit of 5 (already in state + new ones)
+    const currentImagesCount = formData.images.length;
+    if (currentImagesCount + fileList.length > 5) {
+      alert(`Você pode adicionar no máximo 5 fotos. Você já possui ${currentImagesCount} e tentou adicionar ${fileList.length}.`);
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingImage(true);
+    setError(null);
+    console.log(`[Upload UI] Selecionado(s) ${fileList.length} arquivo(s) para otimização e upload.`);
+
+    try {
+      // Process files in parallel to optimize and upload
+      const uploadPromises = fileList.map(async (file) => {
+        try {
+          const publicUrlOrBase64 = await compressAndUploadImage(file, 'establishments');
+          return publicUrlOrBase64;
+        } catch (uploadErr: any) {
+          console.error(`[Upload UI - Erro Individual] Erro ao enviar ${file.name}:`, uploadErr);
+          return null;
+        }
+      });
+
+      const uploadedUrls = await Promise.all(uploadPromises);
+      const validUrls = uploadedUrls.filter((url): url is string => url !== null);
+
+      if (validUrls.length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          images: [...prev.images, ...validUrls]
+        }));
+        console.log(`[Upload UI] ${validUrls.length} imagem(ns) adicionada(s) com sucesso.`);
+      } else {
+        setError("Ocorreu um erro ao otimizar e enviar suas fotos. Por favor, tente novamente.");
+      }
+    } catch (err: any) {
+      console.error("[Upload UI - Exceção Geral] Erro ao processar seleção de arquivos:", err);
+      setError("Erro no processamento das imagens: " + (err.message || String(err)));
+    } finally {
+      setIsUploadingImage(false);
+      // Reset input value so same file can be selected again if desired
+      if (e.target) {
+        e.target.value = '';
+      }
+    }
   };
 
   const handleRemoveImage = (index: number) => {
@@ -833,10 +830,19 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         </button>
                       </div>
                     ))}
+                    
+                    {isUploadingImage && (
+                      <div className="aspect-video rounded-2xl border border-[#00897b]/30 bg-[#00897b]/5 flex flex-col items-center justify-center gap-2 text-[#00897b] animate-pulse">
+                        <Loader2 className="w-6 h-6 animate-spin text-[#00897b]" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#00897b] text-center px-2">Otimizando e Enviando...</span>
+                      </div>
+                    )}
+
                     <button
                       type="button"
                       onClick={handleCameraClick}
-                      className="aspect-video rounded-2xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-[#00897b] hover:border-[#00897b] hover:bg-emerald-50/50 transition-all"
+                      disabled={isUploadingImage}
+                      className="aspect-video rounded-2xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-[#00897b] hover:border-[#00897b] hover:bg-emerald-50/50 transition-all disabled:opacity-50 disabled:pointer-events-none"
                     >
                       <Camera className="w-6 h-6" />
                       <span className="text-[10px] font-bold uppercase tracking-wider">Usar Câmera</span>
@@ -844,7 +850,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                     <button
                       type="button"
                       onClick={handleAddImage}
-                      className="aspect-video rounded-2xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-[#00897b] hover:border-[#00897b] hover:bg-emerald-50/50 transition-all"
+                      disabled={isUploadingImage}
+                      className="aspect-video rounded-2xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-[#00897b] hover:border-[#00897b] hover:bg-emerald-50/50 transition-all disabled:opacity-50 disabled:pointer-events-none"
                     >
                       <Upload className="w-6 h-6" />
                       <span className="text-[10px] font-bold uppercase tracking-wider">Anexar Fotos</span>
