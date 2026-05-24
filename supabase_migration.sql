@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS establishments (
   is_premium BOOLEAN DEFAULT FALSE,
   is_open_24_hours BOOLEAN DEFAULT FALSE,
   images TEXT[] DEFAULT '{}',
+  tags TEXT DEFAULT '',
   short_id TEXT UNIQUE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

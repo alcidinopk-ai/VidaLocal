@@ -1430,6 +1430,56 @@ app.get("/api/search", async (req, res) => {
       const mockCity = cities.find(c => c.id === cityIdNum);
       const cityName = mockCity ? mockCity.name : "Gurupi";
 
+      // PRE-CHECK EXCLUSIVE TAGS FILTER FOR SUPABASE
+      if (rawQ) {
+        const cleanSearchStr = rawQ.trim().toLowerCase().replace(/^#/, '');
+        try {
+          const { data: tagCandidates, error: tagError } = await supabase
+            .from('establishments')
+            .select('*')
+            .not('tags', 'is', null)
+            .neq('tags', '');
+          
+          if (!tagError && tagCandidates && tagCandidates.length > 0) {
+            let tagFiltered = tagCandidates.filter((e: any) => {
+              if (!e.tags) return false;
+              const estTags = String(e.tags).split(/[\s,;]+/).map((t: string) => t.trim().toLowerCase().replace(/^#/, '')).filter(Boolean);
+              return estTags.some((tag: string) => tag === cleanSearchStr);
+            });
+
+            if (tagFiltered.length > 0) {
+              console.log(`[TAG SEARCH SUCCESS] Found ${tagFiltered.length} establishments for exact tag "${cleanSearchStr}"`);
+              
+              if (targetCityIds.length > 0) {
+                tagFiltered = tagFiltered.filter((e: any) => targetCityIds.includes(e.city_id));
+              }
+              if (category_id) {
+                tagFiltered = tagFiltered.filter((e: any) => e.category_id === Number(category_id));
+              }
+              if (sub_category) {
+                const subStr = String(sub_category).toLowerCase();
+                tagFiltered = tagFiltered.filter((e: any) => e.sub_category && String(e.sub_category).toLowerCase().includes(subStr));
+              }
+
+              const sorted = tagFiltered.sort((a: any, b: any) => {
+                if (a.status === 'approved' && b.status !== 'approved') return -1;
+                if (a.status !== 'approved' && b.status === 'approved') return 1;
+                if (a.is_premium && !b.is_premium) return -1;
+                if (!a.is_premium && b.is_premium) return 1;
+                if (a.is_featured && !b.is_featured) return -1;
+                if (!a.is_featured && b.is_featured) return 1;
+                return 0;
+              });
+
+              setCache(cacheKey, sorted);
+              return res.json(sorted);
+            }
+          }
+        } catch (tagErr) {
+          console.warn("[API Search] Quick tag matching failed or column 'tags' doesn't exist yet:", tagErr);
+        }
+      }
+
       // Optimized fetch: get both approved and pending in one go, but prioritize approved
       const fetchFromSupabase = async (currentQ: string) => {
         try {
@@ -1616,6 +1666,41 @@ app.get("/api/search", async (req, res) => {
       }
       if (!cityName) {
         cityName = cities.find(c => c.id === cityIdNum)?.name || "";
+      }
+    }
+
+    // PRE-CHECK EXCLUSIVE TAGS FILTER FOR MOCK DATA FALLBACK
+    if (rawQ) {
+      const cleanSearchStr = rawQ.trim().toLowerCase().replace(/^#/, '');
+      let mockTagFiltered = establishments.filter((e: any) => {
+        if (!e.tags) return false;
+        const estTags = String(e.tags).split(/[\s,;]+/).map((t: string) => t.trim().toLowerCase().replace(/^#/, '')).filter(Boolean);
+        return estTags.some((tag: string) => tag === cleanSearchStr);
+      });
+
+      if (mockTagFiltered.length > 0) {
+        console.log(`[MOCK TAG SEARCH SUCCESS] Found ${mockTagFiltered.length} mock establishments for exact tag "${cleanSearchStr}"`);
+        if (!isNaN(cityIdNum)) {
+          mockTagFiltered = mockTagFiltered.filter((e: any) => e.city_id === cityIdNum || (cityName && cities.find(c => c.id === e.city_id)?.name.toLowerCase() === cityName.toLowerCase()));
+        }
+        if (category_id) {
+          mockTagFiltered = mockTagFiltered.filter((e: any) => e.category_id === Number(category_id));
+        }
+        if (sub_category) {
+          const subStr = String(sub_category).toLowerCase();
+          mockTagFiltered = mockTagFiltered.filter((e: any) => e.sub_category && String(e.sub_category).toLowerCase().includes(subStr));
+        }
+
+        const sorted = mockTagFiltered.sort((a: any, b: any) => {
+          if (a.is_premium && !b.is_premium) return -1;
+          if (!a.is_premium && b.is_premium) return 1;
+          if (a.is_featured && !b.is_featured) return -1;
+          if (!a.is_featured && b.is_featured) return 1;
+          return 0;
+        });
+
+        setCache(cacheKey, sorted);
+        return res.json(sorted);
       }
     }
 
@@ -2794,7 +2879,8 @@ app.post("/api/establishments/register", async (req, res) => {
         is_featured: registration.is_featured || false,
         is_verified: registration.is_verified || false,
         is_premium: registration.is_premium || false,
-        images: registration.images || []
+        images: registration.images || [],
+        tags: registration.tags || ''
       }]).select();
 
       if (error) {
@@ -2815,6 +2901,8 @@ app.post("/api/establishments/register", async (req, res) => {
           userMessage = "Erro de esquema: A coluna 'plus_code' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN plus_code TEXT;";
         } else if (error.code === '42703' && error.message && error.message.includes('images')) {
           userMessage = "Erro de esquema: A coluna 'images' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN images TEXT[];";
+        } else if (error.code === '42703' && error.message && error.message.includes('tags')) {
+          userMessage = "Erro de esquema: A coluna 'tags' não foi encontrada na tabela 'establishments'. Por favor, execute o comando SQL: ALTER TABLE establishments ADD COLUMN tags TEXT DEFAULT '';";
         } else if (error.message) {
           userMessage = `Erro no Supabase: ${error.message}`;
         }

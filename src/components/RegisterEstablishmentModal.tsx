@@ -22,7 +22,8 @@ import {
   Hash,
   Copy,
   Upload,
-  Camera
+  Camera,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
@@ -89,6 +90,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [formData, setFormData] = useState({
     name: '',
     categoryId: '',
@@ -107,7 +110,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     is_featured: false,
     is_verified: false,
     is_premium: false,
-    images: [] as string[]
+    images: [] as string[],
+    tags: ''
   });
 
   const [openingHours, setOpeningHours] = useState([
@@ -121,6 +125,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   ]);
 
   React.useEffect(() => {
+    setImageErrors({});
     if (initialData && isOpen) {
       // Process subCategory into array if it's a string
       let subCats: string[] = [];
@@ -180,7 +185,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         is_featured: initialData.is_featured || false,
         is_verified: initialData.is_verified || false,
         is_premium: initialData.is_premium || false,
-        images: initialData.images || []
+        images: initialData.images || [],
+        tags: initialData.tags || ''
       });
       // Set opening hours if available in initialData
       if (initialData.opening_hours && Array.isArray(initialData.opening_hours)) {
@@ -223,7 +229,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         is_featured: false,
         is_verified: false,
         is_premium: false,
-        images: []
+        images: [],
+        tags: ''
       });
     }
   }, [initialData, isOpen]);
@@ -374,6 +381,27 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
       ...prev,
       images: prev.images.filter((_, i) => i !== index)
     }));
+  };
+
+  const handleAddUrlImage = () => {
+    const trimmedUrl = imageUrlInput.trim();
+    if (!trimmedUrl) return;
+
+    if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+      alert("Por favor, insira um link de imagem começando com http:// ou https://");
+      return;
+    }
+
+    if (formData.images.length >= 5) {
+      alert(`Você pode adicionar no máximo 5 fotos.`);
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      images: [...prev.images, trimmedUrl]
+    }));
+    setImageUrlInput(""); // clear the input after adding!
   };
 
   const resolveAndSetPlusCode = (inputCode: string, showAlert = false) => {
@@ -617,7 +645,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             is_verified: false,
             is_premium: false,
             plusCode: '',
-            images: []
+            images: [],
+            tags: ''
           });
         }, 3000);
       } else {
@@ -815,16 +844,36 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {formData.images.map((img, idx) => (
                       <div key={idx} className="relative aspect-video rounded-2xl overflow-hidden group bg-zinc-100 border border-zinc-200">
-                        <img 
-                          src={img} 
-                          alt={`Foto ${idx + 1}`} 
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
+                        {!imageErrors[img] ? (
+                          <img 
+                            src={img} 
+                            alt={`Foto ${idx + 1}`} 
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                            onError={() => {
+                              setImageErrors(prev => ({ ...prev, [img]: true }));
+                            }}
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center p-2.5 text-center bg-zinc-50 text-zinc-400">
+                            <AlertCircle className="w-5 h-5 mb-1 text-red-500 animate-pulse" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 block">Link de Foto não Carrega</span>
+                            <span className="text-[8px] text-zinc-400 block leading-tight mt-1 px-1">
+                              Insira o link direto (<span className="text-zinc-500 font-medium">.jpg, .png...</span>) ou tente outra imagem.
+                            </span>
+                          </div>
+                        )}
                         <button
                           type="button"
-                          onClick={() => handleRemoveImage(idx)}
-                          className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                          onClick={() => {
+                            handleRemoveImage(idx);
+                            setImageErrors(prev => {
+                              const updated = { ...prev };
+                              delete updated[img];
+                              return updated;
+                            });
+                          }}
+                          className={`absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full transition-opacity shadow-lg group-hover:opacity-100 ${imageErrors[img] ? 'opacity-100' : 'opacity-0'}`}
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -856,6 +905,32 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                       <Upload className="w-6 h-6" />
                       <span className="text-[10px] font-bold uppercase tracking-wider">Anexar Fotos</span>
                     </button>
+                  </div>
+
+                  {/* URL image attachment box */}
+                  <div className="mt-4 p-4 border border-zinc-100 rounded-2xl bg-zinc-50/50 space-y-3">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500">Ou adicione Fotos via Link/URL</label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="url"
+                        value={imageUrlInput}
+                        onChange={e => setImageUrlInput(e.target.value)}
+                        placeholder="https://exemplo.com/foto-do-estabelecimento.jpg"
+                        className="flex-1 px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddUrlImage}
+                        className="px-5 py-3 bg-[#00897b] text-white font-bold text-sm rounded-xl hover:bg-[#00796b] transition-all flex items-center gap-1 active:scale-[0.98]"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Adicionar
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 leading-relaxed">
+                      💡 <strong>Dica de ouro:</strong> O link deve ser de uma imagem direta (geralmente terminando com <code>.jpg</code>, <code>.jpeg</code>, <code>.png</code> ou <code>.webp</code>). 
+                      Se você encontrou a foto na internet, clique com o botão direito sobre ela e escolha <strong>"Copiar endereço da imagem"</strong> antes de colar aqui!
+                    </p>
                   </div>
                 </div>
 
@@ -907,6 +982,18 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         placeholder="https://..."
                         className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-zinc-700 mb-2 ml-1">Tags de Busca</label>
+                      <input 
+                        type="text"
+                        value={formData.tags}
+                        onChange={e => setFormData({...formData, tags: e.target.value})}
+                        placeholder="Ex: #Evento2026, #RoteiroTuristico"
+                        className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
+                      />
+                      <p className="text-xs text-zinc-400 mt-2 ml-1">Use hashtags separadas por vírgula para cadastrar circuitos e eventos exclusivos de busca.</p>
                     </div>
                   </div>
                 </div>
