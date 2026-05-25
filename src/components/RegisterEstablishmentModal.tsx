@@ -23,7 +23,9 @@ import {
   Copy,
   Upload,
   Camera,
-  AlertCircle
+  AlertCircle,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
@@ -238,6 +240,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   const [isLocating, setIsLocating] = useState(false);
   const [isSuggestingHours, setIsSuggestingHours] = useState(false);
   const [showManualCoords, setShowManualCoords] = useState(false);
+  const [isHoursExpanded, setIsHoursExpanded] = useState(false);
 
   const handleSuggestHours = async () => {
     if (!formData.name) {
@@ -277,6 +280,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             return h;
           });
           setOpeningHours(newHours);
+          setIsHoursExpanded(true);
         }
       } else {
         setError("Não consegui encontrar os horários automaticamente. Por favor, preencha manualmente.");
@@ -618,6 +622,13 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
 
       if (response.ok) {
         setIsSubmitted(true);
+        
+        // Dispatch global update event so any listing components or layouts can update immediately
+        const updatedEst = result && (result.id ? result : result.data);
+        if (updatedEst && updatedEst.id) {
+          window.dispatchEvent(new CustomEvent('vida360:establishment-updated', { detail: updatedEst }));
+        }
+
         if (onSuccess) onSuccess();
         // Inform user about where it was saved
         if (result.supabase === false) {
@@ -908,30 +919,32 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                   </div>
 
                   {/* URL image attachment box */}
-                  <div className="mt-4 p-4 border border-zinc-100 rounded-2xl bg-zinc-50/50 space-y-3">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500">Ou adicione Fotos via Link/URL</label>
-                    <div className="flex gap-2">
-                      <input 
-                        type="url"
-                        value={imageUrlInput}
-                        onChange={e => setImageUrlInput(e.target.value)}
-                        placeholder="https://exemplo.com/foto-do-estabelecimento.jpg"
-                        className="flex-1 px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddUrlImage}
-                        className="px-5 py-3 bg-[#00897b] text-white font-bold text-sm rounded-xl hover:bg-[#00796b] transition-all flex items-center gap-1 active:scale-[0.98]"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Adicionar
-                      </button>
+                  {isAdmin && (
+                    <div className="mt-4 p-4 border border-zinc-100 rounded-2xl bg-zinc-50/50 space-y-3">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500">Ou adicione Fotos via Link/URL</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="url"
+                          value={imageUrlInput}
+                          onChange={e => setImageUrlInput(e.target.value)}
+                          placeholder="https://exemplo.com/foto-do-estabelecimento.jpg"
+                          className="flex-1 px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddUrlImage}
+                          className="px-5 py-3 bg-[#00897b] text-white font-bold text-sm rounded-xl hover:bg-[#00796b] transition-all flex items-center gap-1 active:scale-[0.98]"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Adicionar
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-zinc-500 leading-relaxed">
+                        💡 <strong>Dica de ouro:</strong> O link deve ser de uma imagem direta (geralmente terminando com <code>.jpg</code>, <code>.jpeg</code>, <code>.png</code> ou <code>.webp</code>). 
+                        Se você encontrou a foto na internet, clique com o botão direito sobre ela e escolha <strong>"Copiar endereço da imagem"</strong> antes de colar aqui!
+                      </p>
                     </div>
-                    <p className="text-[10px] text-zinc-500 leading-relaxed">
-                      💡 <strong>Dica de ouro:</strong> O link deve ser de uma imagem direta (geralmente terminando com <code>.jpg</code>, <code>.jpeg</code>, <code>.png</code> ou <code>.webp</code>). 
-                      Se você encontrou a foto na internet, clique com o botão direito sobre ela e escolha <strong>"Copiar endereço da imagem"</strong> antes de colar aqui!
-                    </p>
-                  </div>
+                  )}
                 </div>
 
                 {/* Contact & Location */}
@@ -1038,30 +1051,32 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                     />
                   </div>
 
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input 
-                        type="text"
-                        value={formData.plusCode}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setFormData(prev => ({...prev, plusCode: val}));
-                          // Silently auto-resolve coordinates when valid codes are pasted or typed
-                          resolveAndSetPlusCode(val, false);
-                        }}
-                        placeholder="Inserir Plus Code (ex: 8FVC9G8F+6X)"
-                        className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
-                      />
+                   {isAdmin && (
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input 
+                          type="text"
+                          value={formData.plusCode}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setFormData(prev => ({...prev, plusCode: val}));
+                            // Silently auto-resolve coordinates when valid codes are pasted or typed
+                            resolveAndSetPlusCode(val, false);
+                          }}
+                          placeholder="Inserir Plus Code (ex: 8FVC9G8F+6X)"
+                          className="w-full px-6 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
+                        />
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={handleResolvePlusCode}
+                        className="px-6 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all flex items-center gap-2"
+                      >
+                        <Hash className="w-4 h-4" />
+                        Resolver
+                      </button>
                     </div>
-                    <button 
-                      type="button"
-                      onClick={handleResolvePlusCode}
-                      className="px-6 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all flex items-center gap-2"
-                    >
-                      <Hash className="w-4 h-4" />
-                      Resolver
-                    </button>
-                  </div>
+                  )}
 
                   {isAdmin && (
                     <>
@@ -1131,101 +1146,130 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                     </button>
                   </div>
 
-                  <div className={`bg-zinc-50 rounded-3xl border border-zinc-100 overflow-hidden transition-opacity ${formData.is_open_24_hours ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <div className="p-2 sm:p-4 space-y-4">
-                      {openingHours.map((h) => (
-                        <div key={h.day} className="flex flex-col gap-3 p-4 bg-white sm:bg-transparent rounded-2xl sm:rounded-none border border-zinc-100 sm:border-0 sm:border-b sm:border-zinc-100 last:border-0 shadow-sm sm:shadow-none">
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-zinc-700 sm:w-24">{h.label}</span>
-                              {!h.closed && (
-                                <button
-                                  type="button"
-                                  onClick={() => copyToAll(h.day)}
-                                  className="p-1.5 text-zinc-400 hover:text-[#00897b] transition-colors hidden sm:block"
-                                  title="Copiar para todos os dias"
-                                >
-                                  <Copy className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
-                            
-                            <button
-                              type="button"
-                              onClick={() => handleHourChange(h.day, 'closed', !h.closed)}
-                              className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${
-                                h.closed 
-                                  ? "bg-[#00897b] text-white shadow-lg shadow-[#00897b]/20" 
-                                  : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
-                              }`}
-                            >
-                              {h.closed ? "Abrir" : "Fechar"}
-                            </button>
-                          </div>
+                  <button 
+                    type="button"
+                    onClick={() => setIsHoursExpanded(!isHoursExpanded)}
+                    disabled={formData.is_open_24_hours}
+                    className={`w-full flex items-center justify-between px-6 py-4 bg-white border border-zinc-200 rounded-2xl hover:bg-zinc-50 transition-all font-bold text-zinc-700 text-sm ${
+                      formData.is_open_24_hours ? 'opacity-55 cursor-not-allowed' : 'active:scale-98'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-5 h-5 text-[#00897b]" />
+                      <span>Configurar Horários por Dia</span>
+                      <span className="text-xs font-normal text-zinc-400">
+                        ({formData.is_open_24_hours ? 'Aberto 24 horas' : `${openingHours.filter(h => !h.closed).length} dias ativos`})
+                      </span>
+                    </div>
+                    {isHoursExpanded ? <ChevronUp className="w-5 h-5 text-zinc-400" /> : <ChevronDown className="w-5 h-5 text-zinc-400" />}
+                  </button>
 
-                          {!h.closed && (
-                            <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                              {h.slots.map((slot, idx) => (
-                                <div key={idx} className="flex items-start sm:items-center gap-2">
-                                  <div className="flex-1 grid grid-cols-2 gap-2">
-                                    <div className="flex flex-col gap-1">
-                                      <span className="text-[9px] font-bold text-zinc-400 uppercase ml-1">De</span>
-                                      <input 
-                                        type="time"
-                                        value={slot.open}
-                                        onChange={(e) => handleHourChange(h.day, 'open', e.target.value, idx)}
-                                        className="w-full px-3 py-3 bg-zinc-50 border border-zinc-100 rounded-xl text-sm focus:ring-2 focus:ring-[#00897b]/20 transition-all font-medium"
-                                      />
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                      <span className="text-[9px] font-bold text-zinc-400 uppercase ml-1">Até</span>
-                                      <input 
-                                        type="time"
-                                        value={slot.close}
-                                        onChange={(e) => handleHourChange(h.day, 'close', e.target.value, idx)}
-                                        className="w-full px-3 py-3 bg-zinc-50 border border-zinc-100 rounded-xl text-sm focus:ring-2 focus:ring-[#00897b]/20 transition-all font-medium"
-                                      />
-                                    </div>
+                  <AnimatePresence>
+                    {isHoursExpanded && !formData.is_open_24_hours && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="bg-zinc-50 rounded-3xl border border-zinc-100 overflow-hidden">
+                          <div className="p-2 sm:p-4 space-y-4">
+                            {openingHours.map((h) => (
+                              <div key={h.day} className="flex flex-col gap-3 p-4 bg-white sm:bg-transparent rounded-2xl sm:rounded-none border border-zinc-100 sm:border-0 sm:border-b sm:border-zinc-100 last:border-0 shadow-sm sm:shadow-none">
+                                <div className="flex items-center justify-between gap-4">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-zinc-700 sm:w-24">{h.label}</span>
+                                    {!h.closed && (
+                                      <button
+                                        type="button"
+                                        onClick={() => copyToAll(h.day)}
+                                        className="p-1.5 text-zinc-400 hover:text-[#00897b] transition-colors hidden sm:block"
+                                        title="Copiar para todos os dias"
+                                      >
+                                        <Copy className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                   </div>
                                   
-                                  <div className="flex items-center gap-1 pt-5 sm:pt-0">
-                                    {h.slots.length > 1 && (
-                                      <button 
-                                        type="button"
-                                        onClick={() => removeSlot(h.day, idx)}
-                                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                      >
-                                        <X className="w-5 h-5" />
-                                      </button>
-                                    )}
-                                    {idx === h.slots.length - 1 && (
-                                      <button 
-                                        type="button"
-                                        onClick={() => addSlot(h.day)}
-                                        className="p-2 text-[#00897b] hover:bg-[#00897b]/10 rounded-lg transition-all"
-                                        title="Adicionar intervalo"
-                                      >
-                                        <Plus className="w-5 h-5" />
-                                      </button>
-                                    )}
-                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleHourChange(h.day, 'closed', !h.closed)}
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${
+                                      h.closed 
+                                        ? "bg-[#00897b] text-white shadow-lg shadow-[#00897b]/20" 
+                                        : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+                                    }`}
+                                  >
+                                    {h.closed ? "Abrir" : "Fechar"}
+                                  </button>
                                 </div>
-                              ))}
-                              
-                              <button
-                                type="button"
-                                onClick={() => copyToAll(h.day)}
-                                className="sm:hidden flex items-center justify-center gap-2 py-2 text-xs font-bold text-zinc-400 border border-dashed border-zinc-200 rounded-xl hover:bg-zinc-50 transition-all"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                                Copiar para todos os dias
-                              </button>
-                            </div>
-                          )}
+
+                                {!h.closed && (
+                                  <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    {h.slots.map((slot, idx) => (
+                                      <div key={idx} className="flex items-start sm:items-center gap-2">
+                                        <div className="flex-1 grid grid-cols-2 gap-2">
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-bold text-zinc-400 uppercase ml-1">De</span>
+                                            <input 
+                                              type="time"
+                                              value={slot.open}
+                                              onChange={(e) => handleHourChange(h.day, 'open', e.target.value, idx)}
+                                              className="w-full px-3 py-3 bg-zinc-50 border border-zinc-100 rounded-xl text-sm focus:ring-2 focus:ring-[#00897b]/20 transition-all font-medium"
+                                            />
+                                          </div>
+                                          <div className="flex flex-col gap-1">
+                                            <span className="text-[9px] font-bold text-zinc-400 uppercase ml-1">Até</span>
+                                            <input 
+                                              type="time"
+                                              value={slot.close}
+                                              onChange={(e) => handleHourChange(h.day, 'close', e.target.value, idx)}
+                                              className="w-full px-3 py-3 bg-zinc-50 border border-zinc-100 rounded-xl text-sm focus:ring-2 focus:ring-[#00897b]/20 transition-all font-medium"
+                                            />
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-1 pt-5 sm:pt-0">
+                                          {h.slots.length > 1 && (
+                                            <button 
+                                              type="button"
+                                              onClick={() => removeSlot(h.day, idx)}
+                                              className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                            >
+                                              <X className="w-5 h-5" />
+                                            </button>
+                                          )}
+                                          {idx === h.slots.length - 1 && (
+                                            <button 
+                                              type="button"
+                                              onClick={() => addSlot(h.day)}
+                                              className="p-2 text-[#00897b] hover:bg-[#00897b]/10 rounded-lg transition-all"
+                                              title="Adicionar intervalo"
+                                            >
+                                              <Plus className="w-5 h-5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                    
+                                    <button
+                                      type="button"
+                                      onClick={() => copyToAll(h.day)}
+                                      className="sm:hidden flex items-center justify-center gap-2 py-2 text-xs font-bold text-zinc-400 border border-dashed border-zinc-200 rounded-xl hover:bg-zinc-50 transition-all"
+                                    >
+                                      <Copy className="w-3.5 h-3.5" />
+                                      Copiar para todos os dias
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   <label className="flex items-center gap-3 mt-3 ml-1 cursor-pointer group">
                     <div className="relative flex items-center">

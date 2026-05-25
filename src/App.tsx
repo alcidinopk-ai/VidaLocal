@@ -188,6 +188,60 @@ export default function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  useEffect(() => {
+    const handleEstablishmentUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const updated = customEvent.detail;
+      if (!updated || !updated.id) return;
+
+      // 1. Update categoryEstablishments
+      setCategoryEstablishments(prev => {
+        if (!Array.isArray(prev)) return prev;
+        return prev.map(est => est.id === updated.id ? { ...est, ...updated } : est);
+      });
+
+      // 2. Update allGroundingChunks
+      setAllGroundingChunks(prev => {
+        if (!Array.isArray(prev)) return prev;
+        return prev.map(chunk => {
+          if (chunk.maps?.id === updated.id) {
+            return {
+              ...chunk,
+              maps: {
+                ...chunk.maps,
+                id: updated.id,
+                title: updated.name,
+                uri: updated.maps_link || `https://www.google.com/maps/search/?api=1&query=${updated.latitude},${updated.longitude}`,
+                location: {
+                  latitude: updated.latitude,
+                  longitude: updated.longitude
+                },
+                phone: updated.phone,
+                whatsapp: updated.whatsapp,
+                rating: updated.rating || chunk.maps?.rating || 5.0,
+                address: updated.address,
+                hours: updated.hours,
+                categoryId: updated.category_id,
+                subCategory: updated.sub_category,
+                cityId: updated.city_id,
+                is_featured: updated.is_featured,
+                is_verified: updated.is_verified,
+                is_premium: updated.is_premium,
+                images: updated.images || chunk.maps?.images || [],
+                tags: updated.tags,
+                plusCode: updated.plus_code || updated.plusCode
+              }
+            };
+          }
+          return chunk;
+        });
+      });
+    };
+
+    window.addEventListener('vida360:establishment-updated', handleEstablishmentUpdated);
+    return () => window.removeEventListener('vida360:establishment-updated', handleEstablishmentUpdated);
+  }, []);
+
   const [isDetecting, setIsDetecting] = useState(false);
 
   const detectLocation = useCallback((onSuccessOrEvent?: ((loc: {latitude: number, longitude: number}) => void) | React.MouseEvent) => {
@@ -286,6 +340,7 @@ export default function App() {
             is_premium: est.is_premium,
             opening_hours: est.opening_hours,
             images: est.images || [],
+            tags: est.tags,
             plusCode: est.plus_code || est.plusCode,
             location: {
               latitude: est.latitude,
@@ -507,6 +562,7 @@ export default function App() {
             is_premium: est.is_premium,
             opening_hours: est.opening_hours,
             images: est.images || [],
+            tags: est.tags,
             plusCode: est.plus_code || est.plusCode,
             location: {
               latitude: est.latitude,
@@ -622,6 +678,7 @@ export default function App() {
                   phone: est.phone, whatsapp: est.whatsapp, user_id: est.user_id, is_featured: est.is_featured,
                   is_verified: est.is_verified, is_premium: est.is_premium, opening_hours: est.opening_hours,
                   images: est.images || [],
+                  tags: est.tags,
                   plusCode: est.plus_code || est.plusCode,
                   location: { latitude: est.latitude, longitude: est.longitude }
                 }
@@ -1220,6 +1277,7 @@ export default function App() {
                               is_verified: est.is_verified,
                               is_premium: est.is_premium,
                               images: est.images || (typeof est.image === 'string' ? [est.image] : []),
+                              tags: est.tags,
                               plusCode: est.plus_code || est.plusCode
                             }
                           };

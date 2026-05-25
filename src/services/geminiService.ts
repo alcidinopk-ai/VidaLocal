@@ -29,6 +29,7 @@ export interface GroundingChunk {
     is_open_24_hours?: boolean;
     plusCode?: string;
     images?: string[];
+    tags?: string;
     opening_hours?: {
       day_of_week: number;
       open_time: string | null;

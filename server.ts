@@ -182,6 +182,7 @@ interface Establishment {
   maps_link?: string;
   created_at?: string;
   images?: string[];
+  tags?: string;
 }
 
 // Generate a random 6-character short ID (uppercase letters and numbers)
@@ -416,18 +417,21 @@ app.get("/api/debug-supabase", async (req, res) => {
     if (supabase) {
       try {
         const { data: cities, error: cityErr } = await supabase.from('cities').select('*').limit(5);
-        debug.tables.cities = { count: cities?.length || 0, error: cityErr?.message, sample: cities };
+        debug.tables.cities = { count: cities?.length || 0, error: cityErr?.message || null, sample: cities };
 
         const { data: ests, error: estErr } = await supabase.from('establishments').select('*, opening_hours:establishment_opening_hours(*)').limit(5);
-      debug.tables.establishments = { count: ests?.length || 0, error: estErr?.message, sample: ests };
-      
-      if (ests && ests.length > 0) {
-        debug.tables.establishments.columns = Object.keys(ests[0]);
+        debug.tables.establishments = { count: ests?.length || 0, error: estErr?.message || null, sample: ests };
+        
+        const { data: hours, error: hoursErr } = await supabase.from('establishment_opening_hours').select('*').limit(5);
+        debug.tables.establishment_opening_hours = { count: hours?.length || 0, error: hoursErr || null, sample: hours };
+
+        if (ests && ests.length > 0) {
+          debug.tables.establishments.columns = Object.keys(ests[0]);
+        }
+      } catch (e: any) {
+        debug.error = e.message;
       }
-    } catch (e: any) {
-      debug.error = e.message;
     }
-  }
 
   res.json(debug);
 });
@@ -940,6 +944,12 @@ async function resolveCityIdsByName(supabase: any, cityId: any): Promise<number[
 
 const normalize = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+const makeSqlWildcard = (word: string) => {
+  const base = normalize(word);
+  if (base.length <= 2) return base;
+  return base.replace(/[aeiouy]/g, '_');
+};
+
 const cleanQuery = (text: string) => {
   // Remove all punctuation and special characters, keep only letters, numbers and spaces
   return normalize(text).replace(/[^\w\s]/gi, ' ').replace(/\s+/g, ' ').trim();
@@ -1337,38 +1347,51 @@ app.get("/api/search/suggest", async (req, res) => {
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
+      const qWildcard = makeSqlWildcard(q);
+      
       // 1. Search in search_intents (direct name match)
       const { data: intentsData } = await supabase
         .from('search_intents')
         .select('id, name')
-        .ilike('name', `%${q}%`)
+        .ilike('name', `%${qWildcard}%`)
         .eq('active', true)
-        .limit(5);
+        .limit(20);
 
       // 2. Search in search_keywords (keyword match)
       const { data: keywordIntents } = await supabase
         .from('search_keywords')
-        .select('intent_id, search_intents(id, name)')
-        .ilike('keyword', `%${q}%`)
-        .limit(5);
+        .select('intent_id, search_intents(id, name), keyword')
+        .ilike('keyword', `%${qWildcard}%`)
+        .limit(20);
 
       // 3. Search in establishments (sub_category match)
       const { data: typesData } = await supabase
         .from('establishments')
         .select('sub_category')
-        .ilike('sub_category', `%${q}%`)
+        .ilike('sub_category', `%${qWildcard}%`)
         .eq('status', 'approved')
-        .limit(20);
+        .limit(50);
       
-      const combinedIntents = [...(intentsData || [])];
+      // Post-filter in JS to ensure clean accent-insensitive matches
+      const filteredIntents = (intentsData || []).filter((item: any) => 
+        normalize(item.name || "").includes(q)
+      );
+
+      const combinedIntents = [...filteredIntents];
       keywordIntents?.forEach((ki: any) => {
         const intent = ki.search_intents;
-        if (intent && !combinedIntents.find(ci => ci.id === intent.id)) {
+        const matchesKeyword = normalize(ki.keyword || "").includes(q);
+        if (intent && matchesKeyword && !combinedIntents.find(ci => ci.id === intent.id)) {
           combinedIntents.push(intent);
         }
       });
 
-      const types = Array.from(new Set(typesData?.map(e => e.sub_category) || [])).slice(0, 5);
+      const types = Array.from(new Set(
+        (typesData || [])
+          .filter((e: any) => normalize(e.sub_category || "").includes(q))
+          .map(e => e.sub_category)
+      )).slice(0, 5);
+
       const result = { intents: combinedIntents.slice(0, 5), types };
       setCache(cacheKey, result);
       return res.json(result);
@@ -1527,11 +1550,17 @@ app.get("/api/search", async (req, res) => {
             
             // 1. Add full phrase variations (with accents & normalized)
             if (qAccented) originalTerms.add(sanitizeSupabaseQuery(qAccented));
-            if (qNormalized) originalTerms.add(sanitizeSupabaseQuery(qNormalized));
+            if (qNormalized) {
+              originalTerms.add(sanitizeSupabaseQuery(qNormalized));
+              originalTerms.add(sanitizeSupabaseQuery(makeSqlWildcard(qNormalized)));
+            }
             
             // 2. Add individual words (with accents & normalized)
             wordsAccented.forEach(w => originalTerms.add(sanitizeSupabaseQuery(w)));
-            wordsNormalized.forEach(w => originalTerms.add(sanitizeSupabaseQuery(w)));
+            wordsNormalized.forEach(w => {
+              originalTerms.add(sanitizeSupabaseQuery(w));
+              originalTerms.add(sanitizeSupabaseQuery(makeSqlWildcard(w)));
+            });
             
             // 3. Add smart synonyms to expand the searched terms set
             const synonyms = getSynonymsForQuery(currentQ);
@@ -1539,6 +1568,7 @@ app.get("/api/search", async (req, res) => {
               const sanitized = sanitizeSupabaseQuery(syn);
               if (sanitized && !originalTerms.has(sanitized)) {
                 synonymTerms.add(sanitized);
+                synonymTerms.add(sanitizeSupabaseQuery(makeSqlWildcard(sanitized)));
               }
             });
 
@@ -1585,8 +1615,41 @@ app.get("/api/search", async (req, res) => {
           const result = await query.limit(50);
           if (result.error) return result;
 
+          // JS post-filtering to guarantee 100% correct accent-insensitive matching
+          let filteredData = result.data || [];
+          if (currentQ) {
+            const cleanQ = normalize(currentQ);
+            const qWords = cleanQ.split(/\s+/).filter(w => w.length > 2);
+            const synonyms = getSynonymsForQuery(currentQ).map(s => normalize(s));
+
+            filteredData = filteredData.filter((e: any) => {
+              const name = normalize(e.name || "");
+              const description = normalize(e.description || "");
+              const address = normalize(e.address || "");
+              const subCategory = normalize(e.sub_category || "");
+              const tags = normalize(e.tags || "");
+
+              // Match original raw query
+              if (name.includes(cleanQ) || description.includes(cleanQ) || address.includes(cleanQ) || subCategory.includes(cleanQ) || tags.includes(cleanQ)) {
+                return true;
+              }
+
+              // Match words
+              if (qWords.some(w => name.includes(w) || description.includes(w) || address.includes(w) || subCategory.includes(w) || tags.includes(w))) {
+                return true;
+              }
+
+              // Match synonyms
+              if (synonyms.some(syn => name.includes(syn) || description.includes(syn) || subCategory.includes(syn))) {
+                return true;
+              }
+
+              return false;
+            });
+          }
+
           // Still sort in JS to handle status priority properly (approved > others)
-          const sortedData = (result.data || []).sort((a: any, b: any) => {
+          const sortedData = filteredData.sort((a: any, b: any) => {
             if (a.status === 'approved' && b.status !== 'approved') return -1;
             if (a.status !== 'approved' && b.status === 'approved') return 1;
             if (a.is_premium && !b.is_premium) return -1;
@@ -1912,7 +1975,8 @@ app.put("/api/establishments/:id", async (req, res) => {
         plus_code: registration.plusCode || registration.plus_code,
         city_id: registration.cityId ? Number(registration.cityId) : null,
         state_id: registration.stateId ? Number(registration.stateId) : null,
-        images: registration.images || []
+        images: registration.images || [],
+        tags: registration.tags || ''
       };
 
       // Only allow admins to change premium/featured status
@@ -2012,11 +2076,14 @@ app.put("/api/establishments/:id", async (req, res) => {
           
           const hoursToInsert = registration.openingHours.map((h: any) => ({
             establishment_id: data[0].id,
-            ...h
+            day_of_week: h.day_of_week,
+            open_time: h.open_time === "" ? null : h.open_time,
+            close_time: h.close_time === "" ? null : h.close_time,
+            is_closed: h.is_closed || false
           }));
           
           const { error: hoursError } = await supabase.from('establishment_opening_hours').insert(hoursToInsert);
-          if (hoursError) console.error("[Supabase Error] Updating opening hours:", hoursError);
+          if (hoursError) console.error("[Supabase Error] Updating opening hours:", JSON.stringify(hoursError, null, 2));
         } catch (err) {
           console.error("[API] Error updating opening hours:", err);
         }
@@ -2054,7 +2121,8 @@ app.put("/api/establishments/:id", async (req, res) => {
           is_featured: registration.is_featured,
           is_verified: registration.is_verified,
           is_premium: registration.is_premium,
-          images: registration.images || []
+          images: registration.images || [],
+          tags: registration.tags || ''
         };
         console.log(`[API] Establishment ${id} updated successfully in local memory`);
         clearCache();
@@ -2737,7 +2805,10 @@ app.patch("/api/establishments/:id", async (req, res) => {
           await supabase.from('establishment_opening_hours').delete().eq('establishment_id', data[0].id);
           const hoursToInsert = openingHours.map((h: any) => ({
             establishment_id: data[0].id,
-            ...h
+            day_of_week: h.day_of_week,
+            open_time: h.open_time === "" ? null : h.open_time,
+            close_time: h.close_time === "" ? null : h.close_time,
+            is_closed: h.is_closed || false
           }));
           await supabase.from('establishment_opening_hours').insert(hoursToInsert);
         } catch (err) {
@@ -2919,10 +2990,13 @@ app.post("/api/establishments/register", async (req, res) => {
         try {
           const hoursToInsert = registration.openingHours.map((h: any) => ({
             establishment_id: data[0].id,
-            ...h
+            day_of_week: h.day_of_week,
+            open_time: h.open_time === "" ? null : h.open_time,
+            close_time: h.close_time === "" ? null : h.close_time,
+            is_closed: h.is_closed || false
           }));
           const { error: hoursError } = await supabase.from('establishment_opening_hours').insert(hoursToInsert);
-          if (hoursError) console.error("[Supabase Error] Inserting opening hours:", hoursError);
+          if (hoursError) console.error("[Supabase Error] Inserting opening hours:", JSON.stringify(hoursError, null, 2));
         } catch (err) {
           console.error("[API] Error inserting opening hours:", err);
         }
@@ -2963,6 +3037,7 @@ app.post("/api/establishments/register", async (req, res) => {
         is_verified: registration.is_verified || false,
         is_premium: registration.is_premium || false,
         images: registration.images || [],
+        tags: registration.tags || '',
         created_at: new Date().toISOString()
       };
       establishments.push(newEstablishment);
