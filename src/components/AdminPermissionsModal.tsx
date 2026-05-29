@@ -54,7 +54,10 @@ export const AdminPermissionsModal: React.FC<AdminPermissionsModalProps> = ({
     setIsLoading(true);
     try {
       const response = await fetch(`/api/admin/permissions/${establishment.short_id}`, {
-        headers: { 'x-user-id': user.id }
+        headers: { 
+          'x-user-id': user.id,
+          'x-user-email': user.email || ''
+        }
       });
       
       const contentType = response.headers.get('content-type');
@@ -83,7 +86,8 @@ export const AdminPermissionsModal: React.FC<AdminPermissionsModalProps> = ({
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-user-id': user.id 
+          'x-user-id': user.id,
+          'x-user-email': user.email || ''
         },
         body: JSON.stringify({
           email: email.trim(),
@@ -122,9 +126,12 @@ export const AdminPermissionsModal: React.FC<AdminPermissionsModalProps> = ({
     
     try {
       const response = await fetch(`/api/admin/permissions/${permId}`, {
-        method: 'DELETE',
-        headers: { 'x-user-id': user.id }
-      });
+         method: 'DELETE',
+         headers: { 
+           'x-user-id': user.id,
+           'x-user-email': user.email || ''
+         }
+       });
 
       if (response.ok) {
         setPermissions(prev => prev.filter(p => p.id !== permId));

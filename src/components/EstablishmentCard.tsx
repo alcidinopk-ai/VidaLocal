@@ -71,6 +71,9 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   const [rating, setRating] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteStatus, setDeleteStatus] = useState<'idle' | 'deleting' | 'success' | 'error'>('idle');
+  const [deleteError, setDeleteError] = useState('');
   const [showFullHoursModal, setShowFullHoursModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isFullDetailsOpen, setIsFullDetailsOpen] = useState(defaultOpen);
@@ -121,7 +124,10 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
 
       try {
         const response = await fetch(`/api/establishments/${chunk.maps.id}/can-edit`, {
-          headers: { 'x-user-id': user.id }
+          headers: { 
+            'x-user-id': user.id,
+            'x-user-email': user.email || ''
+          }
         });
         if (response.ok) {
           const data = await response.json();
@@ -136,29 +142,43 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
     checkPermission();
   }, [user, chunk.maps, isAdmin, isOwner]);
 
-  const handleDelete = async () => {
-    if (!chunk.maps?.id) return;
-    if (!confirm(`Tem certeza que deseja excluir "${title}"?`)) return;
+  const handleDelete = () => {
+    setShowDeleteConfirm(true);
+    setDeleteStatus('idle');
+    setDeleteError('');
+  };
 
+  const executeDelete = async () => {
+    if (!chunk.maps?.id) return;
+
+    setDeleteStatus('deleting');
     setIsDeleting(true);
     try {
       const response = await fetch(`/api/establishments/${chunk.maps.id}`, {
         method: 'DELETE',
-        headers: { 'x-user-id': user?.id || '' }
+        headers: { 
+          'x-user-id': user?.id || '',
+          'x-user-email': user?.email || ''
+        }
       });
       
       const data = await response.json();
       
       if (response.ok) {
-        alert("Estabelecimento excluído com sucesso!");
-        if (onRefresh) onRefresh();
-        else window.location.reload();
+        setDeleteStatus('success');
+        setTimeout(() => {
+          setShowDeleteConfirm(false);
+          if (onRefresh) onRefresh();
+          else window.location.reload();
+        }, 1500);
       } else {
-        alert(`Erro ao excluir: ${data.error || "Ocorreu um erro inesperado."}`);
+        setDeleteStatus('error');
+        setDeleteError(data.error || "Ocorreu um erro inesperado.");
       }
     } catch (err) {
       console.error("Delete error:", err);
-      alert("Erro de conexão ao excluir. Verifique sua internet.");
+      setDeleteStatus('error');
+      setDeleteError("Erro de conexão ao excluir. Verifique sua internet.");
     } finally {
       setIsDeleting(false);
     }
@@ -247,7 +267,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   return (
     <>
       <motion.div 
-        className="group bg-white border border-zinc-100 rounded-3xl p-0 hover:border-emerald-200 hover:shadow-2xl hover:shadow-emerald-900/10 transition-all overflow-hidden flex flex-col"
+        className="group relative bg-white border border-zinc-100 rounded-3xl p-0 hover:border-emerald-200 hover:shadow-2xl hover:shadow-emerald-900/10 transition-all overflow-hidden flex flex-col"
       >
         {/* Top Image Section */}
         <div 
@@ -492,6 +512,67 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
 
       {/* Modals */}
       <AnimatePresence>
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl p-6 text-center border border-zinc-100"
+            >
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center text-red-600 mx-auto mb-4">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <h2 className="text-lg font-bold text-zinc-900 mb-2">Excluir Estabelecimento?</h2>
+              <p className="text-sm text-zinc-500 mb-6">
+                Tem certeza que deseja excluir "{title}"? Esta ação não pode ser desfeita.
+              </p>
+              
+              {deleteStatus === 'deleting' ? (
+                <div className="py-2 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-zinc-600" />
+                  <span className="text-xs text-zinc-500 font-medium">Excluindo...</span>
+                </div>
+              ) : deleteStatus === 'success' ? (
+                <div className="py-2 flex flex-col items-center justify-center gap-2">
+                  <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <span className="text-xs text-emerald-600 font-bold">Excluído com sucesso!</span>
+                </div>
+              ) : (
+                <>
+                  {deleteStatus === 'error' && (
+                    <div className="p-3 mb-4 bg-red-50 text-red-600 text-xs rounded-xl font-medium">
+                      {deleteError}
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setShowDeleteConfirm(false);
+                        setDeleteStatus('idle');
+                        setDeleteError('');
+                      }}
+                      className="flex-1 py-3.5 bg-zinc-100 text-zinc-700 rounded-2xl font-bold text-sm hover:bg-zinc-200 transition-all text-center"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={executeDelete}
+                      className="flex-1 py-3.5 bg-red-600 text-white rounded-2xl font-bold text-sm hover:bg-red-700 transition-all shadow-lg shadow-red-600/10 text-center"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
+        )}
+
         {activeModal && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div 

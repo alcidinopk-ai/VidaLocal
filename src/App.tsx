@@ -89,7 +89,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 };
 
 export default function App() {
-  const { currentCity, isLoading: isCityLoading, skipLoading } = useCity();
+  const { currentCity, setCity, isLoading: isCityLoading, skipLoading } = useCity();
   const { 
     user, 
     profile, 
@@ -241,6 +241,68 @@ export default function App() {
     window.addEventListener('vida360:establishment-updated', handleEstablishmentUpdated);
     return () => window.removeEventListener('vida360:establishment-updated', handleEstablishmentUpdated);
   }, []);
+
+  const [isBackfilling, setIsBackfilling] = useState(false);
+
+  const runGeoBackfillAndLoad = async () => {
+    if (isBackfilling) return;
+    setIsBackfilling(true);
+    try {
+      const res = await fetch('/api/maintenance/backfill-geo', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-id': user?.id || '' 
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.processed > 0) {
+          alert(`${data.processed} novo(s) local(is) geocodificado(s) com sucesso. Atualizando cidades...`);
+        } else {
+          alert('Tudo atualizado! Nenhuma nova cidade/local pendente no momento.');
+        }
+        
+        // Re-detect coordinates and load the nearest active city
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+              try {
+                const geoRes = await fetch('/api/cities/resolve-by-geo', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+                });
+                if (geoRes.ok) {
+                  const resolvedCity = await geoRes.json();
+                  if (resolvedCity && resolvedCity.active) {
+                    setCity(resolvedCity);
+                    setLocation({ latitude: resolvedCity.latitude, longitude: resolvedCity.longitude });
+                    setLocationName(`${resolvedCity.name} – ${resolvedCity.uf}`);
+                    // Dispatch updates
+                    window.dispatchEvent(new CustomEvent('vida360:refresh-featured'));
+                    if (activeCategoryId) {
+                      fetchCategoryEstablishments(activeCategoryId);
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error("Erro ao auto-detectar cidade após backfill:", e);
+              }
+            },
+            () => {}
+          );
+        }
+      } else {
+        alert(`Não foi possível executar o backfill: ${data.error || 'Erro no servidor'}`);
+      }
+    } catch (err) {
+      console.error("Backfill request error:", err);
+      alert('Erro ao conectar ao servidor para atualizar cidades.');
+    } finally {
+      setIsBackfilling(false);
+    }
+  };
 
   const [isDetecting, setIsDetecting] = useState(false);
 
@@ -1027,6 +1089,18 @@ export default function App() {
                         )}
                         {isRealLocation ? 'GPS Ativo' : 'Usar meu GPS'}
                       </button>
+                      <button
+                        onClick={runGeoBackfillAndLoad}
+                        disabled={isBackfilling}
+                        className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl transition-all flex items-center gap-1 text-[11px] font-bold backdrop-blur-sm"
+                        title="Executar Backfill de Geo para carregar novas cidades"
+                      >
+                        {isBackfilling ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        )}
+                      </button>
                     </div>
 
                     <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white tracking-tight mb-2 leading-[1.1]">
@@ -1377,6 +1451,18 @@ export default function App() {
                         <Compass className="w-3 h-3" />
                       )}
                       <span className="hidden sm:inline">{isRealLocation ? 'GPS Ativo' : 'Usar meu GPS'}</span>
+                    </button>
+                    <button
+                      onClick={runGeoBackfillAndLoad}
+                      disabled={isBackfilling}
+                      className="ml-2 p-2 rounded-xl border border-zinc-200 text-zinc-500 hover:text-[#00897b] transition-all flex items-center gap-1 text-[10px] font-bold bg-white shrink-0"
+                      title="Sincronizar e carregar novas cidades/locais cadastrados"
+                    >
+                      {isBackfilling ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      )}
                     </button>
                   </div>
                   

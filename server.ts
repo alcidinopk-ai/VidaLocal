@@ -196,8 +196,8 @@ function generateShortId(): string {
 }
 
 // Permission checking helper
-async function canUserEdit(supabase: any, userId: string, establishmentIdOrShortId: string): Promise<boolean> {
-  console.log(`[Permissions] Checking edit permission for user ${userId} on establishment ${establishmentIdOrShortId}`);
+async function canUserEdit(supabase: any, userId: string, establishmentIdOrShortId: string, userEmailFromHeader?: string): Promise<boolean> {
+  console.log(`[Permissions] Checking edit permission for user ${userId} (${userEmailFromHeader || "no-header-email"}) on establishment ${establishmentIdOrShortId}`);
   if (!userId) {
     console.warn('[Permissions] No userId provided');
     return false;
@@ -205,6 +205,12 @@ async function canUserEdit(supabase: any, userId: string, establishmentIdOrShort
   
   try {
     // 0. Check if user is admin (this bypasses everything else)
+    const emailToCheck = (userEmailFromHeader || '').trim().toLowerCase();
+    if (emailToCheck === 'alcidinopk@gmail.com') {
+      console.log(`[Permissions] User is developer via header email. Permission granted.`);
+      return true;
+    }
+
     // First check by ID in profiles - Try fetching with the new column first
     let profile: any = null;
     try {
@@ -216,16 +222,22 @@ async function canUserEdit(supabase: any, userId: string, establishmentIdOrShort
       profile = data;
     }
 
-    if (profile?.role === 'admin' || profile?.email === 'alcidinopk@gmail.com') {
+    if (profile?.role === 'admin' || profile?.email?.toLowerCase() === 'alcidinopk@gmail.com') {
       console.log(`[Permissions] User ${userId} is an admin or developer (via profile). Permission granted.`);
       return true;
     }
 
-    // Fallback: check Auth email directly (most reliable for developer account)
-    const { data: { user: authUser }, error: authError } = await supabase.auth.admin.getUser(userId);
-    if (!authError && authUser?.email === 'alcidinopk@gmail.com') {
-      console.log(`[Permissions] User ${userId} is the developer (via auth email). Permission granted.`);
-      return true;
+    // Fallback: check Auth email directly (most reliable for developer account) using safe optional chaining
+    if (supabase.auth?.admin) {
+      try {
+        const { data: authData, error: authError } = await supabase.auth.admin.getUser(userId);
+        if (!authError && authData?.user?.email?.toLowerCase() === 'alcidinopk@gmail.com') {
+          console.log(`[Permissions] User ${userId} is the developer (via auth email). Permission granted.`);
+          return true;
+        }
+      } catch (authErr) {
+        console.warn('[Permissions/Auth] Error calling supabase.auth.admin.getUser:', authErr);
+      }
     }
 
     // 1. Check if user is the creator (admin_id/user_id)
@@ -235,17 +247,17 @@ async function canUserEdit(supabase: any, userId: string, establishmentIdOrShort
     // Try by short_id first (safest as it's always a string)
     const { data: byShortId } = await supabase
       .from('establishments')
-      .select('user_id, short_id, id')
+      .select('user_id, user_email, short_id, id')
       .eq('short_id', establishmentIdOrShortId)
       .maybeSingle();
       
     establishment = byShortId;
     
     // If not found and looks like a UUID, try by id
-    if (!establishment && establishmentIdOrShortId.length > 30) {
+    if (!establishment && establishmentIdOrShortId && establishmentIdOrShortId.length > 30) {
       const { data: byId } = await supabase
         .from('establishments')
-        .select('user_id, short_id, id')
+        .select('user_id, user_email, short_id, id')
         .eq('id', establishmentIdOrShortId)
         .maybeSingle();
       establishment = byId;
@@ -256,8 +268,16 @@ async function canUserEdit(supabase: any, userId: string, establishmentIdOrShort
       return false;
     }
 
-    console.log(`[Permissions] Establishment found. Owner: ${establishment.user_id}, Checking against: ${userId}`);
+    console.log(`[Permissions] Establishment found. Owner ID: ${establishment.user_id}, Owner Email: ${establishment.user_email}, Checking against: ${userId}`);
     if (establishment.user_id === userId) return true;
+
+    // Check if the user email matches the establishment's user_email
+    const resolvedUserEmail = (emailToCheck || profile?.email || '').trim().toLowerCase();
+    if (establishment.user_email && resolvedUserEmail && 
+        establishment.user_email.trim().toLowerCase() === resolvedUserEmail) {
+      console.log(`[Permissions] User matches establishment user_email (${resolvedUserEmail}). Permission granted.`);
+      return true;
+    }
     
     // Check if the user's profile has this establishment's short ID assigned specifically (requested feature)
     // Support multiple IDs separated by comma
@@ -906,9 +926,6 @@ async function resolveCityIdsByName(supabase: any, cityId: any): Promise<number[
     return cityIdCache.get(cityIdNum)!;
   }
 
-  const mockCity = cities.find(c => c.id === cityIdNum);
-  const cityName = mockCity ? mockCity.name : "Gurupi";
-
   try {
     const supabase = getSupabaseAdmin();
     if (supabase) {
@@ -918,6 +935,15 @@ async function resolveCityIdsByName(supabase: any, cityId: any): Promise<number[
       );
 
       const fetchPromise = (async () => {
+        // Try to get actual name from database first to handle dynamically created/registered cities correctly
+        const { data: dbCity } = await supabase
+          .from('cities')
+          .select('name')
+          .eq('id', cityIdNum)
+          .maybeSingle();
+
+        const cityName = dbCity ? dbCity.name : (cities.find(c => c.id === cityIdNum)?.name || "Gurupi");
+
         const { data: matchingCities, error: queryError } = await supabase
           .from('cities')
           .select('id')
@@ -936,7 +962,7 @@ async function resolveCityIdsByName(supabase: any, cityId: any): Promise<number[
       return await Promise.race([fetchPromise, timeoutPromise]) as number[];
     }
   } catch (err: any) {
-    console.warn(`[Supabase] City resolution failed for ${cityName}:`, err.message);
+    console.warn(`[Supabase] City resolution failed for ID ${cityIdNum}:`, err.message);
   }
   
   return [cityIdNum];
@@ -1077,7 +1103,7 @@ app.post("/api/chat", async (req, res) => {
     const lng = userLocation?.longitude || city.longitude;
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash", 
+      model: "gemini-3.5-flash", 
       contents: [{ role: "user", parts: [{ text: message }] }],
       config: {
         systemInstruction: `Você é VidaLocal, um guia para ${city.name}. Ajude o usuário a encontrar locais.
@@ -1145,6 +1171,7 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
 
       let query = supabase.from('establishments').select('*');
       query = query.eq('category_id', Number(categoryId));
+      query = query.neq('status', 'deleted'); // Exclude soft-deleted records
 
       if (targetCityIds.length > 0) {
         query = query.in('city_id', targetCityIds);
@@ -1319,7 +1346,7 @@ app.post("/api/suggest-hours", async (req, res) => {
     Se não encontrar horários confiáveis, responda apenas o objeto com campos nulos ou vazios.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json"
@@ -1461,7 +1488,8 @@ app.get("/api/search", async (req, res) => {
             .from('establishments')
             .select('*')
             .not('tags', 'is', null)
-            .neq('tags', '');
+            .neq('tags', '')
+            .neq('status', 'deleted');
           
           if (!tagError && tagCandidates && tagCandidates.length > 0) {
             let tagFiltered = tagCandidates.filter((e: any) => {
@@ -1507,6 +1535,7 @@ app.get("/api/search", async (req, res) => {
       const fetchFromSupabase = async (currentQ: string) => {
         try {
           let query = supabase.from('establishments').select('*'); // Removed opening_hours join for stability
+          query = query.neq('status', 'deleted'); // Exclude soft-deleted records
           
           if (targetCityIds.length > 0) {
             query = query.in('city_id', targetCityIds);
@@ -1890,6 +1919,7 @@ app.get("/api/establishments/user/:userId", async (req, res) => {
       });
 
       let query = supabase.from('establishments').select('*');
+      query = query.neq('status', 'deleted'); // Exclude soft-deleted records
       
       if (allowedIds.size > 0) {
         const ids = Array.from(allowedIds).map(id => `"${id}"`).join(',');
@@ -1914,6 +1944,7 @@ app.get("/api/establishments/user/:userId", async (req, res) => {
 app.get("/api/establishments/:id/can-edit", async (req, res) => {
   const { id } = req.params;
   const userId = req.headers['x-user-id'] as string;
+  const userEmail = req.headers['x-user-email'] as string;
   
   if (!userId) {
     return res.json({ can_edit: false });
@@ -1927,7 +1958,7 @@ app.get("/api/establishments/:id/can-edit", async (req, res) => {
       return res.json({ can_edit: est ? est.user_id === userId : false });
     }
 
-    const hasPermission = await canUserEdit(supabase, userId, id);
+    const hasPermission = await canUserEdit(supabase, userId, id, userEmail);
     res.json({ can_edit: hasPermission });
   } catch (error: any) {
     console.error("[API Error] Checking can-edit:", error);
@@ -1939,6 +1970,7 @@ app.put("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
   const registration = req.body;
   const userId = (req.headers['x-user-id'] || req.headers['x-vidalocal-user-id']) as string;
+  const userEmail = (req.headers['x-user-email'] || req.headers['x-vidalocal-user-email'] || registration.userEmail) as string;
   
   const { images, ...logData } = registration;
   console.log(`[API] Updating establishment ${id}:`, JSON.stringify(logData, null, 2), images ? `(${images.length} images)` : "(no images)");
@@ -1947,8 +1979,8 @@ app.put("/api/establishments/:id", async (req, res) => {
     const supabase = getSupabaseAdmin();
     if (supabase) {
       // Permission check
-      const isAdminByEmail = registration.userEmail === 'alcidinopk@gmail.com';
-      const hasPermission = isAdminByEmail || await canUserEdit(supabase, userId, id);
+      const isAdminByEmail = registration.userEmail === 'alcidinopk@gmail.com' || userEmail === 'alcidinopk@gmail.com';
+      const hasPermission = isAdminByEmail || await canUserEdit(supabase, userId, id, userEmail);
       
       if (!hasPermission) {
         console.warn(`[API] Permission denied for user ${userId} / ${registration.userEmail} on establishment ${id}`);
@@ -2174,18 +2206,24 @@ app.post("/api/maintenance/backfill-geo", async (req, res) => {
   const supabase = getSupabaseAdmin();
   if (!supabase) return res.status(503).json({ error: "DB not connected" });
 
-  // Segurança: Apenas admins (ou verificação de chave secreta)
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
-  if (profile?.role !== 'admin') return res.status(403).json({ error: "Permission denied" });
+  // Segurança: Admins (ou qualquer usuário logado limitado a um lote menor de requisições)
+  const { data: profile } = await supabase.from('profiles').select('role, email').eq('id', userId).maybeSingle();
+  const isAdmin = profile?.role === 'admin' || profile?.email === 'alcidinopk@gmail.com';
+  const isUser = !!userId;
+
+  if (!isAdmin && !isUser) {
+    return res.status(403).json({ error: "Permissão negada. É preciso estar logado para atualizar geolocalizações." });
+  }
 
   // 1. Busca estabelecimentos sem city_id ou state_id que tenham coordenadas
+  const batchLimit = isAdmin ? 50 : 10; // Lote menor para usuários comuns para evitar timeout/rate limits
   const { data: records, error } = await supabase
     .from('establishments')
     .select('id, name, latitude, longitude')
     .or('city_id.is.null,state_id.is.null')
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
-    .limit(50); // Processa em lotes para segurança
+    .limit(batchLimit); // Processa em lotes para segurança
 
   if (error) return res.status(500).json({ error: error.message });
 
@@ -2464,6 +2502,7 @@ Se você identificar que o nome do comércio é fictício ou genérico e não po
 app.delete("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
   const userId = req.headers['x-user-id'] as string;
+  const userEmail = req.headers['x-user-email'] as string;
   
   try {
     const supabase = getSupabaseAdmin();
@@ -2471,7 +2510,7 @@ app.delete("/api/establishments/:id", async (req, res) => {
       // 1. Identify if it's a mock ID
       const isMockId = /^[epa]\d+$/.test(id);
       
-      // 2. Determine the real UUID to delete
+      // 2. Determine the real UUID to delete/archive
       const isUuid = id.length > 30 && id.includes('-');
       let realId = id;
       let recordInDb = null;
@@ -2479,7 +2518,7 @@ app.delete("/api/establishments/:id", async (req, res) => {
       if (!isUuid) {
         const { data: found } = await supabase
           .from('establishments')
-          .select('id, user_id')
+          .select('*')
           .eq('short_id', id)
           .maybeSingle();
         
@@ -2494,17 +2533,17 @@ app.delete("/api/establishments/:id", async (req, res) => {
           return res.status(404).json({ error: "Estabelecimento não encontrado para exclusão." });
         }
       } else {
-        // It's a UUID, check if it exists
+        // It's a UUID, check if it exists (fetching select('*') to back up all data)
         const { data: found } = await supabase
           .from('establishments')
-          .select('id, user_id')
+          .select('*')
           .eq('id', id)
           .maybeSingle();
         recordInDb = found;
       }
 
       // 3. Permission check
-      const hasPermission = await canUserEdit(supabase, userId, recordInDb ? id : (isUuid ? id : id)); 
+      const hasPermission = await canUserEdit(supabase, userId, recordInDb ? id : (isUuid ? id : id), userEmail); 
       // canUserEdit already handles ID/ShortID and Admin status
       
       if (!hasPermission) {
@@ -2512,16 +2551,45 @@ app.delete("/api/establishments/:id", async (req, res) => {
       }
 
       if (recordInDb) {
+        // PREVENTIVE LAYER A: Local JSON backup audit log
+        try {
+          const backupPath = path.join(process.cwd(), "deleted_establishments_backup.json");
+          let currentBackup: any[] = [];
+          if (fs.existsSync(backupPath)) {
+            const raw = fs.readFileSync(backupPath, "utf8");
+            try {
+              currentBackup = JSON.parse(raw);
+              if (!Array.isArray(currentBackup)) {
+                currentBackup = [];
+              }
+            } catch (err) {
+              console.error("[Backup] Error parsing backup file, starting fresh:", err);
+            }
+          }
+          
+          currentBackup.push({
+            deleted_at: new Date().toISOString(),
+            deleted_by_user_id: userId,
+            record: recordInDb
+          });
+          
+          fs.writeFileSync(backupPath, JSON.stringify(currentBackup, null, 2), "utf8");
+          console.log(`[Backup System] Successfully backed up establishment "${recordInDb.name}" (${recordInDb.id}) list length: ${currentBackup.length}`);
+        } catch (backupErr: any) {
+          console.error("[Backup System Error] Failed to write record to offline backup file:", backupErr.message);
+        }
+
+        // PREVENTIVE LAYER B: database soft-delete (status = 'deleted') instead of full hard-delete
         const { error } = await supabase
           .from('establishments')
-          .delete()
+          .update({ status: 'deleted' })
           .eq('id', recordInDb.id);
 
         if (error) throw error;
       }
       
       clearCache();
-      return res.json({ success: true });
+      return res.json({ success: true, message: "Estabelecimento excluído com sucesso (soft-delete)." });
     } else {
       const index = establishments.findIndex(e => e.id === id);
       if (index !== -1) {
@@ -2531,7 +2599,7 @@ app.delete("/api/establishments/:id", async (req, res) => {
         }
         establishments.splice(index, 1);
         clearCache();
-        return res.json({ success: true });
+        return res.json({ success: true, message: "Estabelecimento mock excluído." });
       }
       return res.status(404).json({ error: "Estabelecimento não encontrado" });
     }
@@ -2776,6 +2844,7 @@ app.patch("/api/establishments/:id", async (req, res) => {
   const { id } = req.params;
   const { hours, is_open_24_hours, openingHours } = req.body;
   const userId = req.headers['x-user-id'] as string;
+  const userEmail = req.headers['x-user-email'] as string;
   
   console.log(`[API] Updating hours for establishment ${id}: ${hours}`);
 
@@ -2783,7 +2852,7 @@ app.patch("/api/establishments/:id", async (req, res) => {
     const supabase = getSupabaseAdmin();
     if (supabase) {
       // Permission check
-      const hasPermission = await canUserEdit(supabase, userId, id);
+      const hasPermission = await canUserEdit(supabase, userId, id, userEmail);
       if (!hasPermission) {
         return res.status(403).json({ error: "Acesso negado." });
       }
@@ -2871,17 +2940,32 @@ app.post("/api/establishments/register", async (req, res) => {
       let targetCityId = Number(registration.cityId);
       let targetStateId: number | null = null;
 
-      // TRIGGER LÓGICA: Se city_id for inválido (0 ou -1) ou estiver faltando, e tivermos coordenadas,
-      // disparamos o Geocoding reverso como um "trigger" de aplicação.
-      const hasCoords = (registration.latitude && registration.longitude) || (registration.cityLat && registration.cityLng);
+      // TRIGGER LÓGICA: Se houver coordenadas geográficas específicas (latitude e longitude),
+      // fazemos o Geocoding reverso para garantir o vínculo correto da cidade (especialmente se for nova).
+      const lat = registration.latitude;
+      const lng = registration.longitude;
+      const hasCoords = (lat && lng);
 
-      if ((!targetCityId || targetCityId <= 0) && hasCoords) {
+      if (hasCoords) {
         try {
-          console.log(`[API Register] Missing city_id. Attempting auto-geocoding...`);
-          const lat = registration.latitude || registration.cityLat;
-          const lng = registration.longitude || registration.cityLng;
-          
+          console.log(`[API Register] Geocoding coordinates: ${lat}, ${lng}...`);
           const geo = await reverseGeocode(lat, lng);
+          if (geo) {
+            const resolved = await resolveCityAndState(supabase, geo);
+            if (resolved) {
+              targetCityId = resolved.cityId;
+              targetStateId = resolved.stateId;
+              console.log(`[API Register] Auto-resolved to city_id: ${targetCityId}, state_id: ${targetStateId} (${geo.cityName})`);
+            }
+          }
+        } catch (geoErr) {
+          console.error("[API Register] Auto-geocoding resolution failed:", geoErr);
+        }
+      } else if ((!targetCityId || targetCityId <= 0) && (registration.cityLat && registration.cityLng)) {
+        // Fallback para coordenadas da cidade se fornecidas
+        try {
+          console.log(`[API Register] Missing city_id but city center coordinates exist. Geocoding city center...`);
+          const geo = await reverseGeocode(registration.cityLat, registration.cityLng);
           if (geo) {
             const resolved = await resolveCityAndState(supabase, geo);
             if (resolved) {
@@ -2891,7 +2975,7 @@ app.post("/api/establishments/register", async (req, res) => {
             }
           }
         } catch (geoErr) {
-          console.error("[API Register] Auto-geocoding resolution failed:", geoErr);
+          console.error("[API Register] City center geocoding failed:", geoErr);
         }
       }
 
@@ -3002,12 +3086,38 @@ app.post("/api/establishments/register", async (req, res) => {
         }
       }
       
+      // Get the full City object to return to client for automatic switching
+      let resolvedCityObj = null;
+      if (targetCityId) {
+        try {
+          const { data: cityObj } = await supabase
+            .from('cities')
+            .select('*, states(uf)')
+            .eq('id', targetCityId)
+            .maybeSingle();
+            
+          if (cityObj) {
+            resolvedCityObj = {
+              id: cityObj.id,
+              name: cityObj.name,
+              uf: cityObj.states?.uf || cityObj.states?.[0]?.uf || "",
+              active: cityObj.active,
+              latitude: cityObj.latitude,
+              longitude: cityObj.longitude
+            };
+          }
+        } catch (err) {
+          console.error("[API] Error fetching resolved city for response:", err);
+        }
+      }
+
       console.log("[API] Establishment registered successfully in Supabase");
       clearCache();
       return res.json({ 
         status: "approved", 
         message: "Seu estabelecimento foi cadastrado e já está visível!",
         data: data?.[0],
+        resolvedCity: resolvedCityObj,
         supabase: true
       });
     } else {

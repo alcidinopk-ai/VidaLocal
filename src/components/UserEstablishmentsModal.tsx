@@ -41,6 +41,10 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
   const [selectedEstablishment, setSelectedEstablishment] = useState<Establishment | null>(null);
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [establishmentToDelete, setEstablishmentToDelete] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   useEffect(() => {
     if (isOpen && user) {
@@ -95,26 +99,43 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
     setIsEditModalOpen(true);
   };
 
-  const handleDelete = async (est: any) => {
-    if (!confirm(`Tem certeza que deseja excluir "${est.name}"?`)) return;
+  const handleDelete = (est: any) => {
+    setEstablishmentToDelete(est);
+    setDeleteError(null);
+    setDeleteSuccess(false);
+  };
 
+  const executeDelete = async () => {
+    if (!establishmentToDelete) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
     try {
-      const response = await fetch(`/api/establishments/${est.id}`, {
+      const response = await fetch(`/api/establishments/${establishmentToDelete.id}`, {
         method: 'DELETE',
-        headers: { 'x-user-id': user?.id || '' }
+        headers: { 
+          'x-user-id': user?.id || '',
+          'x-user-email': user?.email || ''
+        }
       });
       
       const data = await response.json();
       
       if (response.ok) {
-        alert("Estabelecimento excluído com sucesso!");
-        fetchUserEstablishments();
+        setDeleteSuccess(true);
+        setTimeout(() => {
+          setEstablishmentToDelete(null);
+          setDeleteSuccess(false);
+          fetchUserEstablishments();
+        }, 1500);
       } else {
-        alert(data.error || "Erro ao excluir estabelecimento.");
+        setDeleteError(data.error || "Erro ao excluir estabelecimento.");
       }
     } catch (err) {
       console.error("[UserEst] Error deleting:", err);
-      alert("Não foi possível conectar ao servidor.");
+      setDeleteError("Não foi possível conectar ao servidor.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -267,6 +288,69 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
           fetchUserEstablishments();
         }}
       />
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {establishmentToDelete && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl p-6 text-center border border-zinc-100"
+            >
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center text-red-600 mx-auto mb-4">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <h2 className="text-lg font-bold text-zinc-900 mb-2">Excluir Estabelecimento?</h2>
+              <p className="text-sm text-zinc-500 mb-6 font-medium">
+                Tem certeza que deseja excluir "{establishmentToDelete.name}"? Esta ação não pode ser desfeita.
+              </p>
+              
+              {isDeleting ? (
+                <div className="py-2 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-zinc-600" />
+                  <span className="text-xs text-zinc-500 font-medium">Excluindo...</span>
+                </div>
+              ) : deleteSuccess ? (
+                <div className="py-2 flex flex-col items-center justify-center gap-2">
+                  <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <span className="text-xs text-emerald-600 font-bold">Excluído com sucesso!</span>
+                </div>
+              ) : (
+                <>
+                  {deleteError && (
+                    <div className="p-3 mb-4 bg-red-50 text-red-600 text-xs rounded-xl font-medium">
+                      {deleteError}
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setEstablishmentToDelete(null);
+                        setDeleteError(null);
+                      }}
+                      className="flex-1 py-3.5 bg-zinc-100 text-zinc-700 rounded-2xl font-bold text-sm hover:bg-zinc-200 transition-all text-center"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={executeDelete}
+                      className="flex-1 py-3.5 bg-red-600 text-white rounded-2xl font-bold text-sm hover:bg-red-700 transition-all shadow-lg shadow-red-600/10 text-center"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

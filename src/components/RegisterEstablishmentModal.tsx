@@ -83,7 +83,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   initialData,
   onSuccess 
 }) => {
-  const { currentCity } = useCity();
+  const { currentCity, setCity } = useCity();
   const { user, profile, role } = useAuth();
   const isAdmin = user && (role === 'admin' || user.email === 'alcidinopk@gmail.com');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -412,13 +412,46 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     const trimmed = inputCode.trim();
     if (!trimmed) return false;
 
+    // Cidades conhecidas e suas coordenadas para recuperação de Plus Code curto caso o usuário digite o endereço de outra cidade
+    const KNOWN_CITIES_COORDS = [
+      { name: 'paraiso', lat: -10.1753, lng: -48.8833 },
+      { name: 'guarai', lat: -8.8344, lng: -48.5103 },
+      { name: 'gurupi', lat: -11.7298, lng: -49.0678 },
+      { name: 'palmas', lat: -10.1844, lng: -48.3336 },
+      { name: 'araguaina', lat: -7.1925, lng: -48.2078 },
+      { name: 'porto nacional', lat: -10.7081, lng: -48.4172 },
+      { name: 'colinas', lat: -8.0558, lng: -48.4764 },
+      { name: 'araguatins', lat: -5.6503, lng: -48.1250 },
+      { name: 'tocantinopolis', lat: -6.3233, lng: -47.4128 },
+      { name: 'dianopolis', lat: -11.6286, lng: -46.8203 },
+      { name: 'alianca', lat: -11.3060, lng: -48.9329 },
+    ];
+
     try {
       const olc = new OpenLocationCode();
       if (olc.isValid(trimmed)) {
         let fullCode = trimmed;
         if (olc.isShort(trimmed)) {
-          const refLat = cleanAndParseCoordinate(formData.latitude, currentCity?.latitude) || currentCity?.latitude || -11.7298;
-          const refLng = cleanAndParseCoordinate(formData.longitude, currentCity?.longitude) || currentCity?.longitude || -49.0678;
+          let refLat = cleanAndParseCoordinate(formData.latitude, currentCity?.latitude) || currentCity?.latitude || -11.7298;
+          let refLng = cleanAndParseCoordinate(formData.longitude, currentCity?.longitude) || currentCity?.longitude || -49.0678;
+
+          // Se houver endereço preenchido, tenta detectar uma cidade de referência
+          if (formData.address) {
+            const normalizedAddress = formData.address
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "");
+
+            for (const city of KNOWN_CITIES_COORDS) {
+              if (normalizedAddress.includes(city.name)) {
+                refLat = city.lat;
+                refLng = city.lng;
+                console.log(`[PlusCode] Detectada cidade de referência '${city.name}' no endereço. Coordenadas: ${refLat}, ${refLng}`);
+                break;
+              }
+            }
+          }
+
           fullCode = olc.recoverNearest(trimmed, refLat, refLng);
         }
 
@@ -591,7 +624,8 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         method: isUpdate ? 'PUT' : 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-user-id': user.id
+          'x-user-id': user.id,
+          'x-user-email': user.email || ''
         },
         body: JSON.stringify(payload)
       });
@@ -627,6 +661,12 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         const updatedEst = result && (result.id ? result : result.data);
         if (updatedEst && updatedEst.id) {
           window.dispatchEvent(new CustomEvent('vida360:establishment-updated', { detail: updatedEst }));
+        }
+
+        // Automatic shift of city if a new city was resolved/created by coordinates
+        if (result.resolvedCity && result.resolvedCity.id !== currentCity.id) {
+          setCity(result.resolvedCity);
+          alert(`Excelente! Identificamos que este local fica em ${result.resolvedCity.name} - ${result.resolvedCity.uf}. Atualizamos a cidade ativa do aplicativo para você encontrar o local!`);
         }
 
         if (onSuccess) onSuccess();

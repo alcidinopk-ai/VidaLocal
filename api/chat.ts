@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ai = new GoogleGenAI({ apiKey });
     
     // Use the model recommended by the gemini-api skill
-    const modelName = "gemini-3-flash-preview";
+    const modelName = "gemini-3.5-flash";
     const lat = Number(userLocation?.latitude || city?.latitude || -11.7298);
     const lng = Number(userLocation?.longitude || city?.longitude || -49.0678);
 
