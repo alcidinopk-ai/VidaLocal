@@ -320,7 +320,7 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
                   maps: {
                     id: selectedEst.id,
                     title: selectedEst.name,
-                    uri: selectedEst.maps_link || `https://www.google.com/maps/search/?api=1&query=${selectedEst.latitude},${selectedEst.longitude}`,
+                    uri: selectedEst.maps_link || '',
                     location: {
                       latitude: selectedEst.latitude,
                       longitude: selectedEst.longitude

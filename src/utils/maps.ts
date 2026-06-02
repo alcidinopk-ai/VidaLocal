@@ -40,14 +40,31 @@ export const extractCoordinatesFromMapsLink = (url: string) => {
 // Helper to construct a Google Maps Directions URL (routing) using extracted or default coordinates
 export const getDirectionsUrl = (
   mapsLink?: string | null,
-  latitude?: number | null,
-  longitude?: number | null,
+  latitude?: number | string | null,
+  longitude?: number | string | null,
   userLocation?: { latitude: number; longitude: number } | null
 ): string => {
-  let destLat = latitude;
-  let destLng = longitude;
+  let destLat: number | null = null;
+  let destLng: number | null = null;
 
-  if (mapsLink) {
+  if (latitude !== undefined && latitude !== null) {
+    const parsed = typeof latitude === 'string' ? parseFloat(latitude.replace(',', '.')) : latitude;
+    if (!isNaN(parsed)) destLat = parsed;
+  }
+
+  if (longitude !== undefined && longitude !== null) {
+    const parsed = typeof longitude === 'string' ? parseFloat(longitude.replace(',', '.')) : longitude;
+    if (!isNaN(parsed)) destLng = parsed;
+  }
+
+  // Prioritize explicit coordinates. Only extract from mapsLink if explicit coords are missing/invalid.
+  const hasExplicitCoordinates = 
+    destLat !== null && 
+    destLng !== null && 
+    destLat !== 0 && 
+    destLng !== 0;
+
+  if (!hasExplicitCoordinates && mapsLink) {
     const coords = extractCoordinatesFromMapsLink(mapsLink);
     if (coords) {
       destLat = coords.latitude;
@@ -55,10 +72,10 @@ export const getDirectionsUrl = (
     }
   }
 
-  if (destLat && destLng) {
+  if (destLat !== null && destLng !== null && destLat !== 0 && destLng !== 0) {
     const originParam = userLocation ? `&origin=${userLocation.latitude},${userLocation.longitude}` : '';
     return `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}${originParam}`;
   }
 
-  return mapsLink || '#';
+  return (mapsLink && !mapsLink.includes('query=')) ? mapsLink : '#';
 };

@@ -182,7 +182,11 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         description: initialData.description || '',
         latitude: cleanedLat !== null ? String(cleanedLat) : '',
         longitude: cleanedLng !== null ? String(cleanedLng) : '',
-        mapsLink: initialData.maps_link || initialData.uri || initialData.mapsLink || '',
+        mapsLink: (initialData.maps_link && !initialData.maps_link.includes('query=')) 
+          ? initialData.maps_link 
+          : (initialData.mapsLink && !initialData.mapsLink.includes('query=')) 
+            ? initialData.mapsLink 
+            : '',
         plusCode: initialData.plus_code || initialData.plusCode || '',
         is_featured: initialData.is_featured || false,
         is_verified: initialData.is_verified || false,
@@ -588,8 +592,10 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     }
     
     try {
+      const cleanedMapsLink = (formData.mapsLink && (formData.mapsLink.includes('query=') || formData.mapsLink.includes('api=1'))) ? '' : formData.mapsLink;
       const payload = {
         ...formData,
+        mapsLink: cleanedMapsLink,
         latitude: parsedLat,
         longitude: parsedLng,
         subCategory: formData.subCategory.join(' | '),

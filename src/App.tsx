@@ -1334,7 +1334,7 @@ export default function App() {
                             maps: {
                               id: est.id,
                               title: est.name,
-                              uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
+                              uri: est.maps_link || '',
                               location: {
                                 latitude: est.latitude,
                                 longitude: est.longitude

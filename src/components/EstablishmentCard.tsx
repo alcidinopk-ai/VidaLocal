@@ -110,7 +110,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   // Obtém a URL de rota corretíssima traçada a partir do link do Google Maps salvo se disponível,
   // ou através das coordenadas cadastradas, integrando a localização de origem do usuário para traçar a rota perfeita.
   const routeUrl = getDirectionsUrl(uri, location?.latitude, location?.longitude, userLocation);
-  const shareText = `Confira ${title} no VidaLocal: ${uri}`;
+  const shareText = `Confira ${title} no VidaLocal: ${uri && uri !== '#' ? uri : `https://www.google.com/maps/search/?api=1&query=${location?.latitude || ''},${location?.longitude || ''}`}`;
 
   const statusInfo = getBusinessStatus(chunk.maps?.hours);
 
@@ -185,19 +185,21 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   };
 
   const handleShare = async () => {
+    const shareUrl = uri && uri !== '#' ? uri : `https://www.google.com/maps/search/?api=1&query=${location?.latitude || ''},${location?.longitude || ''}`;
     if (navigator.share) {
       try {
         await navigator.share({
           title: title,
           text: `Encontrei este lugar no VidaLocal: ${title}`,
-          url: uri,
+          url: shareUrl,
         });
       } catch (err) {
         console.error('Erro ao compartilhar:', err);
       }
     } else {
       // Fallback to WhatsApp
-      const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+      const customShareText = `Confira ${title} no VidaLocal: ${shareUrl}`;
+      const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(customShareText)}`;
       window.open(whatsappShareUrl, '_blank');
     }
   };
