@@ -34,12 +34,28 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
         if (loginError) throw loginError;
         onClose();
       } else {
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
         });
         if (signUpError) throw signUpError;
-        setSuccess('Conta criada! Verifique seu e-mail para confirmar o cadastro.');
+        
+        // Auto-login to guarantee immediate session
+        if (data && !data.session) {
+          try {
+            await supabase.auth.signInWithPassword({
+              email,
+              password,
+            });
+          } catch (loginErr) {
+            console.warn('[AuthModal] Auto login signInWithPassword optional attempt:', loginErr);
+          }
+        }
+        
+        setSuccess('Conta criada com sucesso. Bem-vindo ao VidaLocal!');
+        setTimeout(() => {
+          onClose();
+        }, 2200);
       }
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro ao processar sua solicitação.');

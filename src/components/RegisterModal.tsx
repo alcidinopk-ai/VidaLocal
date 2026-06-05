@@ -136,7 +136,20 @@ export const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }: RegisterModa
       if (signUpError) throw signUpError;
 
       if (data.user) {
-        setSuccess('Cadastro realizado com sucesso! Verifique seu e-mail para confirmar seu cadastro antes de fazer login!');
+        if (!data.session) {
+          try {
+            await supabase.auth.signInWithPassword({
+              email: formData.email,
+              password: formData.password,
+            });
+          } catch (loginErr) {
+            console.warn('[Register] Auto login signInWithPassword optional attempt:', loginErr);
+          }
+        }
+        setSuccess('Conta criada com sucesso. Bem-vindo ao VidaLocal!');
+        setTimeout(() => {
+          onClose();
+        }, 2200);
       }
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro ao realizar o cadastro.');
@@ -177,15 +190,15 @@ export const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }: RegisterModa
               <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl font-bold text-zinc-900 mb-4">Verifique seu e-mail</h3>
-              <p className="text-zinc-600 mb-8 leading-relaxed">
+              <h3 className="text-2xl font-bold text-zinc-900 mb-4 font-sans tracking-tight">Bem-vindo!</h3>
+              <p className="text-zinc-600 mb-8 leading-relaxed font-sans text-sm">
                 {success}
               </p>
               <button 
-                onClick={onSwitchToLogin}
-                className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all shadow-lg"
+                onClick={onClose}
+                className="w-full py-4 bg-[#00897b] text-white rounded-2xl font-bold hover:bg-[#00796b] transition-all shadow-lg shadow-emerald-100"
               >
-                Voltar para Login
+                Começar a Explorar
               </button>
             </div>
           ) : (

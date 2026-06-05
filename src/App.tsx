@@ -27,6 +27,8 @@ import {
   Plus,
   Printer,
   RefreshCw,
+  Mic,
+  MicOff,
   User as UserIcon
 } from 'lucide-react';
 import Markdown from 'react-markdown';
@@ -180,6 +182,18 @@ export default function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [isMobile, setIsMobile] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+    };
+  }, []);
   
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -838,6 +852,60 @@ export default function App() {
     }
   }, [isLoading, view, selectedSubCategory, currentCity, location, activeCategoryId]);
 
+  const toggleListening = useCallback((isChatInput: boolean = false) => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("O seu navegador não possui suporte para reconhecimento de voz (Web Speech API). Tente utilizar o Google Chrome, Edge ou Safari.");
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {}
+      }
+      setIsListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      if (transcript) {
+        setInput(transcript);
+        if (!isChatInput) {
+          performSearch(transcript, true);
+        }
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error('Failed to start speech recognition:', err);
+      setIsListening(false);
+    }
+  }, [isListening, performSearch]);
+
   const findNearbyEstablishments = useCallback(async () => {
     const runSearch = (loc: {latitude: number, longitude: number}) => {
       setView('chat');
@@ -1126,6 +1194,27 @@ export default function App() {
                             className="w-full bg-transparent border-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 text-sm"
                           />
                         </div>
+                        
+                        <button
+                          type="button"
+                          onClick={() => toggleListening(false)}
+                          className={`p-2.5 rounded-xl transition-all relative group flex items-center justify-center shrink-0 ${
+                            isListening 
+                              ? 'bg-red-50 text-red-600 animate-pulse border border-red-200' 
+                              : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600'
+                          }`}
+                          title={isListening ? "Desativar busca por voz" : "Buscar por voz (fale agora)"}
+                        >
+                          {isListening ? (
+                            <MicOff className="w-4.5 h-4.5" />
+                          ) : (
+                            <Mic className="w-4.5 h-4.5" />
+                          )}
+                          {isListening && (
+                            <span className="absolute -inset-0.5 rounded-xl bg-red-500/20 animate-ping pointer-events-none" />
+                          )}
+                        </button>
+
                         <button 
                           onClick={() => performSearch(input, true)}
                           disabled={isLoading}
@@ -1572,8 +1661,27 @@ export default function App() {
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       placeholder="Pergunte sobre restaurantes, locais ou informações..."
-                      className="w-full pl-5 pr-14 py-4 bg-zinc-100 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/5 focus:border-zinc-900 transition-all text-sm"
+                      className="w-full pl-5 pr-24 py-4 bg-zinc-100 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/5 focus:border-zinc-900 transition-all text-sm"
                     />
+                    <button
+                      type="button"
+                      onClick={() => toggleListening(true)}
+                      className={`absolute right-14 top-2 bottom-2 px-3 rounded-xl transition-all relative flex items-center justify-center ${
+                        isListening 
+                          ? 'bg-red-50 text-red-600 animate-pulse border border-red-200' 
+                          : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600'
+                      }`}
+                      title={isListening ? "Desativar busca por voz" : "Buscar por voz (fale agora)"}
+                    >
+                      {isListening ? (
+                        <MicOff className="w-4 h-4" />
+                      ) : (
+                        <Mic className="w-4 h-4" />
+                      )}
+                      {isListening && (
+                        <span className="absolute -inset-0.5 rounded-xl bg-red-400/20 animate-ping pointer-events-none" />
+                      )}
+                    </button>
                     <button
                       type="submit"
                       disabled={isLoading || !input.trim()}
