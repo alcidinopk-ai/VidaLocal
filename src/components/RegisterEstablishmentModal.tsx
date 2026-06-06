@@ -30,6 +30,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useCity } from '../contexts/CityContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { CATEGORIES, SUB_CATEGORIES } from '../constants/taxonomy';
 import { extractCoordinatesFromMapsLink } from '../utils/maps';
 import { compressAndUploadImage } from '../utils/imageCompression';
@@ -85,6 +86,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
 }) => {
   const { currentCity, setCity } = useCity();
   const { user, profile, role } = useAuth();
+  const { toast } = useToast();
   const isAdmin = user && (role === 'admin' || user.email === 'alcidinopk@gmail.com');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
@@ -312,12 +314,12 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
           longitude: pos.coords.longitude
         }));
         setIsLocating(false);
-        alert("Localização obtida com sucesso!");
+        toast.success("Localização obtida com sucesso!");
       },
       (err) => {
         console.error(err);
         setIsLocating(false);
-        alert("Não foi possível obter sua localização.");
+        toast.error("Não foi possível obter sua localização.");
       }
     );
   };
@@ -339,7 +341,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     // Check total images limit of 5 (already in state + new ones)
     const currentImagesCount = formData.images.length;
     if (currentImagesCount + fileList.length > 5) {
-      alert(`Você pode adicionar no máximo 5 fotos. Você já possui ${currentImagesCount} e tentou adicionar ${fileList.length}.`);
+      toast.warning(`Você pode adicionar no máximo 5 fotos. Você já possui ${currentImagesCount} e tentou adicionar ${fileList.length}.`);
       e.target.value = '';
       return;
     }
@@ -396,12 +398,12 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     if (!trimmedUrl) return;
 
     if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
-      alert("Por favor, insira um link de imagem começando com http:// ou https://");
+      toast.warning("Por favor, insira um link de imagem começando com http:// ou https://");
       return;
     }
 
     if (formData.images.length >= 5) {
-      alert(`Você pode adicionar no máximo 5 fotos.`);
+      toast.warning(`Você pode adicionar no máximo 5 fotos.`);
       return;
     }
 
@@ -467,7 +469,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             longitude: decoded.longitudeCenter
           }));
           if (showAlert) {
-            alert(`Plus Code resolvido com sucesso!\nCoordenadas: ${decoded.latitudeCenter}, ${decoded.longitudeCenter}`);
+            toast.success(`Plus Code resolvido com sucesso! Coordenadas: ${decoded.latitudeCenter.toFixed(5)}, ${decoded.longitudeCenter.toFixed(5)}`);
           }
           return true;
         }
@@ -475,7 +477,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     } catch (err) {
       if (showAlert) {
         console.error("Plus Code error:", err);
-        alert("Erro ao decodificar o Plus Code. Verifique o formato.");
+        toast.error("Erro ao decodificar o Plus Code. Verifique o formato.");
       }
     }
     return false;
@@ -483,12 +485,12 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
 
   const handleResolvePlusCode = () => {
     if (!formData.plusCode.trim()) {
-      alert("Por favor, insira um Plus Code.");
+      toast.warning("Por favor, insira um Plus Code.");
       return;
     }
     const resolved = resolveAndSetPlusCode(formData.plusCode, true);
     if (!resolved) {
-      alert("Plus Code inválido ou incompleto. Certifique-se de que é um código válido.");
+      toast.error("Plus Code inválido ou incompleto. Certifique-se de que é um código válido.");
     }
   };
 
@@ -662,6 +664,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
 
       if (response.ok) {
         setIsSubmitted(true);
+        toast.success(isUpdate ? 'Local salvo com sucesso!' : 'Local cadastrado com sucesso!');
         
         // Dispatch global update event so any listing components or layouts can update immediately
         const updatedEst = result && (result.id ? result : result.data);
@@ -672,7 +675,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         // Automatic shift of city if a new city was resolved/created by coordinates
         if (result.resolvedCity && result.resolvedCity.id !== currentCity.id) {
           setCity(result.resolvedCity);
-          alert(`Excelente! Identificamos que este local fica em ${result.resolvedCity.name} - ${result.resolvedCity.uf}. Atualizamos a cidade ativa do aplicativo para você encontrar o local!`);
+          toast.info(`Excelente! Identificamos que este local fica em ${result.resolvedCity.name} - ${result.resolvedCity.uf}. Atualizamos a cidade ativa do aplicativo para você encontrar o local!`, 6000);
         }
 
         if (onSuccess) onSuccess();
@@ -1087,7 +1090,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                             latitude: cleanedLat,
                             longitude: cleanedLng
                           }));
-                          alert("Coordenadas geográficas extraídas com sucesso do link do Google Maps!");
+                          toast.success("Coordenadas geográficas extraídas com sucesso do link do Google Maps!");
                         } else {
                           setFormData(prev => ({...prev, mapsLink: val}));
                         }

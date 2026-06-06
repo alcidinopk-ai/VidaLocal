@@ -10,10 +10,14 @@ import {
   Calendar,
   Shield,
   Edit,
-  Trash2
+  Trash2,
+  Heart,
+  ExternalLink,
+  Navigation2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
+import { useFavorites } from '../contexts/FavoritesContext';
 import { AdminPermissionsModal } from './AdminPermissionsModal';
 import { RegisterEstablishmentModal } from './RegisterEstablishmentModal';
 
@@ -34,6 +38,8 @@ interface Establishment {
 
 export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = ({ isOpen, onClose }) => {
   const { user, role } = useAuth();
+  const { favorites, toggleFavorite } = useFavorites();
+  const [activeTab, setActiveTab] = useState<'cadastros' | 'favoritos'>('favoritos');
   const isAdmin = user && (role === 'admin' || user.email === 'alcidinopk@gmail.com');
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -149,113 +155,241 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
         className="bg-white w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]"
       >
         {/* Header */}
-        <div className="p-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#f57c00] flex items-center justify-center text-white">
-              <Store className="w-5 h-5" />
+        <div className="p-4 border-b border-zinc-100 flex flex-col gap-3 bg-zinc-50/50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[#00897b] flex items-center justify-center text-white">
+                {activeTab === 'favoritos' ? <Heart className="w-5 h-5 fill-white text-white" /> : <Store className="w-5 h-5 text-white" />}
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-zinc-900">Meus Locais</h2>
+                <p className="text-[10px] text-zinc-500">
+                  {activeTab === 'favoritos' 
+                    ? 'Acompanhe os seus estabelecimentos favoritos salvos' 
+                    : 'Acompanhe o status das suas sugestões enviadas'}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-zinc-900">Meus Cadastros</h2>
-              <p className="text-[10px] text-zinc-500">Acompanhe o status das suas sugestões</p>
-            </div>
+            <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
+              <X className="w-4 h-4 text-zinc-400" />
+            </button>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
-            <X className="w-4 h-4 text-zinc-400" />
-          </button>
+
+          {/* Navigation Tabs */}
+          <div className="flex bg-zinc-100/80 p-1 rounded-2xl border border-zinc-200/50">
+            <button
+              onClick={() => setActiveTab('favoritos')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-xl transition-all ${
+                activeTab === 'favoritos'
+                  ? 'bg-white text-rose-600 shadow-sm border border-zinc-100/55'
+                  : 'text-zinc-500 hover:text-zinc-800'
+              }`}
+            >
+              <Heart className={`w-3.5 h-3.5 ${activeTab === 'favoritos' ? 'fill-rose-500 text-rose-500' : 'text-zinc-400'}`} />
+              Favoritos
+              {favorites.length > 0 && (
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black ${
+                  activeTab === 'favoritos' ? 'bg-rose-50 text-rose-600' : 'bg-zinc-200 text-zinc-600'
+                }`}>
+                  {favorites.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('cadastros')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-xl transition-all ${
+                activeTab === 'cadastros'
+                  ? 'bg-white text-zinc-900 shadow-sm border border-zinc-100/55'
+                  : 'text-zinc-500 hover:text-zinc-800'
+              }`}
+            >
+              <Store className={`w-3.5 h-3.5 ${activeTab === 'cadastros' ? 'text-zinc-700' : 'text-zinc-400'}`} />
+              Sugestões / Cadastros
+            </button>
+          </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {error ? (
-            <div className="py-12 flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center text-red-500 mb-4">
-                <AlertCircle className="w-8 h-8" />
+          {activeTab === 'favoritos' ? (
+            favorites.length === 0 ? (
+              <div className="py-20 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center text-rose-400 mb-4">
+                  <Heart className="w-8 h-8 fill-rose-100" />
+                </div>
+                <h3 className="text-sm font-bold text-zinc-900">Sua lista está vazia</h3>
+                <p className="text-xs text-zinc-500 mt-2 max-w-xs mx-auto">
+                  Adicione locais aos seus favoritos pressionando o coração nas fotos de qualquer estabelecimento!
+                </p>
               </div>
-              <h3 className="text-lg font-bold text-zinc-900">Ops! Algo deu errado</h3>
-              <p className="text-sm text-zinc-500 mt-2 max-w-xs mx-auto">{error}</p>
-              <button 
-                onClick={fetchUserEstablishments}
-                className="mt-6 px-6 py-2 bg-zinc-100 text-zinc-900 rounded-xl text-xs font-bold hover:bg-zinc-200 transition-all"
-              >
-                Tentar Novamente
-              </button>
-            </div>
-          ) : isLoading ? (
-            <div className="py-20 flex flex-col items-center justify-center text-zinc-400">
-              <Loader2 className="w-8 h-8 animate-spin mb-4" />
-              <p className="text-sm font-medium">Carregando seus cadastros...</p>
-            </div>
-          ) : establishments.length === 0 ? (
-            <div className="py-20 flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400 mb-4">
-                <Store className="w-8 h-8" />
-              </div>
-              <h3 className="text-lg font-bold text-zinc-900">Nenhum cadastro encontrado</h3>
-              <p className="text-sm text-zinc-500 mt-2 max-w-xs mx-auto">
-                Você ainda não sugeriu nenhum estabelecimento. Comece agora clicando no botão de "+"!
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {establishments.map((est) => (
-                <div 
-                  key={est.id} 
-                  className="p-4 border border-zinc-100 rounded-2xl hover:border-zinc-200 transition-all bg-zinc-50/30"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-zinc-900 truncate">{est.name}</h4>
-                      <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
-                        <MapPin className="w-3 h-3" />
-                        <span className="truncate">{est.address || 'Endereço não informado'}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
-                        <Calendar className="w-3 h-3" />
-                        <span>Sugerido em: {new Date(est.created_at).toLocaleDateString('pt-BR')}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col items-end gap-2">
-                      <StatusBadge status={est.status} />
-                      <div className="flex flex-wrap gap-1 mt-1 justify-end">
-                        {(est.sub_category || '').split(est.sub_category?.includes(' | ') ? ' | ' : /,\s*(?![^()]*\))/).map((cat, idx) => (
-                          <span key={idx} className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-widest">
-                            {cat && typeof cat === 'string' ? cat.trim() : ''}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 mt-2 justify-end">
-                        <button 
-                          onClick={() => handleEdit(est)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 bg-zinc-100 text-zinc-700 hover:bg-zinc-200 rounded-lg text-[10px] font-bold transition-all border border-zinc-200"
-                        >
-                          <Edit className="w-3 h-3 text-zinc-500" />
-                          Editar
-                        </button>
-                        
-                        <button 
-                          onClick={() => handleDelete(est)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-[10px] font-bold transition-all border border-red-100"
-                        >
-                          <Trash2 className="w-3 h-3 text-red-500" />
-                          Excluir
-                        </button>
+            ) : (
+              <div className="space-y-4">
+                {favorites.map((fav) => {
+                  const maps = fav.maps;
+                  if (!maps) return null;
+                  const itemKey = maps.id || maps.short_id || Math.random().toString();
+                  const subCat = maps.subCategory || maps.sub_category || 'Estabelecimento';
+                  const rawImages = maps.images || [];
+                  const image = Array.isArray(rawImages) && rawImages.length > 0
+                    ? rawImages.find((img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/')))
+                    : null;
 
-                        {isAdmin && est.status === 'approved' && (
-                          <button 
-                            onClick={() => openPermissions(est)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-[10px] font-bold transition-all border border-emerald-100"
-                          >
-                            <Shield className="w-3 h-3 text-emerald-500" />
-                            Gerenciar Acessos
-                          </button>
+                  return (
+                    <div 
+                      key={itemKey} 
+                      className="p-4 border border-zinc-100 rounded-2xl bg-zinc-50/20 hover:border-zinc-200 hover:shadow-xs transition-all group flex gap-4"
+                    >
+                      {/* Thumbnail Image */}
+                      {image && (
+                        <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-zinc-100 bg-zinc-100">
+                          <img 
+                            src={image} 
+                            alt={maps.title} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      )}
+                      
+                      <div className="flex-1 min-w-0 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="font-bold text-zinc-900 truncate text-xs sm:text-sm">{maps.title}</h4>
+                            
+                            {/* Heart toggle button */}
+                            <button
+                              onClick={() => toggleFavorite(fav)}
+                              className="p-1 hover:bg-rose-50 rounded-lg text-rose-500 transition-colors shrink-0"
+                              title="Remover dos favoritos"
+                            >
+                              <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                            </button>
+                          </div>
+                          
+                          <p className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-widest inline-block mt-0.5 mb-1.5">
+                            {subCat}
+                          </p>
+
+                          {maps.address && (
+                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                              <MapPin className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{maps.address}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {maps.uri && (
+                          <div className="flex items-center gap-2 mt-2 pt-0.5">
+                            <a 
+                              href={maps.uri}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-[9px] font-black text-[#00897b] hover:underline"
+                            >
+                              <Navigation2 className="w-2.5 h-2.5 fill-current" />
+                              Ver no Google Maps
+                              <ExternalLink className="w-2.5 h-2.5 ml-0.5" />
+                            </a>
+                          </div>
                         )}
                       </div>
                     </div>
-                  </div>
+                  );
+                })}
+              </div>
+            )
+          ) : (
+            error ? (
+              <div className="py-12 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center text-red-500 mb-4">
+                  <AlertCircle className="w-8 h-8" />
                 </div>
-              ))}
-            </div>
+                <h3 className="text-lg font-bold text-zinc-900">Ops! Algo deu errado</h3>
+                <p className="text-sm text-zinc-500 mt-2 max-w-xs mx-auto">{error}</p>
+                <button 
+                  onClick={fetchUserEstablishments}
+                  className="mt-6 px-6 py-2 bg-zinc-100 text-zinc-900 rounded-xl text-xs font-bold hover:bg-zinc-200 transition-all"
+                >
+                  Tentar Novamente
+                </button>
+              </div>
+            ) : isLoading ? (
+              <div className="py-20 flex flex-col items-center justify-center text-zinc-400">
+                <Loader2 className="w-8 h-8 animate-spin mb-4" />
+                <p className="text-sm font-medium">Carregando seus cadastros...</p>
+              </div>
+            ) : establishments.length === 0 ? (
+              <div className="py-20 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400 mb-4">
+                  <Store className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-bold text-zinc-900">Nenhum cadastro encontrado</h3>
+                <p className="text-sm text-zinc-500 mt-2 max-w-xs mx-auto">
+                  Você ainda não sugeriu nenhum estabelecimento. Comece agora clicando no botão de "+"!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {establishments.map((est) => (
+                  <div 
+                    key={est.id} 
+                    className="p-4 border border-zinc-100 rounded-2xl hover:border-zinc-200 transition-all bg-zinc-50/30"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-zinc-900 truncate">{est.name}</h4>
+                        <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
+                          <MapPin className="w-3 h-3" />
+                          <span className="truncate">{est.address || 'Endereço não informado'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
+                          <MapPin className="w-3 h-3" />
+                          <span>Sugerido em: {new Date(est.created_at).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-col items-end gap-2">
+                        <StatusBadge status={est.status} />
+                        <div className="flex flex-wrap gap-1 mt-1 justify-end">
+                          {(est.sub_category || '').split(est.sub_category?.includes(' | ') ? ' | ' : /,\s*(?![^()]*\))/).map((cat, idx) => (
+                            <span key={idx} className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-widest">
+                              {cat && typeof cat === 'string' ? cat.trim() : ''}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 mt-2 justify-end">
+                          <button 
+                            onClick={() => handleEdit(est)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-zinc-100 text-zinc-700 hover:bg-zinc-200 rounded-lg text-[10px] font-bold transition-all border border-zinc-200"
+                          >
+                            <Edit className="w-3 h-3 text-zinc-500" />
+                            Editar
+                          </button>
+                          
+                          <button 
+                            onClick={() => handleDelete(est)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-[10px] font-bold transition-all border border-red-100"
+                          >
+                            <Trash2 className="w-3 h-3 text-red-500" />
+                            Excluir
+                          </button>
+  
+                          {isAdmin && est.status === 'approved' && (
+                            <button 
+                              onClick={() => openPermissions(est)}
+                              className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-[10px] font-bold transition-all border border-emerald-100"
+                            >
+                              <Shield className="w-3 h-3 text-emerald-500" />
+                              Gerenciar Acessos
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
 

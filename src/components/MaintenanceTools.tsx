@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { suggestBusinessHours } from '../services/geminiService';
 import { Loader2, RefreshCw, CheckCircle2, AlertCircle, Clock, MapPin, Globe, Search, Compass, Check, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 interface Establishment {
   id: string;
@@ -26,6 +27,7 @@ interface AutoEstablishment {
 
 export const MaintenanceTools: React.FC = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [missingHours, setMissingHours] = useState<Establishment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -58,13 +60,13 @@ export const MaintenanceTools: React.FC = () => {
       });
       
       if (data.processed > 0) {
-        alert(`${data.processed} estabelecimentos foram geocodificados com sucesso!`);
+        toast.success(`${data.processed} estabelecimentos foram geocodificados com sucesso!`);
       } else if (data.batchSize === 0) {
-        alert("Todos os estabelecimentos já possuem cidade e estado vinculados.");
+        toast.info("Todos os estabelecimentos já possuem cidade e estado vinculados.");
       }
     } catch (err) {
       console.error("Geo backfill error:", err);
-      alert("Erro ao executar geocodificação.");
+      toast.error("Erro ao executar geocodificação.");
     } finally {
       setIsGeocoding(false);
     }
@@ -153,7 +155,7 @@ export const MaintenanceTools: React.FC = () => {
     
     const pendingItems = autoEsts.filter(item => !item.isHighPrecision);
     if (pendingItems.length === 0) {
-      alert("Todos os estabelecimentos já estão corrigidos com coordenadas de alta precisão!");
+      toast.info("Todos os estabelecimentos já estão corrigidos com coordenadas de alta precisão!");
       return;
     }
 

@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { Download, FileText, FileSpreadsheet, Filter, Loader2 } from 'lucide-react';
 import { CATEGORIES, SUB_CATEGORIES } from '../constants/taxonomy';
+import { useToast } from '../contexts/ToastContext';
 
 interface City {
   id: number;
@@ -18,6 +19,7 @@ interface State {
 }
 
 export const ExportTools: React.FC = () => {
+  const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
   const [cities, setCities] = useState<City[]>([]);
   const [states, setStates] = useState<State[]>([]);
@@ -50,7 +52,7 @@ export const ExportTools: React.FC = () => {
     try {
       const data = await fetchData();
       if (!data || data.length === 0) {
-        alert("Nenhum dado encontrado para os filtros selecionados.");
+        toast.warning("Nenhum dado encontrado para os filtros selecionados.");
         return;
       }
 
@@ -76,7 +78,7 @@ export const ExportTools: React.FC = () => {
       XLSX.writeFile(workbook, `VidaLocal_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
     } catch (err) {
       console.error("Export error:", err);
-      alert("Erro ao exportar para Excel.");
+      toast.error("Erro ao exportar para Excel.");
     } finally {
       setIsExporting(false);
     }
@@ -87,7 +89,7 @@ export const ExportTools: React.FC = () => {
     try {
       const data = await fetchData();
       if (!data || data.length === 0) {
-        alert("Nenhum dado encontrado para os filtros selecionados.");
+        toast.warning("Nenhum dado encontrado para os filtros selecionados.");
         return;
       }
 
@@ -117,7 +119,7 @@ export const ExportTools: React.FC = () => {
       doc.save(`VidaLocal_Export_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (err) {
       console.error("Export error:", err);
-      alert("Erro ao exportar para PDF.");
+      toast.error("Erro ao exportar para PDF.");
     } finally {
       setIsExporting(false);
     }

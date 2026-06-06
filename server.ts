@@ -1460,7 +1460,47 @@ app.get("/api/search/suggest", async (req, res) => {
 
 app.get("/api/search", async (req, res) => {
   const rawQ = String(req.query.q || "");
-  const originalQ = cleanQuery(rawQ);
+  
+  // Advanced pre-processing for proximity searches
+  let processedQ = rawQ.toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // remove accents
+  
+  const proximityKeywords = [
+    "mais proximos", "mais proximo", "mais proximas", "mais proxima",
+    "proximos", "proximo", "proximas", "proxima",
+    "perto de mim", "mais perto", "perto", "proxima de mim", "proximas de mim",
+    "ao meu redor", "ao redor", "proximidade", "proximidades"
+  ];
+
+  const genericKeywords = [
+    "estabelecimentos", "estabelecimento", "locais", "local", "lugares", "lugar", "pontos", "ponto"
+  ];
+
+  const cityNames = ["gurupi", "palmas", "araguaina", "tocantins", "to"];
+
+  proximityKeywords.forEach(kw => {
+    processedQ = processedQ.replace(new RegExp(kw, 'gi'), ' ');
+  });
+
+  genericKeywords.forEach(kw => {
+    processedQ = processedQ.replace(new RegExp(kw, 'gi'), ' ');
+  });
+
+  cityNames.forEach(cn => {
+    processedQ = processedQ.replace(new RegExp(`\\b${cn}\\b`, 'gi'), ' ');
+  });
+
+  // Remove standard connector words
+  processedQ = processedQ.replace(/\b(de|da|do|das|dos|em|no|na|para|com|e|o|a|um|uma)\b/gi, ' ');
+  
+  // Clean spacing
+  processedQ = processedQ.replace(/\s+/g, ' ').trim();
+
+  // If the query became empty or generic, treat it as empty query to list all establishments
+  const finalQ = processedQ.length > 0 ? processedQ : "";
+
+  const originalQ = cleanQuery(finalQ);
   let q = originalQ;
   const { city_id, category_id, sub_category } = req.query;
   

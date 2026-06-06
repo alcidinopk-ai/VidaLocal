@@ -20,12 +20,15 @@ import {
   Plus,
   ChevronDown,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Heart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock } from 'lucide-react';
 import { GroundingChunk } from '../services/geminiService';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { useFavorites } from '../contexts/FavoritesContext';
 import { supabase } from '../lib/supabase';
 import { InteractionHistory } from './InteractionHistory';
 import { RegisterEstablishmentModal } from './RegisterEstablishmentModal';
@@ -54,6 +57,9 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   onCloseDetails
 }) => {
   const { user, profile, role, setIsAuthModalOpen } = useAuth();
+  const { toast } = useToast();
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const isFav = isFavorite(chunk.maps?.id || chunk.maps?.short_id);
   const isAdmin = user && (role === 'admin' || user.email === 'alcidinopk@gmail.com');
   const isOwner = user && chunk.maps?.user_id === user.id;
   const [canEdit, setCanEdit] = useState(isAdmin || isOwner);
@@ -223,6 +229,11 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
       if (error) throw error;
 
       setIsSubmitted(true);
+      toast.success(
+        activeModal === 'avaliar' 
+          ? 'Avaliação enviada com sucesso!' 
+          : 'Enquete/Feedback enviado com sucesso!'
+      );
       setTimeout(() => {
         setIsSubmitted(false);
         setActiveModal(null);
@@ -231,7 +242,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
       }, 2000);
     } catch (err) {
       console.error('Error submitting interaction:', err);
-      alert('Erro ao enviar interação. Verifique se o banco de dados está configurado corretamente.');
+      toast.error('Erro ao enviar interação. Verifique se o banco de dados está configurado corretamente.');
     }
   };
 
@@ -314,6 +325,18 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
               </div>
             )}
           </div>
+
+          {/* Heart Button Top Right */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite(chunk);
+            }}
+            className="absolute top-3 right-3 z-10 p-2 bg-white/90 backdrop-blur-md hover:bg-white text-zinc-700 hover:text-red-500 rounded-full shadow-lg transition-all active:scale-90"
+            title={isFav ? "Remover dos favoritos" : "Salvar nos favoritos"}
+          >
+            <Heart className={`w-4 h-4 transition-colors ${isFav ? 'fill-red-500 text-red-500 animate-pulse' : 'text-zinc-600'}`} />
+          </button>
 
           {/* Quick Info Overlay Bottom */}
           <div className="absolute bottom-0 inset-x-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
@@ -690,6 +713,17 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                   className="absolute top-4 right-4 p-2.5 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors z-30"
                 >
                   <X className="w-5 h-5" />
+                </button>
+
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFavorite(chunk);
+                  }}
+                  className="absolute top-4 right-16 p-2.5 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors z-30"
+                  title={isFav ? "Remover dos favoritos" : "Salvar nos favoritos"}
+                >
+                  <Heart className={`w-5 h-5 transition-colors ${isFav ? 'fill-red-500 text-red-500 animate-pulse' : 'text-white'}`} />
                 </button>
 
                 {images.length > 1 && (

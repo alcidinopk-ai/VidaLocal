@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Search, User as UserIcon, Shield, ShieldAlert, Loader2, Pencil, Trash2, Eye } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 interface Profile {
   id: string;
@@ -17,6 +18,7 @@ interface Profile {
 
 export const UserManagementModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const { user: currentUser } = useAuth();
+  const { toast } = useToast();
   const [users, setUsers] = useState<Profile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -105,7 +107,7 @@ export const UserManagementModal = ({ isOpen, onClose }: { isOpen: boolean; onCl
       if (error) {
         // Tratar erro específico de coluna inexistente (Schema Cache)
         if (error.code === 'PGRST204' || error.message?.includes('managed_establishment_short_id')) {
-          alert("⚠️ Ação necessária no Supabase!\n\nA coluna 'managed_establishment_short_id' não foi encontrada no banco de dados.\n\nPor favor, execute este comando no SQL Editor do Supabase:\n\nALTER TABLE profiles ADD COLUMN managed_establishment_short_id TEXT;");
+          toast.error("Ação necessária no Supabase! A coluna 'managed_establishment_short_id' não foi encontrada. Execute: ALTER TABLE profiles ADD COLUMN managed_establishment_short_id TEXT;", 10000);
           return;
         }
         throw error;
@@ -113,9 +115,10 @@ export const UserManagementModal = ({ isOpen, onClose }: { isOpen: boolean; onCl
       
       setUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
       setEditingUser(null);
+      toast.success("Usuário atualizado com sucesso!");
     } catch (err: any) {
       console.error('Error updating user:', err);
-      alert('Erro ao atualizar usuário: ' + (err.message || 'Erro desconhecido'));
+      toast.error('Erro ao atualizar usuário: ' + (err.message || 'Erro desconhecido'));
     } finally {
       setIsUpdating(null);
     }

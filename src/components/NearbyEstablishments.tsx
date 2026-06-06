@@ -24,7 +24,10 @@ interface Establishment {
   maps_link?: string;
 }
 
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+const calculateDistance = (lat1: number, lon1: number, lat2?: number, lon2?: number) => {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) {
+    return Infinity;
+  }
   const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
@@ -69,16 +72,22 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
               distance: calculateDistance(userLocation.latitude, userLocation.longitude, e.latitude, e.longitude)
             }))
             .sort((a, b) => {
-              // Priority 1: Premium
+              // Priority 1: Distance (closest first)
+              if (a.distance !== b.distance && isFinite(a.distance) && isFinite(b.distance)) {
+                return a.distance - b.distance;
+              }
+              if (isFinite(a.distance) && !isFinite(b.distance)) return -1;
+              if (!isFinite(a.distance) && isFinite(b.distance)) return 1;
+
+              // Priority 2: Premium
               if (a.is_premium && !b.is_premium) return -1;
               if (!a.is_premium && b.is_premium) return 1;
 
-              // Priority 2: Featured
+              // Priority 3: Featured
               if (a.is_featured && !b.is_featured) return -1;
               if (!a.is_featured && b.is_featured) return 1;
 
-              // Priority 3: Distance
-              return a.distance - b.distance;
+              return 0;
             })
             .slice(0, 8);
           setEstablishments(sorted);

@@ -25,7 +25,10 @@ interface Establishment {
   maps_link?: string;
 }
 
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+const calculateDistance = (lat1: number, lon1: number, lat2?: number, lon2?: number) => {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) {
+    return Infinity;
+  }
   const R = 6371; // Radius of the earth in km
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
@@ -78,7 +81,10 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
               // Priority 3: Distance
               const distA = calculateDistance(userLocation.latitude, userLocation.longitude, a.latitude, a.longitude);
               const distB = calculateDistance(userLocation.latitude, userLocation.longitude, b.latitude, b.longitude);
-              return distA - distB;
+              if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+              if (isFinite(distA) && !isFinite(distB)) return -1;
+              if (!isFinite(distA) && isFinite(distB)) return 1;
+              return 0;
             });
           } else {
             // Even without location, sort premium then featured

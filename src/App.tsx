@@ -22,6 +22,7 @@ import {
   ShoppingBag,
   LogOut,
   ChevronDown,
+  ChevronRight,
   CheckCircle2,
   Store,
   Plus,
@@ -29,7 +30,8 @@ import {
   RefreshCw,
   Mic,
   MicOff,
-  User as UserIcon
+  User as UserIcon,
+  MoreHorizontal
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
@@ -39,6 +41,7 @@ import { MapDisplay } from './components/MapDisplay';
 import { EstablishmentCard } from './components/EstablishmentCard';
 import { useCity } from './contexts/CityContext';
 import { useAuth } from './contexts/AuthContext';
+import { useToast } from './contexts/ToastContext';
 import { CitySelectorButton } from './components/CitySelector';
 import { RegisterEstablishmentModal } from './components/RegisterEstablishmentModal';
 import { UserEstablishmentsModal } from './components/UserEstablishmentsModal';
@@ -48,6 +51,8 @@ import { FeaturedEstablishments } from './components/FeaturedEstablishments';
 import { NearbyEstablishments } from './components/NearbyEstablishments';
 import { UserProfileModal } from './components/UserProfileModal';
 import { UserManagementModal } from './components/UserManagementModal';
+import { AllCategoriesModal } from './components/AllCategoriesModal';
+import { Logo } from './components/Logo';
 
 import { MaintenanceTools } from './components/MaintenanceTools';
 import { ExportTools } from './components/ExportTools';
@@ -77,7 +82,47 @@ const IconRenderer = ({ name, color, className }: { name: string; color?: string
   return <IconComponent className={className} style={color ? { color } : {}} />;
 };
 
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+const isSimilarName = (name1?: string, name2?: string): boolean => {
+  if (!name1 || !name2) return false;
+  
+  const normalize = (str: string) => {
+    return str
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // remove acentos
+      .toLowerCase()
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "") // remove pontuações
+      .replace(/\s+/g, " ") // normaliza espaços
+      .trim();
+  };
+
+  const n1 = normalize(name1);
+  const n2 = normalize(name2);
+
+  if (n1 === n2) return true;
+
+  const removeConnectors = (str: string) => {
+    return str
+      .split(" ")
+      .filter(word => !["de", "da", "do", "dos", "das", "e", "o", "a", "em", "para"].includes(word))
+      .join(" ");
+  };
+
+  const clean1 = removeConnectors(n1);
+  const clean2 = removeConnectors(n2);
+
+  if (clean1 === clean2) return true;
+
+  if (clean1.length > 3 && clean2.length > 3) {
+    if (clean1.includes(clean2) || clean2.includes(clean1)) return true;
+  }
+
+  return false;
+};
+
+const calculateDistance = (lat1: number, lon1: number, lat2?: number, lon2?: number) => {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) {
+    return Infinity;
+  }
   const R = 6371; // Radius of the earth in km
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
@@ -103,6 +148,7 @@ export default function App() {
     setIsRegisterUserModalOpen
   } = useAuth();
   const [showSkip, setShowSkip] = useState(false);
+  const { toast } = useToast();
 
   // Auth callback handling (runs in the popup)
   const isAuthCallback = window.location.pathname === '/auth/callback';
@@ -137,8 +183,10 @@ export default function App() {
             setTimeout(() => window.close(), 1500);
           } else {
             // Show error on screen if not in popup
-            alert('Erro de autenticação: ' + err.message);
-            window.location.href = '/';
+            toast.error('Erro de autenticação: ' + err.message);
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 3000);
           }
         }
       };
@@ -165,6 +213,8 @@ export default function App() {
   const [isRealLocation, setIsRealLocation] = useState(false);
   const [locationName, setLocationName] = useState<string>('Detectando...');
   const [allGroundingChunks, setAllGroundingChunks] = useState<GroundingChunk[]>([]);
+  const [backgroundImages, setBackgroundImages] = useState<string[]>([]);
+  const [currentBgIndex, setCurrentBgIndex] = useState<number>(0);
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
   const [categoryEstablishments, setCategoryEstablishments] = useState<any[]>([]);
@@ -178,12 +228,26 @@ export default function App() {
   const [suggestions, setSuggestions] = useState<{ intents: any[], types: string[] }>({ intents: [], types: [] });
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [view, setView] = useState<'home' | 'subcategories' | 'chat' | 'maintenance'>('home');
+  const [isAllCategoriesModalOpen, setIsAllCategoriesModalOpen] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const [isMobile, setIsMobile] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -272,9 +336,9 @@ export default function App() {
       const data = await res.json();
       if (res.ok) {
         if (data.processed > 0) {
-          alert(`${data.processed} novo(s) local(is) geocodificado(s) com sucesso. Atualizando cidades...`);
+          toast.success(`${data.processed} novo(s) local(is) geocodificado(s) com sucesso. Atualizando cidades...`);
         } else {
-          alert('Tudo atualizado! Nenhuma nova cidade/local pendente no momento.');
+          toast.info('Tudo atualizado! Nenhuma nova cidade/local pendente no momento.');
         }
         
         // Re-detect coordinates and load the nearest active city
@@ -308,11 +372,11 @@ export default function App() {
           );
         }
       } else {
-        alert(`Não foi possível executar o backfill: ${data.error || 'Erro no servidor'}`);
+        toast.error(`Não foi possível executar o backfill: ${data.error || 'Erro no servidor'}`);
       }
     } catch (err) {
       console.error("Backfill request error:", err);
-      alert('Erro ao conectar ao servidor para atualizar cidades.');
+      toast.error('Erro ao conectar ao servidor para atualizar cidades.');
     } finally {
       setIsBackfilling(false);
     }
@@ -377,6 +441,62 @@ export default function App() {
     }
   }, [currentCity]);
 
+  const FALLBACK_CITY_IMAGES = [
+    "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&h=600&q=80",
+    "https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&h=600&q=80",
+    "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=1200&h=600&q=80",
+    "https://images.unsplash.com/photo-1496568818309-53d7c7753022?auto=format&fit=crop&w=1200&h=600&q=80"
+  ];
+
+  const updateBackgroundImagesFromFeaturedData = (data: any[]) => {
+    const urls: string[] = [];
+    data.forEach((est: any) => {
+      if (est.images) {
+        if (Array.isArray(est.images)) {
+          est.images.forEach((img: any) => {
+            if (typeof img === 'string' && img.trim() && !urls.includes(img)) {
+              urls.push(img);
+            }
+          });
+        } else if (typeof est.images === 'string' && est.images.trim()) {
+          try {
+            const parsed = JSON.parse(est.images);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((img: any) => {
+                if (typeof img === 'string' && img.trim() && !urls.includes(img)) {
+                  urls.push(img);
+                }
+              });
+            }
+          } catch (e) {
+            if (!urls.includes(est.images)) {
+              urls.push(est.images);
+            }
+          }
+        }
+      }
+      if (est.image && typeof est.image === 'string' && est.image.trim() && !urls.includes(est.image)) {
+        urls.push(est.image);
+      }
+    });
+
+    if (urls.length > 0) {
+      setBackgroundImages(urls);
+    } else {
+      setBackgroundImages(FALLBACK_CITY_IMAGES);
+    }
+    setCurrentBgIndex(0);
+  };
+
+  // Timer to rotate background images every 8 seconds
+  useEffect(() => {
+    const activeImages = backgroundImages.length > 0 ? backgroundImages : FALLBACK_CITY_IMAGES;
+    const interval = setInterval(() => {
+      setCurrentBgIndex((prev) => (prev + 1) % activeImages.length);
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [backgroundImages]);
+
   const [initialFetchError, setInitialFetchError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -395,6 +515,7 @@ export default function App() {
       .then(data => {
         if (!Array.isArray(data)) {
           console.warn("Featured data is not an array:", data);
+          updateBackgroundImagesFromFeaturedData([]);
           return;
         }
         const initialChunks: GroundingChunk[] = data.map((est: any) => ({
@@ -425,10 +546,12 @@ export default function App() {
           }
         }));
         setAllGroundingChunks(initialChunks);
+        updateBackgroundImagesFromFeaturedData(data);
       })
       .catch(err => {
         console.error("Error fetching initial establishments:", err);
         setInitialFetchError("Não foi possível carregar os estabelecimentos. Verifique sua conexão.");
+        updateBackgroundImagesFromFeaturedData([]);
       });
   }, [currentCity]);
 
@@ -451,22 +574,25 @@ export default function App() {
       
       if (Array.isArray(data)) {
         data.sort((a, b) => {
-          // 1. Premium priority
+          // 1. Distance priority (if location is available)
+          if (location) {
+            const distA = calculateDistance(location.latitude, location.longitude, a.latitude, a.longitude);
+            const distB = calculateDistance(location.latitude, location.longitude, b.latitude, b.longitude);
+            if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+            if (isFinite(distA) && !isFinite(distB)) return -1;
+            if (!isFinite(distA) && isFinite(distB)) return 1;
+          }
+
+          // 2. Premium priority
           const premiumA = a.is_premium ? 1 : 0;
           const premiumB = b.is_premium ? 1 : 0;
           if (premiumA !== premiumB) return premiumB - premiumA;
           
-          // 2. Featured priority
+          // 3. Featured priority
           const featuredA = a.is_featured ? 1 : 0;
           const featuredB = b.is_featured ? 1 : 0;
           if (featuredA !== featuredB) return featuredB - featuredA;
 
-          // 3. Distance priority (if location is available)
-          if (location) {
-            const distA = calculateDistance(location.latitude, location.longitude, a.latitude, a.longitude);
-            const distB = calculateDistance(location.latitude, location.longitude, b.latitude, b.longitude);
-            return distA - distB;
-          }
           return 0;
         });
       }
@@ -485,6 +611,12 @@ export default function App() {
       setCategoryEstablishments(prev => {
         if (!Array.isArray(prev) || prev.length === 0) return prev;
         const sorted = [...prev].sort((a, b) => {
+          const distA = calculateDistance(location.latitude, location.longitude, a.latitude, a.longitude);
+          const distB = calculateDistance(location.latitude, location.longitude, b.latitude, b.longitude);
+          if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+          if (isFinite(distA) && !isFinite(distB)) return -1;
+          if (!isFinite(distA) && isFinite(distB)) return 1;
+
           const premiumA = a.is_premium ? 1 : 0;
           const premiumB = b.is_premium ? 1 : 0;
           if (premiumA !== premiumB) return premiumB - premiumA;
@@ -493,9 +625,7 @@ export default function App() {
           const featuredB = b.is_featured ? 1 : 0;
           if (featuredA !== featuredB) return featuredB - featuredA;
 
-          const distA = calculateDistance(location.latitude, location.longitude, a.latitude, a.longitude);
-          const distB = calculateDistance(location.latitude, location.longitude, b.latitude, b.longitude);
-          return distA - distB;
+          return 0;
         });
         return sorted;
       });
@@ -506,6 +636,16 @@ export default function App() {
           const am = a.maps;
           const bm = b.maps;
           
+          const locA = am?.location;
+          const locB = bm?.location;
+          if (locA && locB) {
+            const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
+            const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
+            if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+            if (isFinite(distA) && !isFinite(distB)) return -1;
+            if (!isFinite(distA) && isFinite(distB)) return 1;
+          }
+          
           const premiumA = am?.is_premium ? 1 : 0;
           const premiumB = bm?.is_premium ? 1 : 0;
           if (premiumA !== premiumB) return premiumB - premiumA;
@@ -514,12 +654,7 @@ export default function App() {
           const featuredB = bm?.is_featured ? 1 : 0;
           if (featuredA !== featuredB) return featuredB - featuredA;
 
-          const locA = am?.location;
-          const locB = bm?.location;
-          if (!locA || !locB) return 0;
-          const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
-          const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
-          return distA - distB;
+          return 0;
         });
         return sorted;
       });
@@ -652,12 +787,24 @@ export default function App() {
         setAllGroundingChunks(prev => {
           // Prioritize newChunks that have data from our DB
           const filteredPrev = prev.filter(
-            pc => !localChunks.some(nc => nc.maps?.id === pc.maps?.id || (nc.maps?.title && pc.maps?.title && nc.maps.title === pc.maps.title))
+            pc => !localChunks.some(nc => nc.maps?.id === pc.maps?.id || isSimilarName(nc.maps?.title, pc.maps?.title))
           );
           let combined = [...localChunks, ...filteredPrev];
           combined.sort((a, b) => {
             const am = a.maps;
             const bm = b.maps;
+            
+            if (location) {
+              const locA = am?.location;
+              const locB = bm?.location;
+              if (locA && locB) {
+                const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
+                const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
+                if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+                if (isFinite(distA) && !isFinite(distB)) return -1;
+                if (!isFinite(distA) && isFinite(distB)) return 1;
+              }
+            }
             
             const premiumA = am?.is_premium ? 1 : 0;
             const premiumB = bm?.is_premium ? 1 : 0;
@@ -667,14 +814,6 @@ export default function App() {
             const featuredB = bm?.is_featured ? 1 : 0;
             if (featuredA !== featuredB) return featuredB - featuredA;
 
-            if (location) {
-              const locA = am?.location;
-              const locB = bm?.location;
-              if (!locA || !locB) return 0;
-              const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
-              const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
-              return distA - distB;
-            }
             return 0;
           });
           return combined.slice(0, 30);
@@ -761,9 +900,12 @@ export default function App() {
               }));
               if (location) {
                 nearbyChunks.sort((a, b) => {
-                  const distA = calculateDistance(location.latitude, location.longitude, a.maps!.location!.latitude, a.maps!.location!.longitude);
-                  const distB = calculateDistance(location.latitude, location.longitude, b.maps!.location!.latitude, b.maps!.location!.longitude);
-                  return distA - distB;
+                  const distA = calculateDistance(location.latitude, location.longitude, a.maps?.location?.latitude, a.maps?.location?.longitude);
+                  const distB = calculateDistance(location.latitude, location.longitude, b.maps?.location?.latitude, b.maps?.location?.longitude);
+                  if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+                  if (isFinite(distA) && !isFinite(distB)) return -1;
+                  if (!isFinite(distA) && isFinite(distB)) return 1;
+                  return 0;
                 });
               }
               setAllGroundingChunks(nearbyChunks.slice(0, 5));
@@ -790,7 +932,7 @@ export default function App() {
       const chunksWithDescriptions = geminiChunks.map(chunk => {
         if (!chunk.maps) return chunk;
         const title = chunk.maps.title;
-        const localMatch = localResults.find((lr: any) => lr.name.toLowerCase().trim() === title.toLowerCase().trim());
+        const localMatch = localResults.find((lr: any) => isSimilarName(lr.name, title));
         let enrichedMaps = { ...chunk.maps };
         if (localMatch) {
           enrichedMaps = {
@@ -799,7 +941,11 @@ export default function App() {
             description: localMatch.description || enrichedMaps.description, phone: localMatch.phone || enrichedMaps.phone,
             whatsapp: localMatch.whatsapp || enrichedMaps.whatsapp, is_featured: localMatch.is_featured,
             is_verified: localMatch.is_verified, is_premium: localMatch.is_premium, plusCode: localMatch.plus_code || enrichedMaps.plusCode,
-            images: localMatch.images || enrichedMaps.images || []
+            images: localMatch.images || enrichedMaps.images || [],
+            location: {
+              latitude: Number(localMatch.latitude),
+              longitude: Number(localMatch.longitude)
+            }
           };
         }
         const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -818,11 +964,23 @@ export default function App() {
       
       if (chunksWithDescriptions.length > 0) {
         setAllGroundingChunks(prev => {
-          const newChunks = chunksWithDescriptions.filter(nc => !prev.some(pc => pc.maps?.title === nc.maps?.title));
+          const newChunks = chunksWithDescriptions.filter(nc => !prev.some(pc => isSimilarName(pc.maps?.title, nc.maps?.title)));
           let combined = [...newChunks, ...prev];
           combined.sort((a, b) => {
             const am = a.maps;
             const bm = b.maps;
+            
+            if (location) {
+              const locA = am?.location;
+              const locB = bm?.location;
+              if (locA && locB) {
+                const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
+                const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
+                if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+                if (isFinite(distA) && !isFinite(distB)) return -1;
+                if (!isFinite(distA) && isFinite(distB)) return 1;
+              }
+            }
             
             const premiumA = am?.is_premium ? 1 : 0;
             const premiumB = bm?.is_premium ? 1 : 0;
@@ -832,13 +990,6 @@ export default function App() {
             const featuredB = bm?.is_featured ? 1 : 0;
             if (featuredA !== featuredB) return featuredB - featuredA;
 
-            if (location) {
-              const locA = am?.location; const locB = bm?.location;
-              if (!locA || !locB) return 0;
-              const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
-              const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
-              return distA - distB;
-            }
             return 0;
           });
           return combined.slice(0, 30);
@@ -855,7 +1006,7 @@ export default function App() {
   const toggleListening = useCallback((isChatInput: boolean = false) => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("O seu navegador não possui suporte para reconhecimento de voz (Web Speech API). Tente utilizar o Google Chrome, Edge ou Safari.");
+      toast.warning("O seu navegador não possui suporte para reconhecimento de voz (Web Speech API). Tente utilizar o Google Chrome, Edge ou Safari.");
       return;
     }
 
@@ -907,6 +1058,7 @@ export default function App() {
   }, [isListening, performSearch]);
 
   const findNearbyEstablishments = useCallback(async () => {
+    setShowSuggestions(false);
     const runSearch = (loc: {latitude: number, longitude: number}) => {
       setView('chat');
       setSelectedSubCategory('Estabelecimentos mais próximos');
@@ -920,7 +1072,7 @@ export default function App() {
     }
     
     runSearch(location);
-  }, [location, detectLocation, currentCity, performSearch]);
+  }, [location, detectLocation, currentCity, performSearch, setShowSuggestions]);
 
 
   const refreshData = useCallback(() => {
@@ -932,6 +1084,7 @@ export default function App() {
           // This will trigger re-render of FeaturedEstablishments if it was listening to a global state,
           // but here it's local to that component. We might need a global refresh trigger.
           window.dispatchEvent(new CustomEvent('vida360:refresh-featured'));
+          updateBackgroundImagesFromFeaturedData(data);
         }
       });
     
@@ -967,10 +1120,7 @@ export default function App() {
   if (isAuthLoading || isCityLoading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-white p-6 text-center">
-        <div className="w-20 h-20 bg-[#00897b] rounded-3xl flex items-center justify-center text-white mb-6 animate-pulse shadow-xl">
-          <MapPin className="w-10 h-10" />
-        </div>
-        <h1 className="text-2xl font-bold text-zinc-900">VidaLocal</h1>
+        <Logo layout="vertical" size="lg" className="mb-6 animate-pulse" />
         <p className="text-sm text-zinc-400 mt-2">
           {isAuthLoading ? 'Recuperando sua sessão...' : 'Detectando sua localização...'}
         </p>
@@ -993,15 +1143,7 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 border-r border-zinc-200">
         {/* Header */}
         <header className="h-16 border-b border-zinc-200 flex items-center justify-between px-6 bg-white z-20">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-[#00897b] rounded-xl flex items-center justify-center text-white">
-              <MapPin className="w-5 h-5" />
-            </div>
-            <div className="flex items-baseline">
-              <span className="font-bold text-xl text-zinc-900">Vida</span>
-              <span className="font-bold text-xl text-[#f57c00]">Local</span>
-            </div>
-          </div>
+          <Logo layout="horizontal" size="sm" />
           
           <div className="flex items-center gap-4">
             <button 
@@ -1125,15 +1267,42 @@ export default function App() {
                 exit={{ opacity: 0 }}
                 className="flex flex-col"
               >
-                {/* Hero Section */}
-                <div className="relative min-h-[240px] flex flex-col items-center justify-center px-6 py-4 text-center overflow-hidden">
-                  {/* Background Gradient & Pattern */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#00897b] via-[#00796b] to-[#f57c00] opacity-90 z-0" />
-                  <div className="absolute inset-0 bg-[url('https://picsum.photos/seed/city/1920/1080?blur=10')] bg-cover bg-center mix-blend-overlay opacity-30 z-0" />
+                {/* Hero, Search & Categories Container with Gradient styling */}
+                <div className="relative flex flex-col items-center justify-start px-4 sm:px-6 py-8 text-center overflow-hidden bg-zinc-50 border-b border-zinc-100">
+                  
+                  {/* 1. Light Gray Base Background Layer */}
+                  <div className="absolute inset-0 bg-[#f4f4f7] z-0 pointer-events-none" />
+                  
+                  {/* 2. Dynamic City Establishments Background (Intermediate Layer) */}
+                  <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+                    <AnimatePresence mode="popLayout">
+                      <motion.div
+                        key={backgroundImages[currentBgIndex] || 'fallback-bg-' + currentBgIndex}
+                        initial={{ opacity: 0, scale: 1.05 }}
+                        animate={{ opacity: 0.85, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.96 }}
+                        transition={{ duration: 1.8, ease: "easeInOut" }}
+                        className="absolute inset-0"
+                      >
+                        <img
+                          src={backgroundImages[currentBgIndex] || FALLBACK_CITY_IMAGES[currentBgIndex % FALLBACK_CITY_IMAGES.length]}
+                          alt="Cidade Viva"
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+                  
+                  {/* 3. Smooth fade-out light-gray overlays for clean transition & maximum text readability */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-[#f4f4f7]/85 to-[#f4f4f7] z-0 pointer-events-none" />
+                  <div className="absolute inset-0 bg-white/10 z-0 pointer-events-none" />
                   
                   <div className="relative z-10 max-w-4xl mx-auto w-full">
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2 mb-4">
-                      <CitySelectorButton />
+                    
+                    {/* 1. Barra Superior */}
+                    <div className="flex items-center justify-center gap-2 mb-6 sm:mb-8">
+                      {/* GPS Pill Button */}
                       <button 
                         onClick={isRealLocation ? () => {
                           setIsRealLocation(false);
@@ -1141,27 +1310,32 @@ export default function App() {
                           setLocationName(`${currentCity.name} – ${currentCity.uf}`);
                         } : detectLocation}
                         disabled={isDetecting}
-                        className={`px-4 py-2 rounded-xl transition-all border flex items-center gap-2 text-xs font-bold backdrop-blur-sm ${
+                        className={`px-4 py-2 rounded-full transition-all flex items-center gap-2 text-xs font-bold backdrop-blur-md border cursor-pointer select-none shrink-0 shadow-xs ${
                           isRealLocation 
-                            ? 'bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20' 
-                            : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+                            ? 'bg-emerald-600 border-emerald-500 text-white' 
+                            : 'bg-white/80 hover:bg-white text-zinc-800 border-zinc-200/80 shadow-xs'
                         } ${isDetecting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        title={isRealLocation ? "Desativar GPS e usar centro da cidade" : "Ativar minha localização real via GPS"}
+                        title={isRealLocation ? "Desativar GPS e usar centro da cidade" : "Ativar GPS real"}
                       >
                         {isDetecting ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-500" />
                         ) : isRealLocation ? (
-                          <CheckCircle2 className="w-3 h-3" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300 fill-emerald-500/20" />
                         ) : (
-                          <Compass className="w-3 h-3" />
+                          <Compass className="w-3.5 h-3.5 text-zinc-500" />
                         )}
                         {isRealLocation ? 'GPS Ativo' : 'Usar meu GPS'}
                       </button>
+
+                      {/* Seletor de Cidade */}
+                      <CitySelectorButton />
+
+                      {/* Botão Atualizar Localização */}
                       <button
                         onClick={runGeoBackfillAndLoad}
                         disabled={isBackfilling}
-                        className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl transition-all flex items-center gap-1 text-[11px] font-bold backdrop-blur-sm"
-                        title="Executar Backfill de Geo para carregar novas cidades"
+                        className="p-2 bg-white/80 hover:bg-white text-zinc-700 border border-zinc-200/80 rounded-full transition-all flex items-center justify-center shrink-0 shadow-xs cursor-pointer backdrop-blur-md"
+                        title="Atualizar localização"
                       >
                         {isBackfilling ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1171,17 +1345,18 @@ export default function App() {
                       </button>
                     </div>
 
-                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white tracking-tight mb-2 leading-[1.1]">
-                      VidaLocal
-                    </h2>
-                    
-                    <p className="text-base text-white/90 mb-4 max-w-2xl mx-auto leading-relaxed">
-                      Conectando você ao melhor da sua cidade, todos os dias.
-                    </p>
+                    {/* Logo Branded Display */}
+                    <Logo 
+                      layout="vertical" 
+                      size="lg" 
+                      showSubtitle={true} 
+                      className="mb-6" 
+                      subtitleClassName="text-zinc-800 text-xs sm:text-sm font-semibold max-w-xl mx-auto leading-relaxed drop-shadow-[0_1px_5px_rgba(255,255,255,0.5)] !text-zinc-700"
+                    />
 
-                    {/* Hero Search Bar */}
-                    <div className="relative max-w-xl mx-auto w-full mb-4">
-                      <div className="bg-white p-1.5 rounded-2xl shadow-2xl flex items-center gap-2">
+                    {/* 4. Campo de Busca Inteligente */}
+                    <div ref={searchContainerRef} className="relative max-w-xl mx-auto w-full mb-2">
+                      <div className="bg-white p-1.5 rounded-2xl shadow-xl flex items-center gap-2 border border-zinc-200/40">
                         <div className="flex-1 flex items-center gap-2 pl-3">
                           <Search className="w-4 h-4 text-zinc-400" />
                           <input 
@@ -1190,15 +1365,15 @@ export default function App() {
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && performSearch(input, true)}
                             onFocus={() => setShowSuggestions(true)}
-                            placeholder="O que você precisa agora?"
-                            className="w-full bg-transparent border-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 text-sm"
+                            placeholder="O que você procura agora?"
+                            className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 text-xs sm:text-sm py-2 font-medium"
                           />
                         </div>
                         
                         <button
                           type="button"
                           onClick={() => toggleListening(false)}
-                          className={`p-2.5 rounded-xl transition-all relative group flex items-center justify-center shrink-0 ${
+                          className={`p-2 rounded-xl sm:p-2.5 transition-all relative flex items-center justify-center shrink-0 cursor-pointer ${
                             isListening 
                               ? 'bg-red-50 text-red-600 animate-pulse border border-red-200' 
                               : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600'
@@ -1206,9 +1381,9 @@ export default function App() {
                           title={isListening ? "Desativar busca por voz" : "Buscar por voz (fale agora)"}
                         >
                           {isListening ? (
-                            <MicOff className="w-4.5 h-4.5" />
+                            <MicOff className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                           ) : (
-                            <Mic className="w-4.5 h-4.5" />
+                            <Mic className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                           )}
                           {isListening && (
                             <span className="absolute -inset-0.5 rounded-xl bg-red-500/20 animate-ping pointer-events-none" />
@@ -1218,7 +1393,7 @@ export default function App() {
                         <button 
                           onClick={() => performSearch(input, true)}
                           disabled={isLoading}
-                          className="px-6 py-2.5 bg-[#f57c00] text-white text-sm font-bold rounded-xl hover:bg-[#e65100] transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          className="px-4 sm:px-6 py-2.5 bg-[#f57c00] text-white text-xs sm:text-sm font-bold rounded-xl hover:bg-[#e65100] transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer shrink-0"
                         >
                           {isLoading ? (
                             <>
@@ -1231,26 +1406,22 @@ export default function App() {
                         </button>
                       </div>
 
-                      <p className="mt-2 text-[10px] sm:text-xs text-white/80 italic font-medium max-w-lg mx-auto leading-relaxed">
-                        "Disse-lhe Jesus: Eu sou o caminho, e a verdade e a vida; ninguém vem ao Pai, senão por mim." — João 14:6
-                      </p>
-
-                      {/* Intelligent Suggestions */}
+                      {/* Intelligent Suggestions List */}
                       <AnimatePresence>
                         {showSuggestions && (
                           <motion.div 
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 10 }}
-                            className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-zinc-200 overflow-hidden z-[60] p-6"
+                            className="absolute top-full left-0 right-0 mt-3 bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-zinc-200 overflow-hidden z-[60] p-6 text-left"
                           >
                             {input.length < 2 ? (
                               <div>
-                                <span className="text-xs font-black text-zinc-800 uppercase tracking-wider mb-4 block">Buscas Populares</span>
+                                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider mb-4 block">Buscas Populares</span>
                                 <div className="flex flex-wrap gap-2">
                                   <button 
                                     onClick={findNearbyEstablishments}
-                                    className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all border border-emerald-500 flex items-center gap-2 shadow-md active:scale-95"
+                                    className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all border border-emerald-500 flex items-center gap-2 shadow-sm active:scale-95 cursor-pointer"
                                   >
                                     <MapPin className="w-3.5 h-3.5" />
                                     Perto de Mim
@@ -1259,7 +1430,7 @@ export default function App() {
                                     <button 
                                       key={term}
                                       onClick={() => handleSelectSuggestion(term)}
-                                      className="px-4 py-2.5 bg-zinc-800 text-white rounded-xl text-xs font-bold hover:bg-zinc-900 transition-all border border-zinc-700 flex items-center gap-2 shadow-md active:scale-95"
+                                      className="px-4 py-2.5 bg-zinc-800 text-white rounded-xl text-xs font-bold hover:bg-zinc-900 transition-all border border-zinc-700 flex items-center gap-2 shadow-sm active:scale-95 cursor-pointer"
                                     >
                                       <Sparkles className="w-3.5 h-3.5 text-[#f57c00]" />
                                       {term}
@@ -1280,7 +1451,7 @@ export default function App() {
                                         <button 
                                           key={intent.id}
                                           onClick={() => handleSelectSuggestion(intent.name)}
-                                          className="px-4 py-2.5 bg-orange-600 text-white rounded-xl text-xs font-bold hover:bg-orange-700 transition-all border border-orange-500 shadow-md active:scale-95"
+                                          className="px-4 py-2.5 bg-orange-600 text-white rounded-xl text-xs font-bold hover:bg-orange-700 transition-all border border-orange-500 shadow-sm active:scale-95 cursor-pointer"
                                         >
                                           {intent.name}
                                         </button>
@@ -1299,7 +1470,7 @@ export default function App() {
                                         <button 
                                           key={type}
                                           onClick={() => handleSelectSuggestion(type)}
-                                          className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all border border-emerald-500 flex items-center gap-2 shadow-md active:scale-95"
+                                          className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all border border-emerald-500 flex items-center gap-2 shadow-sm active:scale-95 cursor-pointer"
                                         >
                                           <Search className="w-3.5 h-3.5" />
                                           {type}
@@ -1319,34 +1490,113 @@ export default function App() {
                         )}
                       </AnimatePresence>
                     </div>
-                  </div>
-                </div>
 
-                {/* Categories Section */}
-                <div className="px-6 py-4 max-w-7xl mx-auto w-full">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-zinc-900">Categorias</h3>
-                    <span className="text-xs font-medium text-zinc-400">12 categorias nacionais</span>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                    {CATEGORIES.map((cat) => (
-                      <button
-                        key={cat.id}
-                        onClick={() => handleCategoryClick(cat.id)}
-                        className="group flex flex-col items-center p-4 bg-white border border-zinc-100 rounded-[24px] hover:shadow-lg hover:shadow-zinc-200 transition-all aspect-square justify-center"
-                      >
-                        <div 
-                          className="w-12 h-12 rounded-xl mb-3 flex items-center justify-center transition-transform group-hover:scale-110 shadow-sm"
-                          style={{ backgroundColor: cat.color + '15' }}
+                    {/* Interactive search examples / suggestions chips directly under the search bar */}
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3 max-w-xl mx-auto px-1">
+                      <span className="text-[10px] uppercase tracking-wider text-zinc-600 font-extrabold block w-full text-center mb-1">Exemplos de busca:</span>
+                      {[
+                        "Quero comer",
+                        "Meu pneu furou",
+                        "Preciso de um eletricista",
+                        "Farmácia aberta",
+                        "Hospital",
+                        "Táxi"
+                      ].map((ex) => (
+                        <button
+                          key={ex}
+                          onClick={() => {
+                            setInput(ex);
+                            performSearch(ex, true);
+                          }}
+                          className="px-2.5 py-1 bg-white/70 hover:bg-white active:scale-95 text-zinc-800 border border-zinc-200/80 rounded-full text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer shadow-xs"
                         >
-                          <IconRenderer name={cat.icon} color={cat.color} className="w-6 h-6" />
+                          {ex}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Categories Section: Modern Grid of 4 categories per line on small screen */}
+                    <div className="mt-8 pb-4 w-full">
+                      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-12 gap-x-2 gap-y-5 max-w-4xl mx-auto w-full px-1">
+                        {CATEGORIES.map((cat, index) => {
+                          const displayName = cat.name === "Mobilidade Urbana" ? "Mobilidade" : cat.name;
+                          return (
+                            <button
+                              key={cat.id}
+                              onClick={() => handleCategoryClick(cat.id)}
+                              className={`group flex flex-col items-center justify-start focus:outline-none cursor-pointer ${
+                                index >= 3 ? 'hidden sm:flex' : 'flex'
+                              }`}
+                            >
+                              <div 
+                                className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-white flex items-center justify-center transition-all group-hover:scale-110 group-hover:shadow-lg active:scale-95 shadow-md mb-2 shrink-0 border border-zinc-100"
+                              >
+                                <IconRenderer name={cat.icon} color={cat.color} className="w-6 h-6" />
+                              </div>
+                              <span className="text-[10px] sm:text-xs font-bold text-zinc-800 text-center leading-tight tracking-tight group-hover:text-zinc-950 transition-colors line-clamp-2 max-w-[85px] drop-shadow-[0_1px_3px_rgba(255,255,255,0.8)]">
+                                {displayName}
+                              </span>
+                            </button>
+                          );
+                        })}
+
+                        {/* Ver Todas card */}
+                        <button
+                          onClick={() => setIsAllCategoriesModalOpen(true)}
+                          className="group flex flex-col items-center justify-start focus:outline-none cursor-pointer"
+                        >
+                          <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-white/80 hover:bg-white border border-zinc-200/80 flex items-center justify-center transition-all group-hover:scale-110 active:scale-95 shadow-md mb-2 shrink-0">
+                            <MoreHorizontal className="w-6 h-6 text-zinc-800" />
+                          </div>
+                          <span className="text-[10px] sm:text-xs font-bold text-zinc-700 text-center leading-tight tracking-tight group-hover:text-zinc-950 transition-colors drop-shadow-[0_1px_3px_rgba(255,255,255,0.8)]">
+                            Ver Todas
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Mover o botão "Sugira um Local" para abaixo das categorias */}
+                    {user && (
+                      <div className="w-full max-w-xl mx-auto mt-6 px-1">
+                        <button
+                          onClick={() => setIsRegisterModalOpen(true)}
+                          className="w-full bg-white hover:bg-zinc-50 border border-zinc-200/80 hover:shadow-lg rounded-3xl p-4 flex items-center gap-4 transition-all duration-300 group text-left cursor-pointer active:scale-[0.99] shadow-md"
+                        >
+                          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500/20 group-hover:scale-105 transition-all shrink-0">
+                            <Plus className="w-6 h-6" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-sm sm:text-base text-zinc-900 group-hover:text-[#00897b] transition-colors leading-tight">
+                              Sugira um Local
+                            </h4>
+                            <p className="text-xs text-zinc-500 mt-0.5 font-medium leading-none">
+                              Ajude a fortalecer a comunidade local.
+                            </p>
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-400 group-hover:text-zinc-600 group-hover:bg-zinc-100 transition-colors">
+                            <ChevronRight className="w-4 h-4" />
+                          </div>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Translucent Bible Quotes box at the very bottom of the gradient container */}
+                    <div className="w-full max-w-xl mx-auto mt-6 px-1">
+                      <div className="bg-white/80 backdrop-blur-md border border-zinc-200/80 rounded-3xl p-5 text-left relative overflow-hidden shadow-md">
+                        <div className="flex gap-4 items-start">
+                          <span className="text-4xl text-zinc-300 font-serif leading-none shrink-0 select-none">“</span>
+                          <div className="space-y-1">
+                            <p className="text-xs sm:text-sm text-zinc-800 italic font-bold leading-relaxed">
+                              Disse-lhe Jesus: Eu sou o caminho, e a verdade e a vida; ninguém vem ao Pai, senão por mim.
+                            </p>
+                            <p className="text-[10px] text-zinc-500 font-bold tracking-wider uppercase text-right mt-1 select-none">
+                              — João 14:6
+                            </p>
+                          </div>
                         </div>
-                        <span className="text-xs font-bold text-zinc-800 text-center leading-tight group-hover:text-zinc-900 transition-colors">
-                          {cat.name}
-                        </span>
-                      </button>
-                    ))}
+                      </div>
+                    </div>
+
                   </div>
                 </div>
 
@@ -1769,6 +2019,11 @@ export default function App() {
           setIsRegisterUserModalOpen(false);
           setIsAuthModalOpen(true);
         }}
+      />
+      <AllCategoriesModal
+        isOpen={isAllCategoriesModalOpen}
+        onClose={() => setIsAllCategoriesModalOpen(false)}
+        onSelectCategory={handleCategoryClick}
       />
     </div>
   );

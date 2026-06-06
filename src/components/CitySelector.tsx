@@ -233,11 +233,11 @@ export const CitySelectorButton = () => {
     <>
       <button 
         onClick={() => setIsModalOpen(true)}
-        className="mb-4 px-3 py-1.5 bg-black/10 backdrop-blur-md rounded-full text-white/90 text-xs font-medium flex items-center gap-2 mx-auto hover:bg-black/20 transition-all"
+        className="px-4 py-2 bg-white/80 hover:bg-white border border-zinc-200/80 backdrop-blur-md rounded-full text-zinc-800 text-xs font-bold flex items-center gap-2 transition-all shadow-xs cursor-pointer"
       >
-        <MapPin className="w-3.5 h-3.5" />
+        <MapPin className="w-3.5 h-3.5 text-emerald-600" />
         {currentCity.name}{currentCity.uf ? ` – ${currentCity.uf}` : ''}
-        <ChevronDown className="w-3.5 h-3.5" />
+        <ChevronDown className="w-3 px-0.5 text-zinc-400" />
       </button>
       <CitySelectorModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </>
