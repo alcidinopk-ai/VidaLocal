@@ -203,6 +203,13 @@ async function canUserEdit(supabase: any, userId: string, establishmentIdOrShort
     return false;
   }
   
+  // Allow all logged-in users to edit/clone mock establishments (converting them into real records)
+  const isMockId = /^[epa]\d+$/.test(establishmentIdOrShortId);
+  if (isMockId) {
+    console.log(`[Permissions] Permitting cloning/editing of mock establishment ${establishmentIdOrShortId} for logged-in user ${userId}`);
+    return true;
+  }
+  
   try {
     // 0. Check if user is admin (this bypasses everything else)
     const emailToCheck = (userEmailFromHeader || '').trim().toLowerCase();
@@ -244,22 +251,56 @@ async function canUserEdit(supabase: any, userId: string, establishmentIdOrShort
     // Separate queries to avoid potential type mismatch issues in .or() if using UUID vs String
     let establishment = null;
     
-    // Try by short_id first (safest as it's always a string)
-    const { data: byShortId } = await supabase
+    // Try by short_id first (safest as it's always a string), selecting core columns only to avoid missing-column SQL failures
+    let byShortId: any = null;
+    const { data: selectCoreShort, error: errorCoreShort } = await supabase
       .from('establishments')
-      .select('user_id, user_email, short_id, id')
+      .select('user_id, short_id, id')
       .eq('short_id', establishmentIdOrShortId)
       .maybeSingle();
+
+    if (!errorCoreShort && selectCoreShort) {
+      byShortId = { ...selectCoreShort };
+      try {
+        const { data: emailData } = await supabase
+          .from('establishments')
+          .select('user_email')
+          .eq('short_id', establishmentIdOrShortId)
+          .maybeSingle();
+        if (emailData?.user_email) {
+          byShortId.user_email = emailData.user_email;
+        }
+      } catch (e) {
+        // user_email column does not exist on establishments table
+      }
+    }
       
     establishment = byShortId;
     
-    // If not found and looks like a UUID, try by id
+    // If not found and looks like a UUID, try by id safely selecting core columns only
     if (!establishment && establishmentIdOrShortId && establishmentIdOrShortId.length > 30) {
-      const { data: byId } = await supabase
+      let byId: any = null;
+      const { data: selectCoreId, error: errorCoreId } = await supabase
         .from('establishments')
-        .select('user_id, user_email, short_id, id')
+        .select('user_id, short_id, id')
         .eq('id', establishmentIdOrShortId)
         .maybeSingle();
+        
+      if (!errorCoreId && selectCoreId) {
+        byId = { ...selectCoreId };
+        try {
+          const { data: emailDataId } = await supabase
+            .from('establishments')
+            .select('user_email')
+            .eq('id', establishmentIdOrShortId)
+            .maybeSingle();
+          if (emailDataId?.user_email) {
+            byId.user_email = emailDataId.user_email;
+          }
+        } catch (e) {
+          // user_email column does not exist on establishments table
+        }
+      }
       establishment = byId;
     }
 
@@ -1958,7 +1999,7 @@ app.get("/api/establishments/user/:userId", async (req, res) => {
         if (p.establishment_short_id) allowedIds.add(p.establishment_short_id);
       });
 
-      let query = supabase.from('establishments').select('*');
+      let query = supabase.from('establishments').select('*, opening_hours:establishment_opening_hours(*)');
       query = query.neq('status', 'deleted'); // Exclude soft-deleted records
       
       if (allowedIds.size > 0) {
@@ -2082,10 +2123,15 @@ app.put("/api/establishments/:id", async (req, res) => {
         
         if (isMockId) {
           console.log(`[API] Mock establishment ID ${id} detected for update. Redirecting to INSERT (Register)...`);
+          const originalMock = establishments.find(e => String(e.id) === String(id));
           
           // Prepare for insert
           const insertPayload = {
             ...updatePayload,
+            rating: originalMock?.rating || updatePayload.rating || 5.0,
+            is_featured: originalMock?.is_featured || updatePayload.is_featured || false,
+            is_verified: originalMock?.is_verified || updatePayload.is_verified || false,
+            is_premium: originalMock?.is_premium || updatePayload.is_premium || false,
             user_id: userId,
             status: 'approved', // Automatically approve updates to mock data saved by users (or keep pending?)
             short_id: generateShortId()
@@ -2101,7 +2147,12 @@ app.put("/api/establishments/:id", async (req, res) => {
             return res.status(500).json({ error: "Erro ao salvar cópia do estabelecimento: " + insertError.message });
           }
           
-          return res.json(insertedData[0]);
+          console.log(`[API] Mock establishment ${id} converted to real database row: ${insertedData[0].id}`);
+          clearCache();
+          return res.json({
+            ...insertedData[0],
+            custom_source_mock_id: id
+          });
         }
 
         console.warn(`[API] Establishment NOT FOUND for ID/ShortID: ${id}`);

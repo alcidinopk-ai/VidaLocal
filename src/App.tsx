@@ -275,14 +275,19 @@ export default function App() {
       // 1. Update categoryEstablishments
       setCategoryEstablishments(prev => {
         if (!Array.isArray(prev)) return prev;
-        return prev.map(est => est.id === updated.id ? { ...est, ...updated } : est);
+        return prev.map(est => {
+          if (est.id === updated.id || (updated.custom_source_mock_id && est.id === updated.custom_source_mock_id)) {
+            return { ...est, ...updated, id: updated.id };
+          }
+          return est;
+        });
       });
 
       // 2. Update allGroundingChunks
       setAllGroundingChunks(prev => {
         if (!Array.isArray(prev)) return prev;
         return prev.map(chunk => {
-          if (chunk.maps?.id === updated.id) {
+          if (chunk.maps?.id === updated.id || (updated.custom_source_mock_id && chunk.maps?.id === updated.custom_source_mock_id)) {
             return {
               ...chunk,
               maps: {
@@ -1148,10 +1153,10 @@ export default function App() {
           <div className="flex items-center gap-4">
             <button 
               onClick={() => user ? setIsRegisterModalOpen(true) : setIsAuthModalOpen(true)}
-              className="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 transition-all border border-emerald-500 shadow-md active:scale-95"
+              className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-emerald-600 text-white text-[11px] sm:text-xs font-bold rounded-xl hover:bg-emerald-700 transition-all border border-emerald-500 shadow-md active:scale-95 shrink-0"
             >
-              <Plus className="w-4 h-4" />
-              Sugira um Local
+              <Plus className="w-3.5 h-3.5" />
+              <span>Sugira um Local</span>
             </button>
 
             {user ? (
@@ -1201,7 +1206,7 @@ export default function App() {
             ) : (
               <button 
                 onClick={() => setIsAuthModalOpen(true)}
-                className="px-6 py-2 bg-zinc-900 text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-all flex items-center gap-2 shadow-sm"
+                className="px-3 sm:px-6 py-1.5 sm:py-2 bg-zinc-900 text-white text-[11px] sm:text-xs font-bold rounded-xl hover:bg-zinc-800 transition-all flex items-center gap-1.5 sm:gap-2 shadow-sm shrink-0"
               >
                 <UserIcon className="w-4 h-4" />
                 Entrar
@@ -1556,29 +1561,27 @@ export default function App() {
                     </div>
 
                     {/* Mover o botão "Sugira um Local" para abaixo das categorias */}
-                    {user && (
-                      <div className="w-full max-w-xl mx-auto mt-6 px-1">
-                        <button
-                          onClick={() => setIsRegisterModalOpen(true)}
-                          className="w-full bg-white hover:bg-zinc-50 border border-zinc-200/80 hover:shadow-lg rounded-3xl p-4 flex items-center gap-4 transition-all duration-300 group text-left cursor-pointer active:scale-[0.99] shadow-md"
-                        >
-                          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500/20 group-hover:scale-105 transition-all shrink-0">
-                            <Plus className="w-6 h-6" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-sm sm:text-base text-zinc-900 group-hover:text-[#00897b] transition-colors leading-tight">
-                              Sugira um Local
-                            </h4>
-                            <p className="text-xs text-zinc-500 mt-0.5 font-medium leading-none">
-                              Ajude a fortalecer a comunidade local.
-                            </p>
-                          </div>
-                          <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-400 group-hover:text-zinc-600 group-hover:bg-zinc-100 transition-colors">
-                            <ChevronRight className="w-4 h-4" />
-                          </div>
-                        </button>
-                      </div>
-                    )}
+                    <div className="w-full max-w-xl mx-auto mt-6 px-1">
+                      <button
+                        onClick={() => user ? setIsRegisterModalOpen(true) : setIsAuthModalOpen(true)}
+                        className="w-full bg-white hover:bg-zinc-50 border border-zinc-200/80 hover:shadow-lg rounded-3xl p-4 flex items-center gap-4 transition-all duration-300 group text-left cursor-pointer active:scale-[0.99] shadow-md"
+                      >
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500/20 group-hover:scale-105 transition-all shrink-0">
+                          <Plus className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-sm sm:text-base text-zinc-900 group-hover:text-[#00897b] transition-colors leading-tight">
+                            Sugira um Local
+                          </h4>
+                          <p className="text-xs text-zinc-500 mt-0.5 font-medium leading-none">
+                            Ajude a fortalecer a comunidade local.
+                          </p>
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center text-zinc-400 group-hover:text-zinc-600 group-hover:bg-zinc-100 transition-colors">
+                          <ChevronRight className="w-4 h-4" />
+                        </div>
+                      </button>
+                    </div>
 
                     {/* Translucent Bible Quotes box at the very bottom of the gradient container */}
                     <div className="w-full max-w-xl mx-auto mt-6 px-1">
@@ -1703,7 +1706,7 @@ export default function App() {
                               est.latitude,
                               est.longitude
                             );
-                            distStr = dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1)} km`;
+                            distStr = dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1).replace('.', ',')} km`;
                           }
 
                           return (
@@ -1726,15 +1729,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Floating Action Button for Suggesting Local */}
-                <button
-                  onClick={() => user ? setIsRegisterModalOpen(true) : setIsAuthModalOpen(true)}
-                  className="fixed bottom-6 right-6 w-14 h-14 bg-[#00897b] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50"
-                  title="Sugira um Local"
-                >
-                  <Plus className="w-6 h-6" />
-                </button>
-              </motion.div>
+               </motion.div>
             ) : (
               /* Chat / Results Screen */
               <motion.div
@@ -1983,13 +1978,33 @@ export default function App() {
           />
         </div>
       </motion.div>
-      {/* Floating Action Button for Mobile - Suggest Local */}
-      <button 
-        onClick={() => user ? setIsRegisterModalOpen(true) : setIsAuthModalOpen(true)}
-        className="md:hidden fixed bottom-24 right-6 z-40 w-14 h-14 bg-[#00897b] text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {/* Unified Floating Action Button for Suggesting Local */}
+      {activeCategoryId !== null ? (
+        // Category/Sub-category view FAB: bottom-6 for both. On mobile, we show a gorgeous pill, on desktop a circle
+        <button
+          onClick={() => user ? setIsRegisterModalOpen(true) : setIsAuthModalOpen(true)}
+          className={`fixed right-6 z-40 flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xl hover:scale-105 active:scale-95 transition-all text-xs font-bold border border-emerald-500 shadow-emerald-700/20
+            ${isMobile 
+              ? 'bottom-6 px-4 h-12 rounded-full gap-1.5' 
+              : 'bottom-6 w-14 h-14 rounded-full'
+            }`}
+          title="Sugira um Local"
+        >
+          <Plus className={isMobile ? "w-4 h-4" : "w-6 h-6"} />
+          {isMobile && <span>Sugira um Local</span>}
+        </button>
+      ) : (
+        // Home/Chat view FAB: visible ONLY on mobile at bottom-24 (docked gracefully above the chat text field)
+        <button 
+          onClick={() => user ? setIsRegisterModalOpen(true) : setIsAuthModalOpen(true)}
+          className="md:hidden fixed bottom-24 right-6 z-40 flex items-center gap-1.5 px-4 h-12 bg-emerald-600 text-white rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all font-bold text-xs border border-emerald-500 shadow-emerald-700/20 animate-bounce"
+          style={{ animationDuration: '3s' }}
+          title="Sugira um Local"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Sugira um Local</span>
+        </button>
+      )}
 
       {/* Modals */}
       <RegisterEstablishmentModal 

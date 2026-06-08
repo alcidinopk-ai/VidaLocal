@@ -33,7 +33,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { CATEGORIES, SUB_CATEGORIES } from '../constants/taxonomy';
 import { extractCoordinatesFromMapsLink } from '../utils/maps';
-import { compressAndUploadImage } from '../utils/imageCompression';
+import { compressAndUploadImage, parseImageArray } from '../utils/imageCompression';
 
 // Helper to clean and parse coordinate input supporting empty, number, comma, and dot representations.
 // Automatically heals coordinates that are missing decimal separators (e.g. -490669319 -> -49.0669319) based on typical values and optional reference coordinate
@@ -88,6 +88,9 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   const { user, profile, role } = useAuth();
   const { toast } = useToast();
   const isAdmin = user && (role === 'admin' || user.email === 'alcidinopk@gmail.com');
+  const isOwner = user && initialData && (initialData.user_id === user.id || initialData.userId === user.id);
+  const isUpdate = !!(initialData && (initialData.id || initialData.short_id || initialData.shortId));
+  const canEditCoords = isAdmin || isOwner || !isUpdate;
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -128,120 +131,136 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     { day: 6, label: 'Sábado', slots: [{ open: '08:00', close: '12:00' }], closed: false },
   ]);
 
+  const [lastInitializedId, setLastInitializedId] = useState<string | null>(null);
+  const [wasOpen, setWasOpen] = useState(false);
+
   React.useEffect(() => {
     setImageErrors({});
-    if (initialData && isOpen) {
-      // Process subCategory into array if it's a string
-      let subCats: string[] = [];
-      if (initialData.subCategory) {
-        if (Array.isArray(initialData.subCategory)) {
-          subCats = initialData.subCategory;
-        } else if (typeof initialData.subCategory === 'string') {
-          // Handle both ' | ' and ', ' separators
-          if (initialData.subCategory.includes(' | ')) {
-            subCats = initialData.subCategory.split(' | ').map(s => s.trim()).filter(Boolean);
-          } else {
-            // Regex to split by comma but NOT inside parentheses
-            subCats = initialData.subCategory.split(/,\s*(?![^()]*\))/).map(s => s.trim()).filter(Boolean);
-          }
-        }
-      } else if (initialData.sub_category) {
-        if (initialData.sub_category.includes(' | ')) {
-          subCats = initialData.sub_category.split(' | ').map((s: string) => s.trim()).filter(Boolean);
-        } else {
-          subCats = initialData.sub_category.split(/,\s*(?![^()]*\))/).map((s: string) => s.trim()).filter(Boolean);
-        }
-      }
-
-      let lat: any = null;
-      if (initialData.latitude !== undefined && initialData.latitude !== null) {
-        lat = String(initialData.latitude);
-      } else if (initialData.location?.latitude !== undefined && initialData.location?.latitude !== null) {
-        lat = String(initialData.location.latitude);
-      }
-
-      let lng: any = null;
-      if (initialData.longitude !== undefined && initialData.longitude !== null) {
-        lng = String(initialData.longitude);
-      } else if (initialData.location?.longitude !== undefined && initialData.location?.longitude !== null) {
-        lng = String(initialData.location.longitude);
-      }
-
-      // Automatically clean and parse numeric coordinates to safely recover missing decimal layout
-      const cleanedLat = cleanAndParseCoordinate(lat, currentCity?.latitude);
-      const cleanedLng = cleanAndParseCoordinate(lng, currentCity?.longitude);
-
-      setFormData({
-        name: initialData.name || initialData.title || '',
-        categoryId: String(initialData.category_id || initialData.categoryId || ''),
-        subCategory: subCats,
-        address: initialData.address || '',
-        phone: initialData.phone || '',
-        whatsapp: initialData.whatsapp || '',
-        website: initialData.website || '',
-        hours: initialData.hours || '',
-        is_open_24_hours: initialData.is_open_24_hours || false,
-        description: initialData.description || '',
-        latitude: cleanedLat !== null ? String(cleanedLat) : '',
-        longitude: cleanedLng !== null ? String(cleanedLng) : '',
-        mapsLink: (initialData.maps_link && !initialData.maps_link.includes('query=')) 
-          ? initialData.maps_link 
-          : (initialData.mapsLink && !initialData.mapsLink.includes('query=')) 
-            ? initialData.mapsLink 
-            : '',
-        plusCode: initialData.plus_code || initialData.plusCode || '',
-        is_featured: initialData.is_featured || false,
-        is_verified: initialData.is_verified || false,
-        is_premium: initialData.is_premium || false,
-        images: initialData.images || [],
-        tags: initialData.tags || ''
-      });
-      // Set opening hours if available in initialData
-      if (initialData.opening_hours && Array.isArray(initialData.opening_hours)) {
-        const newHours = [0, 1, 2, 3, 4, 5, 6].map(dayNum => {
-          const dayLabel = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][dayNum];
-          const daySlots = initialData.opening_hours.filter((oh: any) => oh.day_of_week === dayNum);
-          
-          if (daySlots.length > 0) {
-            const isClosed = daySlots.every((s: any) => s.is_closed);
-            return {
-              day: dayNum,
-              label: dayLabel,
-              closed: isClosed,
-              slots: isClosed ? [{ open: '', close: '' }] : daySlots.map((s: any) => ({
-                open: s.open_time?.substring(0, 5) || '',
-                close: s.close_time?.substring(0, 5) || ''
-              }))
-            };
-          }
-          return { day: dayNum, label: dayLabel, slots: [{ open: '', close: '' }], closed: true };
-        });
-        setOpeningHours(newHours);
-      }
-    } else if (!initialData && isOpen) {
-      setFormData({
-        name: '',
-        categoryId: '',
-        subCategory: [],
-        address: '',
-        phone: '',
-        whatsapp: '',
-        website: '',
-        hours: '',
-        is_open_24_hours: false,
-        description: '',
-        latitude: null,
-        longitude: null,
-        mapsLink: '',
-        plusCode: '',
-        is_featured: false,
-        is_verified: false,
-        is_premium: false,
-        images: [],
-        tags: ''
-      });
+    if (!isOpen) {
+      setLastInitializedId(null);
+      setWasOpen(false);
+      return;
     }
-  }, [initialData, isOpen]);
+
+    const currentId = initialData ? (initialData.id || initialData.short_id || initialData.shortId || 'exists') : 'new';
+
+    if (!wasOpen || lastInitializedId !== currentId) {
+      setWasOpen(true);
+      setLastInitializedId(currentId);
+
+      if (initialData) {
+        // Process subCategory into array if it's a string
+        let subCats: string[] = [];
+        if (initialData.subCategory) {
+          if (Array.isArray(initialData.subCategory)) {
+            subCats = initialData.subCategory;
+          } else if (typeof initialData.subCategory === 'string') {
+            // Handle both ' | ' and ', ' separators
+            if (initialData.subCategory.includes(' | ')) {
+              subCats = initialData.subCategory.split(' | ').map(s => s.trim()).filter(Boolean);
+            } else {
+              // Regex to split by comma but NOT inside parentheses
+              subCats = initialData.subCategory.split(/,\s*(?![^()]*\))/).map(s => s.trim()).filter(Boolean);
+            }
+          }
+        } else if (initialData.sub_category) {
+          if (initialData.sub_category.includes(' | ')) {
+            subCats = initialData.sub_category.split(' | ').map((s: string) => s.trim()).filter(Boolean);
+          } else {
+            subCats = initialData.sub_category.split(/,\s*(?![^()]*\))/).map((s: string) => s.trim()).filter(Boolean);
+          }
+        }
+
+        let lat: any = null;
+        if (initialData.latitude !== undefined && initialData.latitude !== null) {
+          lat = String(initialData.latitude);
+        } else if (initialData.location?.latitude !== undefined && initialData.location?.latitude !== null) {
+          lat = String(initialData.location.latitude);
+        }
+
+        let lng: any = null;
+        if (initialData.longitude !== undefined && initialData.longitude !== null) {
+          lng = String(initialData.longitude);
+        } else if (initialData.location?.longitude !== undefined && initialData.location?.longitude !== null) {
+          lng = String(initialData.location.longitude);
+        }
+
+        // Automatically clean and parse numeric coordinates to safely recover missing decimal layout
+        const cleanedLat = cleanAndParseCoordinate(lat, currentCity?.latitude);
+        const cleanedLng = cleanAndParseCoordinate(lng, currentCity?.longitude);
+
+        setFormData({
+          name: initialData.name || initialData.title || '',
+          categoryId: String(initialData.category_id || initialData.categoryId || ''),
+          subCategory: subCats,
+          address: initialData.address || '',
+          phone: initialData.phone || '',
+          whatsapp: initialData.whatsapp || '',
+          website: initialData.website || '',
+          hours: initialData.hours || '',
+          is_open_24_hours: initialData.is_open_24_hours || false,
+          description: initialData.description || '',
+          latitude: cleanedLat !== null ? String(cleanedLat) : '',
+          longitude: cleanedLng !== null ? String(cleanedLng) : '',
+          mapsLink: (initialData.maps_link && !initialData.maps_link.includes('query=')) 
+            ? initialData.maps_link 
+            : (initialData.mapsLink && !initialData.mapsLink.includes('query=')) 
+              ? initialData.mapsLink 
+              : '',
+          plusCode: initialData.plus_code || initialData.plusCode || '',
+          is_featured: initialData.is_featured || false,
+          is_verified: initialData.is_verified || false,
+          is_premium: initialData.is_premium || false,
+          images: parseImageArray(initialData.images),
+          tags: initialData.tags || ''
+        });
+        // Set opening hours if available in initialData
+        if (initialData.opening_hours && Array.isArray(initialData.opening_hours)) {
+          const newHours = [0, 1, 2, 3, 4, 5, 6].map(dayNum => {
+            const dayLabel = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][dayNum];
+            const daySlots = initialData.opening_hours.filter((oh: any) => oh.day_of_week === dayNum);
+            
+            if (daySlots.length > 0) {
+              const isClosed = daySlots.every((s: any) => s.is_closed);
+              return {
+                day: dayNum,
+                label: dayLabel,
+                closed: isClosed,
+                slots: isClosed ? [{ open: '', close: '' }] : daySlots.map((s: any) => ({
+                  open: s.open_time?.substring(0, 5) || '',
+                  close: s.close_time?.substring(0, 5) || ''
+                }))
+              };
+            }
+            return { day: dayNum, label: dayLabel, slots: [{ open: '', close: '' }], closed: true };
+          });
+          setOpeningHours(newHours);
+        }
+      } else {
+        setFormData({
+          name: '',
+          categoryId: '',
+          subCategory: [],
+          address: '',
+          phone: '',
+          whatsapp: '',
+          website: '',
+          hours: '',
+          is_open_24_hours: false,
+          description: '',
+          latitude: null,
+          longitude: null,
+          mapsLink: '',
+          plusCode: '',
+          is_featured: false,
+          is_verified: false,
+          is_premium: false,
+          images: [],
+          tags: ''
+        });
+      }
+    }
+  }, [initialData, isOpen, wasOpen, lastInitializedId, currentCity]);
 
   const [isLocating, setIsLocating] = useState(false);
   const [isSuggestingHours, setIsSuggestingHours] = useState(false);
@@ -612,20 +631,21 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                 is_closed: false
               }))
         ),
-        cityId: initialData?.cityId || currentCity.id,
-        cityName: initialData?.cityName || currentCity.name,
-        cityUf: initialData?.cityUf || currentCity.uf,
-        cityLat: initialData?.cityLat || currentCity.latitude,
-        cityLng: initialData?.cityLng || currentCity.longitude,
+        cityId: initialData?.cityId || initialData?.city_id || currentCity?.id,
+        cityName: initialData?.cityName || initialData?.city?.name || currentCity?.name,
+        cityUf: initialData?.cityUf || initialData?.city?.uf || currentCity?.uf,
+        cityLat: initialData?.cityLat || initialData?.latitude || initialData?.location?.latitude || currentCity?.latitude,
+        cityLng: initialData?.cityLng || initialData?.longitude || initialData?.location?.longitude || currentCity?.longitude,
         userId: user.id,
         userEmail: user.email
       };
       
       console.log("[Register] Sending payload. Images:", payload.images?.length || 0, "Approximate size:", JSON.stringify(payload).length, "bytes");
 
-      const isUpdate = initialData && initialData.id;
+      const isUpdate = !!(initialData && (initialData.id || initialData.short_id || initialData.shortId));
+      const updateId = initialData ? (initialData.id || initialData.short_id || initialData.shortId) : null;
       const url = isUpdate 
-        ? `/api/establishments/${initialData.id}` 
+        ? `/api/establishments/${updateId}` 
         : '/api/establishments/register';
       
       const response = await fetch(url, {
@@ -968,7 +988,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                   </div>
 
                   {/* URL image attachment box */}
-                  {isAdmin && (
+                  {user && (
                     <div className="mt-4 p-4 border border-zinc-100 rounded-2xl bg-zinc-50/50 space-y-3">
                       <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500">Ou adicione Fotos via Link/URL</label>
                       <div className="flex gap-2">
@@ -1100,7 +1120,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                     />
                   </div>
 
-                   {isAdmin && (
+                   {canEditCoords && (
                     <div className="flex gap-2">
                       <div className="relative flex-1">
                         <input 
@@ -1127,7 +1147,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                     </div>
                   )}
 
-                  {isAdmin && (
+                  {canEditCoords && (
                     <>
                       <button 
                         type="button"

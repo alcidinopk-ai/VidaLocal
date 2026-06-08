@@ -189,3 +189,76 @@ export async function compressAndUploadImage(
     return await fileToBase64(optimizedFile);
   }
 }
+
+/**
+ * Utility to parse images from various representation formats.
+ * Supports:
+ * - Real JS string arrays: ['url1', 'url2']
+ * - Postgres array string literal representations: '{"url1","url2"}' or '{url1,url2}'
+ * - JSON string array representations: '["url1","url2"]'
+ * - Comma-separated or singular URL string representations: 'url1,url2' or 'url1'
+ */
+export function parseImageArray(input: any): string[] {
+  if (!input) return [];
+  if (Array.isArray(input)) {
+    return input.filter(item => typeof item === 'string' && item.trim().length > 0);
+  }
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (!trimmed) return [];
+
+    // Check for postgres array format: {item1,item2}
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      const content = trimmed.slice(1, -1).trim();
+      if (!content) return [];
+      
+      const items: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < content.length; i++) {
+        const char = content[i];
+        if (char === '"' && (i === 0 || content[i - 1] !== '\\')) {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          items.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      if (current || items.length > 0) {
+        items.push(current.trim());
+      }
+      
+      return items.map(item => {
+        let cleaned = item;
+        if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+          cleaned = cleaned.slice(1, -1);
+        }
+        return cleaned.replace(/\\"/g, '"').replace(/\\\\/g, '\\').trim();
+      }).filter(Boolean);
+    }
+
+    // Check for JSON array format: ["item1", "item2"]
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map(item => String(item).trim()).filter(Boolean);
+        }
+      } catch (e) {
+        // Fall through
+      }
+    }
+
+    // Comma-separated fallback
+    if (trimmed.includes('http') || trimmed.includes('data:image/')) {
+      return trimmed.split(',').map(item => item.trim()).filter(Boolean);
+    }
+
+    // Single string
+    return [trimmed];
+  }
+  return [];
+}
+

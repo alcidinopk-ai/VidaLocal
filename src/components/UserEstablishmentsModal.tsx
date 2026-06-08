@@ -20,6 +20,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useFavorites } from '../contexts/FavoritesContext';
 import { AdminPermissionsModal } from './AdminPermissionsModal';
 import { RegisterEstablishmentModal } from './RegisterEstablishmentModal';
+import { parseImageArray } from '../utils/imageCompression';
 
 interface UserEstablishmentsModalProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ interface Establishment {
   address: string;
   sub_category: string;
   created_at: string;
+  images?: any;
 }
 
 export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = ({ isOpen, onClose }) => {
@@ -230,9 +232,8 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
                   const itemKey = maps.id || maps.short_id || Math.random().toString();
                   const subCat = maps.subCategory || maps.sub_category || 'Estabelecimento';
                   const rawImages = maps.images || [];
-                  const image = Array.isArray(rawImages) && rawImages.length > 0
-                    ? rawImages.find((img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/')))
-                    : null;
+                  const parsedImgs = parseImageArray(rawImages);
+                  const image = parsedImgs.find((img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/'))) || null;
 
                   return (
                     <div 
@@ -330,26 +331,43 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
               </div>
             ) : (
               <div className="space-y-4">
-                {establishments.map((est) => (
-                  <div 
-                    key={est.id} 
-                    className="p-4 border border-zinc-100 rounded-2xl hover:border-zinc-200 transition-all bg-zinc-50/30"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-zinc-900 truncate">{est.name}</h4>
-                        <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
-                          <MapPin className="w-3 h-3" />
-                          <span className="truncate">{est.address || 'Endereço não informado'}</span>
+                {establishments.map((est) => {
+                  const parsedImgs = parseImageArray(est.images);
+                  const thumbImg = parsedImgs.find((img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/'))) || null;
+                  return (
+                    <div 
+                      key={est.id} 
+                      className="p-4 border border-zinc-100 rounded-2xl hover:border-zinc-200 transition-all bg-zinc-50/30 flex gap-4 items-start"
+                    >
+                      {thumbImg && (
+                        <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-zinc-100 bg-zinc-100">
+                          <img 
+                            src={thumbImg} 
+                            alt={est.name} 
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
                         </div>
-                        <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
-                          <MapPin className="w-3 h-3" />
-                          <span>Sugerido em: {new Date(est.created_at).toLocaleDateString('pt-BR')}</span>
-                        </div>
-                      </div>
+                      )}
                       
-                      <div className="flex flex-col items-end gap-2">
-                        <StatusBadge status={est.status} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-zinc-900 truncate">{est.name}</h4>
+                            <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
+                              <MapPin className="w-3 h-3 text-zinc-400" />
+                              <span className="truncate">{est.address || 'Endereço não informado'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
+                              <Calendar className="w-3 h-3 text-zinc-400" />
+                              <span>Sugerido em: {new Date(est.created_at).toLocaleDateString('pt-BR')}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex flex-col items-end gap-2 shrink-0">
+                            <StatusBadge status={est.status} />
+                          </div>
+                        </div>
                         <div className="flex flex-wrap gap-1 mt-1 justify-end">
                           {(est.sub_category || '').split(est.sub_category?.includes(' | ') ? ' | ' : /,\s*(?![^()]*\))/).map((cat, idx) => (
                             <span key={idx} className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-widest">
@@ -386,8 +404,8 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )
           )}

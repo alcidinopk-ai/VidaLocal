@@ -6,6 +6,7 @@ import { getBusinessStatus } from '../utils/hours';
 import { getDirectionsUrl } from '../utils/maps';
 import { EstablishmentCard } from './EstablishmentCard';
 import { useAuth } from '../contexts/AuthContext';
+import { parseImageArray } from '../utils/imageCompression';
 
 interface Establishment {
   id: string;
@@ -100,6 +101,11 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
     };
 
     fetchNearby();
+
+    window.addEventListener('vida360:establishment-updated', fetchNearby);
+    return () => {
+      window.removeEventListener('vida360:establishment-updated', fetchNearby);
+    };
   }, [currentCity.id, userLocation]);
 
   if (!userLocation || (establishments.length === 0 && !isLoading)) return null;
@@ -127,7 +133,7 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
           {establishments.map((est) => {
             const statusInfo = getBusinessStatus(est.hours);
             const distance = (est as any).distance;
-            const distStr = distance < 1 ? `${(distance * 1000).toFixed(0)} m` : `${distance.toFixed(1)} km`;
+            const distStr = distance < 1 ? `${(distance * 1000).toFixed(0)} m` : `${distance.toFixed(1).replace('.', ',')} km`;
             
             return (
               <React.Fragment key={est.id}>
@@ -137,18 +143,24 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
                   onClick={() => setSelectedEst(est)}
                 >
                   <div className="relative w-full aspect-video bg-zinc-100 overflow-hidden">
-                    {est.images && est.images.length > 0 ? (
-                      <img 
-                        src={est.images[0]} 
-                        alt={est.name} 
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-300">
-                        <MapPin className="w-8 h-8" />
-                      </div>
-                    )}
+                    {(() => {
+                      const parsedImgs = parseImageArray(est.images);
+                      if (parsedImgs.length > 0) {
+                        return (
+                          <img 
+                            src={parsedImgs[0]} 
+                            alt={est.name} 
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            referrerPolicy="no-referrer"
+                          />
+                        );
+                      }
+                      return (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-300">
+                          <MapPin className="w-8 h-8" />
+                        </div>
+                      );
+                    })()}
                     
                     <div className="absolute top-4 right-4 px-2 py-1 bg-emerald-500 text-white text-[9px] font-bold rounded-full shadow-lg z-10">
                       {distStr}
@@ -286,7 +298,7 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
                 } as any}
                 distance={userLocation ? (() => {
                   const dist = calculateDistance(userLocation.latitude, userLocation.longitude, selectedEst.latitude, selectedEst.longitude);
-                  return dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1)} km`;
+                  return dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1).replace('.', ',')} km`;
                 })() : '---'}
                 userLocation={userLocation}
                 defaultOpen={true}

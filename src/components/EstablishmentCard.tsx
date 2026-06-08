@@ -34,6 +34,7 @@ import { InteractionHistory } from './InteractionHistory';
 import { RegisterEstablishmentModal } from './RegisterEstablishmentModal';
 import { getBusinessStatus } from '../utils/hours';
 import { getDirectionsUrl } from '../utils/maps';
+import { parseImageArray } from '../utils/imageCompression';
 
 interface EstablishmentCardProps {
   chunk: GroundingChunk;
@@ -85,9 +86,9 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   const [isFullDetailsOpen, setIsFullDetailsOpen] = useState(defaultOpen);
 
   const rawImages = chunk.maps?.images || [];
-  const images = Array.isArray(rawImages) 
-    ? rawImages.filter((img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/')))
-    : [];
+  const images = parseImageArray(rawImages).filter(
+    (img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/'))
+  );
 
   const subCategoryStr = chunk.maps?.subCategory || chunk.maps?.sub_category;
   const subCategories = typeof subCategoryStr === 'string' 
@@ -445,7 +446,9 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1">
                 <Navigation2 className="w-3 h-3 text-blue-500" />
-                <span className="text-[10px] font-bold text-blue-600 tracking-tight">{distance}</span>
+                <span className="text-[10px] font-bold text-blue-600 tracking-tight">
+                  {distance.endsWith('de você') ? distance : `${distance} de você`}
+                </span>
               </div>
               
               <button 
@@ -833,7 +836,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                         <p className="text-xs sm:text-sm font-bold text-zinc-800 leading-relaxed truncate sm:whitespace-normal">{chunk.maps?.address}</p>
                         <div className="flex items-center gap-2 mt-1.5 text-blue-600 font-black text-[10px] sm:text-sm">
                           <Navigation2 className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />
-                          {distance} de você
+                          {distance.endsWith('de você') ? distance : `${distance} de você`}
                         </div>
                       </div>
                     </div>

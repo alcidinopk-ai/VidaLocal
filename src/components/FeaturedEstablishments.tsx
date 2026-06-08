@@ -6,6 +6,7 @@ import { getBusinessStatus } from '../utils/hours';
 import { getDirectionsUrl } from '../utils/maps';
 import { EstablishmentCard } from './EstablishmentCard';
 import { useAuth } from '../contexts/AuthContext';
+import { parseImageArray } from '../utils/imageCompression';
 
 interface Establishment {
   id: string;
@@ -112,7 +113,11 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
 
     // Listen for global refresh events
     window.addEventListener('vida360:refresh-featured', fetchFeatured);
-    return () => window.removeEventListener('vida360:refresh-featured', fetchFeatured);
+    window.addEventListener('vida360:establishment-updated', fetchFeatured);
+    return () => {
+      window.removeEventListener('vida360:refresh-featured', fetchFeatured);
+      window.removeEventListener('vida360:establishment-updated', fetchFeatured);
+    };
   }, [currentCity.id, userLocation]);
 
   if (isLoading) {
@@ -175,18 +180,24 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
                 onClick={() => setSelectedEst(est)}
               >
                 <div className="relative w-full aspect-video bg-zinc-100 overflow-hidden">
-                  {est.images && est.images.length > 0 ? (
-                    <img 
-                      src={est.images[0]} 
-                      alt={est.name} 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-zinc-300">
-                      <MapPin className="w-8 h-8" />
-                    </div>
-                  )}
+                  {(() => {
+                    const parsedImgs = parseImageArray(est.images);
+                    if (parsedImgs.length > 0) {
+                      return (
+                        <img 
+                          src={parsedImgs[0]} 
+                          alt={est.name} 
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          referrerPolicy="no-referrer"
+                        />
+                      );
+                    }
+                    return (
+                      <div className="w-full h-full flex items-center justify-center text-zinc-300">
+                        <MapPin className="w-8 h-8" />
+                      </div>
+                    );
+                  })()}
                   
                   <div className="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
                     {est.is_premium && (
@@ -343,7 +354,7 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
                 } as any}
                 distance={userLocation ? (() => {
                   const d = calculateDistance(userLocation.latitude, userLocation.longitude, selectedEst.latitude, selectedEst.longitude);
-                  return d < 1 ? `${(d * 1000).toFixed(0)} m` : `${d.toFixed(1)} km`;
+                  return d < 1 ? `${(d * 1000).toFixed(0)} m` : `${d.toFixed(1).replace('.', ',')} km`;
                 })() : '---'}
                 userLocation={userLocation}
                 defaultOpen={true}

@@ -66,10 +66,19 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, is
   };
 
   const filteredChunks = React.useMemo(() => {
-    if (!selectedRadius) return mapChunks;
-    return mapChunks.filter(chunk => {
-      const dist = getChunkDistance(chunk);
-      return dist <= selectedRadius;
+    let result = mapChunks;
+    if (selectedRadius) {
+      result = mapChunks.filter(chunk => {
+        const dist = getChunkDistance(chunk);
+        return dist <= selectedRadius;
+      });
+    }
+    
+    // Always sort by distance (closest first)
+    return [...result].sort((a, b) => {
+      const distA = getChunkDistance(a);
+      const distB = getChunkDistance(b);
+      return distA - distB;
     });
   }, [mapChunks, selectedRadius, userLocation]);
 
@@ -77,10 +86,17 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, is
     const isEstimated = !userLocation || !chunk.maps?.location;
     const dist = getChunkDistance(chunk);
     
+    let formattedDist = "";
     if (dist < 1) {
-      return isEstimated ? `~${(dist * 1000).toFixed(0)} m` : `${(dist * 1000).toFixed(0)} m`;
+      formattedDist = `${(dist * 1000).toFixed(0)} m`;
+    } else {
+      formattedDist = `${dist.toFixed(1).replace('.', ',')} km`;
     }
-    return isEstimated ? `~${dist.toFixed(1)} km` : `${dist.toFixed(1)} km`;
+    
+    if (isEstimated) {
+      return `~${formattedDist}`;
+    }
+    return formattedDist;
   };
 
   return (
