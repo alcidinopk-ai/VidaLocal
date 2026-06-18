@@ -117,6 +117,11 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     is_featured: false,
     is_verified: false,
     is_premium: false,
+    featured_order: '' as string | number,
+    featured_start: '',
+    featured_end: '',
+    featured_type: 'normal' as 'normal' | 'patrocinado',
+    is_active: true as boolean,
     images: [] as string[],
     tags: ''
   });
@@ -189,6 +194,18 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         const cleanedLat = cleanAndParseCoordinate(lat, currentCity?.latitude);
         const cleanedLng = cleanAndParseCoordinate(lng, currentCity?.longitude);
 
+        const formatDatetimeLocal = (val: any) => {
+          if (!val) return '';
+          try {
+            const d = new Date(val);
+            if (isNaN(d.getTime())) return '';
+            const pad = (n: number) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+          } catch (e) {
+            return '';
+          }
+        };
+
         setFormData({
           name: initialData.name || initialData.title || '',
           categoryId: String(initialData.category_id || initialData.categoryId || ''),
@@ -211,6 +228,11 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
           is_featured: initialData.is_featured || false,
           is_verified: initialData.is_verified || false,
           is_premium: initialData.is_premium || false,
+          featured_order: (initialData.featured_order !== undefined && initialData.featured_order !== null) ? String(initialData.featured_order) : '',
+          featured_start: formatDatetimeLocal(initialData.featured_start),
+          featured_end: formatDatetimeLocal(initialData.featured_end),
+          featured_type: initialData.featured_type || 'normal',
+          is_active: initialData.is_active !== undefined ? !!initialData.is_active : (initialData.is_active_input !== undefined ? !!initialData.is_active_input : true),
           images: parseImageArray(initialData.images),
           tags: initialData.tags || ''
         });
@@ -255,6 +277,11 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
           is_featured: false,
           is_verified: false,
           is_premium: false,
+          featured_order: '',
+          featured_start: '',
+          featured_end: '',
+          featured_type: 'normal',
+          is_active: true,
           images: [],
           tags: ''
         });
@@ -724,6 +751,11 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             is_featured: false,
             is_verified: false,
             is_premium: false,
+            featured_order: '',
+            featured_start: '',
+            featured_end: '',
+            featured_type: 'normal',
+            is_active: true,
             plusCode: '',
             images: [],
             tags: ''
@@ -1374,7 +1406,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
               {isAdmin && (
                 <div className="space-y-6 p-8 bg-zinc-50 rounded-[32px] border border-zinc-100">
                   <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-[0.2em]">Configurações de Administrador</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <label className="flex items-center gap-4 p-4 bg-white border border-zinc-200 rounded-2xl cursor-pointer hover:border-emerald-200 transition-all">
                       <input 
                         type="checkbox"
@@ -1397,7 +1429,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                       />
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-5 h-5 text-orange-500" />
-                        <span className="text-sm font-bold text-zinc-700">Destaque</span>
+                        <span className="text-sm font-bold text-zinc-700">Destacar estabelecimento</span>
                       </div>
                     </label>
 
@@ -1413,7 +1445,64 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         <span className="text-sm font-bold text-zinc-700">Premium</span>
                       </div>
                     </label>
+
+                    <label className="flex items-center gap-4 p-4 bg-white border border-zinc-200 rounded-2xl cursor-pointer hover:border-blue-200 transition-all">
+                      <input 
+                        type="checkbox"
+                        checked={formData.is_active}
+                        onChange={e => setFormData({...formData, is_active: e.target.checked})}
+                        className="w-5 h-5 text-blue-600 rounded-lg focus:ring-blue-500"
+                      />
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-blue-500" />
+                        <span className="text-sm font-bold text-zinc-700">Ativo</span>
+                      </div>
+                    </label>
                   </div>
+
+                  {formData.is_featured && (
+                    <div className="mt-6 pt-6 border-t border-zinc-200/50 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Ordem Manual do Destaque</label>
+                        <input 
+                          type="number" 
+                          placeholder="Ex: 1" 
+                          value={formData.featured_order}
+                          onChange={e => setFormData({...formData, featured_order: e.target.value})}
+                          className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-teal-500/25 focus:border-teal-500 text-sm font-semibold text-zinc-800 transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Tipo de Destaque</label>
+                        <select 
+                          value={formData.featured_type}
+                          onChange={e => setFormData({...formData, featured_type: e.target.value as 'normal' | 'patrocinado'})}
+                          className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-teal-500/25 focus:border-teal-500 text-sm font-semibold text-zinc-800 transition-all"
+                        >
+                          <option value="normal">Normal</option>
+                          <option value="patrocinado">Patrocinado</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Início do Destaque (Temporário)</label>
+                        <input 
+                          type="datetime-local" 
+                          value={formData.featured_start}
+                          onChange={e => setFormData({...formData, featured_start: e.target.value})}
+                          className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-teal-500/25 focus:border-teal-500 text-sm font-semibold text-zinc-800 transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Término do Destaque (Temporário)</label>
+                        <input 
+                          type="datetime-local" 
+                          value={formData.featured_end}
+                          onChange={e => setFormData({...formData, featured_end: e.target.value})}
+                          className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-teal-500/25 focus:border-teal-500 text-sm font-semibold text-zinc-800 transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

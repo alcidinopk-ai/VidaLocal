@@ -43,6 +43,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2?: number, lon2?: num
 export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitude: number; longitude: number } }) => {
   const { currentCity } = useCity();
   const { user, setIsAuthModalOpen } = useAuth();
+  const [rawEstablishments, setRawEstablishments] = useState<Establishment[]>([]);
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedEst, setSelectedEst] = useState<Establishment | null>(null);
@@ -58,55 +59,68 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
     action();
   };
 
+  // Fetch master establishments list once per city
   useEffect(() => {
-    if (!userLocation) return;
-
-    const fetchNearby = async () => {
+    const fetchAll = async () => {
       setIsLoading(true);
       try {
         const res = await fetch(`/api/search?q=&city_id=${currentCity.id}`);
         const data = await res.json();
         if (Array.isArray(data)) {
-          const sorted = data
-            .map(e => ({
-              ...e,
-              distance: calculateDistance(userLocation.latitude, userLocation.longitude, e.latitude, e.longitude)
-            }))
-            .sort((a, b) => {
-              // Priority 1: Distance (closest first)
-              if (a.distance !== b.distance && isFinite(a.distance) && isFinite(b.distance)) {
-                return a.distance - b.distance;
-              }
-              if (isFinite(a.distance) && !isFinite(b.distance)) return -1;
-              if (!isFinite(a.distance) && isFinite(b.distance)) return 1;
-
-              // Priority 2: Premium
-              if (a.is_premium && !b.is_premium) return -1;
-              if (!a.is_premium && b.is_premium) return 1;
-
-              // Priority 3: Featured
-              if (a.is_featured && !b.is_featured) return -1;
-              if (!a.is_featured && b.is_featured) return 1;
-
-              return 0;
-            })
-            .slice(0, 8);
-          setEstablishments(sorted);
+          setRawEstablishments(data);
+        } else {
+          setRawEstablishments([]);
         }
       } catch (err) {
-        console.error("Error fetching nearby:", err);
+        console.error("Error fetching nearby raw data:", err);
+        setRawEstablishments([]);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchNearby();
+    fetchAll();
 
-    window.addEventListener('vida360:establishment-updated', fetchNearby);
+    window.addEventListener('vida360:establishment-updated', fetchAll);
     return () => {
-      window.removeEventListener('vida360:establishment-updated', fetchNearby);
+      window.removeEventListener('vida360:establishment-updated', fetchAll);
     };
-  }, [currentCity.id, userLocation]);
+  }, [currentCity.id]);
+
+  // Dynamically recalculate distance and sort when location or raw data changes
+  useEffect(() => {
+    if (!userLocation || rawEstablishments.length === 0) {
+      setEstablishments([]);
+      return;
+    }
+
+    const sorted = rawEstablishments
+      .map(e => ({
+        ...e,
+        distance: calculateDistance(userLocation.latitude, userLocation.longitude, e.latitude, e.longitude)
+      }))
+      .sort((a, b) => {
+        // Priority 1: Distance (closest first)
+        if (a.distance !== b.distance && isFinite(a.distance) && isFinite(b.distance)) {
+          return a.distance - b.distance;
+        }
+        if (isFinite(a.distance) && !isFinite(b.distance)) return -1;
+        if (!isFinite(a.distance) && isFinite(b.distance)) return 1;
+
+        // Priority 2: Premium
+        if (a.is_premium && !b.is_premium) return -1;
+        if (!a.is_premium && b.is_premium) return 1;
+
+        // Priority 3: Featured
+        if (a.is_featured && !b.is_featured) return -1;
+        if (!a.is_featured && b.is_featured) return 1;
+
+        return 0;
+      })
+      .slice(0, 8);
+
+    setEstablishments(sorted);
+  }, [rawEstablishments, userLocation]);
 
   if (!userLocation || (establishments.length === 0 && !isLoading)) return null;
 
@@ -152,6 +166,7 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
                             alt={est.name} 
                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                             referrerPolicy="no-referrer"
+                            loading="lazy"
                           />
                         );
                       }

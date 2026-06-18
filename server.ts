@@ -13,8 +13,16 @@ ${CATEGORIES.map(c => `- Categoria: ${c.name} (ID: ${c.id})
   Tipos: ${SUB_CATEGORIES.filter(sc => sc.categoryId === c.id).map(sc => sc.name).join(", ")}`).join("\n")}
 `;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filenamePath = typeof import.meta !== "undefined" && import.meta.url
+  ? fileURLToPath(import.meta.url)
+  : (typeof (global as any).__filename !== "undefined" ? (global as any).__filename : "");
+
+const __dirnamePath = typeof (global as any).__dirname !== "undefined"
+  ? (global as any).__dirname
+  : path.dirname(__filenamePath);
+
+const __filename = __filenamePath;
+const __dirname = __dirnamePath;
 
 // Simple in-memory cache
 const apiCache = new Map<string, { data: any, expiry: number }>();
@@ -49,6 +57,162 @@ process.on('uncaughtException', (err) => {
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// ==========================================
+// --- MIDDLEWARES DE SEGURANÇA E AUDITORIA ---
+// ==========================================
+
+// 1. Sanitização de tags HTML, scripts inline e esquemas de URI maliciosos para prevenir XSS
+function sanitizeHtmlAndScripts(text: string): string {
+  if (typeof text !== "string") return text;
+  return text
+    .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, "") // Remove blocos de script
+    .replace(/<iframe[^>]*>([\s\S]*?)<\/iframe>/gi, "") // Remove iframes
+    .replace(/javascript\s*:/gi, "")                    // Impede URL com protocolo javascript
+    .replace(/data\s*:\s*text\/html/gi, "")              // Evita injeção de data URI maliciosa
+    .replace(/<[^>]+(on\w+)\s*=\s*['"]?([\s\S]*?)['"]?[^>]*>/gi, (match) => {
+      // Remove manipuladores de eventos inline (onerror, onload, onclick, etc) de tags HTML normais
+      return match.replace(/on\w+\s*=\s*['"]?([\s\S]*?)['"]?/gi, "");
+    });
+}
+
+function sanitizePayload(body: any): any {
+  if (!body) return body;
+  if (typeof body === "string") {
+    return sanitizeHtmlAndScripts(body);
+  }
+  if (Array.isArray(body)) {
+    return body.map(item => sanitizePayload(item));
+  }
+  if (typeof body === "object") {
+    const sanitized: any = {};
+    for (const key of Object.keys(body)) {
+      sanitized[key] = sanitizePayload(body[key]);
+    }
+    return sanitized;
+  }
+  return body;
+}
+
+// Middleware de Sanitização de XSS em todas as requisições que enviam dados
+app.use((req, res, next) => {
+  if (req.body && (req.method === "POST" || req.method === "PUT" || req.method === "PATCH")) {
+    req.body = sanitizePayload(req.body);
+  }
+  next();
+});
+
+// 2. Cabeçalhos de Segurança (Custom Helmet)
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  next();
+});
+
+// 3. Validação robusta de URLs fornecidas pelo usuário
+function isSafeUrl(urlStr: string): boolean {
+  if (!urlStr) return true;
+  try {
+    const trimmed = urlStr.trim();
+    if (trimmed.startsWith("/")) return true;
+    
+    // Testa se o esquema ou protocolo é permitido
+    const parsed = new URL(trimmed);
+    return ["http:", "https:"].includes(parsed.protocol);
+  } catch (err) {
+    const trimmed = urlStr.trim();
+    if (trimmed.includes(":") && !trimmed.toLowerCase().startsWith("http://") && !trimmed.toLowerCase().startsWith("https://")) {
+      return false; // Bloqueia outros esquemas perigosos como javascript: ou data:
+    }
+    return !/[\x00-\x1F\x7F]/.test(urlStr); // Evita caracteres de controle
+  }
+}
+
+// Middleware de Validação de URLs para rotas de modificação de cadastros
+app.use((req, res, next) => {
+  if (req.body && (req.url === "/api/establishments/register" || (req.url.startsWith("/api/establishments/") && req.method === "PUT"))) {
+    const { website, maps_link, mapsLink, images } = req.body;
+    
+    if (website && !isSafeUrl(website)) {
+      return res.status(400).json({ error: "URL do site inválida ou insegura." });
+    }
+    const mapsUrlToCheck = maps_link || mapsLink;
+    if (mapsUrlToCheck && !isSafeUrl(mapsUrlToCheck)) {
+      return res.status(400).json({ error: "Link do Google Maps inválido ou inválido." });
+    }
+    if (images && Array.isArray(images)) {
+      for (const imgUrl of images) {
+        if (!isSafeUrl(imgUrl)) {
+          return res.status(400).json({ error: "Uma ou mais URLs das imagens carregadas são inseguras." });
+        }
+      }
+    }
+  }
+  next();
+});
+
+// 4. Rate Limiting em memória (Proteção Brute Force & DoS)
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+function createRateLimiter(options: { windowMs: number; max: number; message: string }) {
+  return (req: any, res: any, next: any) => {
+    const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "127.0.0.1").split(",")[0].trim();
+    const now = Date.now();
+    let record = rateLimitStore.get(ip);
+    
+    if (record && now > record.resetAt) {
+      record = undefined;
+    }
+    
+    if (!record) {
+      record = {
+        count: 1,
+        resetAt: now + options.windowMs
+      };
+      rateLimitStore.set(ip, record);
+    } else {
+      record.count++;
+    }
+    
+    res.setHeader("X-RateLimit-Limit", options.max);
+    res.setHeader("X-RateLimit-Remaining", Math.max(0, options.max - record.count));
+    res.setHeader("X-RateLimit-Reset", Math.ceil(record.resetAt / 1000));
+    
+    if (record.count > options.max) {
+      return res.status(429).json({
+        error: "Muitas requisições",
+        message: options.message
+      });
+    }
+    
+    next();
+  };
+}
+
+// Limpador automático de registros antigos do rate-limit (previne vazamentos de memória)
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of rateLimitStore.entries()) {
+    if (now > record.resetAt) {
+      rateLimitStore.delete(ip);
+    }
+  }
+}, 15 * 60 * 1000).unref();
+
+// Instanciamento dos Rate Limiters para endpoints críticos
+const chatRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 15,             // limite de 15 chamadas por minuto ao chat do Gemini
+  message: "Limite de conversações excedido temporariamente. Por favor filtre suas mensagens e tente novamente em breve."
+});
+
+const mutationRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 45,                  // limite de 45 criações/edições de estabelecimentos por IP a cada 15m
+  message: "Limite de alterações e registros excedido temporariamente para o seu endereço IP. Tente novamente em 15 minutos."
+});
 
 async function resolveCityAndState(supabase: any, geo: any) {
   if (!geo || !geo.cityName || !geo.stateUf) return null;
@@ -178,9 +342,16 @@ interface Establishment {
   is_featured?: boolean;
   is_verified?: boolean;
   is_premium?: boolean;
+  is_active?: boolean;
+  featured_order?: number | string | null;
+  featured_start?: string | null;
+  featured_end?: string | null;
+  featured_type?: string | null;
+  deleted_at?: string | null;
   plus_code?: string;
   maps_link?: string;
   created_at?: string;
+  updated_at?: string;
   images?: string[];
   tags?: string;
 }
@@ -1126,7 +1297,7 @@ const sanitizeSupabaseQuery = (text: string) => {
 };
 
 // API chat moved to frontend service
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", chatRateLimiter, async (req, res) => {
   const { message, city, userLocation, localContext, categoryFilter, subCategoryFilter } = req.body;
 
   if (!message || !city) {
@@ -1221,8 +1392,7 @@ app.get("/api/establishments/category/:categoryId", async (req, res) => {
       const { data, error } = await query
         .order('is_premium', { ascending: false })
         .order('is_featured', { ascending: false })
-        .order('rating', { ascending: false })
-        .limit(40);
+        .order('rating', { ascending: false });
       
       if (!error && data && data.length > 0) {
         setCache(cacheKey, data);
@@ -1314,53 +1484,155 @@ app.get("/api/establishments/featured", async (req, res) => {
       const targetCityIds = await resolveCityIdsByName(supabase, city_id);
       console.log(`[API] Resolved city search for "${city_id}" to target IDs:`, targetCityIds);
 
-      const { data, error } = await supabase
+      // Build base query
+      let query = supabase
         .from('establishments')
         .select('*')
         .in('city_id', targetCityIds)
-        .eq('status', 'approved') // Only show approved ones
-        .order('is_featured', { ascending: false })
-        .order('is_premium', { ascending: false })
-        .order('rating', { ascending: false })
-        .limit(10);
+        .eq('is_featured', true)
+        .eq('status', 'approved');
+
+      // Add ordering priority:
+      // 1. featured_order ASC, Nulls Last
+      // 2. updated_at DESC
+      // 3. name ASC
+      query = query
+        .order('featured_order', { ascending: true, nullsFirst: false })
+        .order('updated_at', { ascending: false })
+        .order('name', { ascending: true });
+
+      let { data, error } = await query;
+
+      // If DB has no featured_order column yet (code 42703), execute safe fallback query
+      if (error && error.code === '42703') {
+        console.warn("[API] DB columns featured_order not existing yet. Falling back to simple sorting database-side.");
+        const fallbackQuery = supabase
+          .from('establishments')
+          .select('*')
+          .in('city_id', targetCityIds)
+          .eq('is_featured', true)
+          .eq('status', 'approved')
+          .order('updated_at', { ascending: false })
+          .order('name', { ascending: true });
+        
+        const fallbackRes = await fallbackQuery;
+        data = fallbackRes.data;
+        error = fallbackRes.error;
+      }
 
       if (error) {
         console.error("[Supabase Error] Querying featured:", error.message);
       } else if (data && data.length > 0) {
-        console.log(`[API] Found ${data.length} featured establishments in Supabase`);
-        setCache(cacheKey, data);
-        return res.json(data);
+        console.log(`[API] Found ${data.length} raw featured candidates in Supabase. Applying filters...`);
+        
+        // Strict in-memory check for date ranges, active status, and soft deletions
+        const now = new Date();
+        let filteredData = data.filter((e: any) => {
+          // Rule: status = publicado ('approved')
+          if (e.status !== 'approved') return false;
+
+          // Rule: ativo = true
+          if (e.is_active === false) return false;
+
+          // Rule: deleted_at = null
+          if (e.deleted_at && e.deleted_at !== null) return false;
+
+          // Rule: Destaque Temporário
+          if (e.featured_start) {
+            const start = new Date(e.featured_start);
+            if (start > now) return false;
+          }
+          if (e.featured_end) {
+            const end = new Date(e.featured_end);
+            if (end < now) return false;
+          }
+
+          return true;
+        });
+
+        // Re-apply sorting locally as well just to be 100% sure we adhere to rules
+        filteredData.sort((a: any, b: any) => {
+          // 1. featured_order ASC, nulls last
+          const oA = a.featured_order !== undefined && a.featured_order !== null && a.featured_order !== '' ? Number(a.featured_order) : Infinity;
+          const oB = b.featured_order !== undefined && b.featured_order !== null && b.featured_order !== '' ? Number(b.featured_order) : Infinity;
+          if (oA !== oB) return oA - oB;
+
+          // 2. updated_at DESC
+          const tA = new Date(a.updated_at || a.created_at || 0).getTime();
+          const tB = new Date(b.updated_at || b.created_at || 0).getTime();
+          if (tB !== tA) return tB - tA;
+
+          // 3. name ASC
+          return (a.name || "").localeCompare(b.name || "");
+        });
+
+        // Limit results to 10
+        filteredData = filteredData.slice(0, 10);
+
+        console.log(`[API] Returning ${filteredData.length} filtered featured results after processing.`);
+        setCache(cacheKey, filteredData);
+        return res.json(filteredData);
       } else {
         console.warn(`[API] No featured establishments found in Supabase for IDs:`, targetCityIds);
+        setCache(cacheKey, []);
+        return res.json([]);
       }
     }
     
-    // Fallback logic
+    // Fallback logic for mock data
     console.log(`[API] Falling back to mock featured data for city ${cityIdNum} ("${cleanCityId}")`);
     
     // Try to find the city name to use broader fallback
     const mockCity = cities.find(c => c.id === cityIdNum);
     const cityName = mockCity ? mockCity.name : null;
 
+    const now = new Date();
     const results = establishments.filter(e => {
+      // Must be marked as featured
+      if (e.is_featured !== true) return false;
+      // Must be approved/published
+      if (e.status !== 'approved') return false;
+      // Must be active (ativo = true)
+      if (e.is_active === false) return false;
+      // Must be not logically soft-deleted (deleted_at = null)
+      if (e.deleted_at && e.deleted_at !== null) return false;
+
+      // Temporal range checks (Destaque Temporário)
+      if (e.featured_start) {
+        const start = new Date(e.featured_start);
+        if (start > now) return false;
+      }
+      if (e.featured_end) {
+        const end = new Date(e.featured_end);
+        if (end < now) return false;
+      }
+      
       if (!cleanCityId) return true;
       if (e.city_id === cityIdNum) return true;
       // If we have a city name, also match by that in case IDs shifted
       if (cityName && cities.find(c => c.id === e.city_id)?.name === cityName) return true;
       return false;
     }).sort((a, b) => {
-      if (a.is_premium && !b.is_premium) return -1;
-      if (!a.is_premium && b.is_premium) return 1;
-      if (a.is_featured && !b.is_featured) return -1;
-      if (!a.is_featured && b.is_featured) return 1;
-      return 0;
-    }).slice(0, 9);
+      // Sort priority:
+      // 1. featured_order ASC (nulls last)
+      const orderA = a.featured_order !== undefined && a.featured_order !== null && a.featured_order !== '' ? Number(a.featured_order) : Infinity;
+      const orderB = b.featured_order !== undefined && b.featured_order !== null && b.featured_order !== '' ? Number(b.featured_order) : Infinity;
+      if (orderA !== orderB) return orderA - orderB;
+
+      // 2. updated_at descending
+      const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
+      const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+
+      // 3. name ascending
+      return a.name.localeCompare(b.name);
+    }).slice(0, 10);
     
     console.log(`[API] Fallback found ${results.length} results`);
     res.json(results);
   } catch (error: any) {
     console.error("[API Error] Featured establishments:", error.message);
-    res.json(establishments.slice(0, 8));
+    res.json([]);
   }
 });
 
@@ -1568,9 +1840,8 @@ app.get("/api/search", async (req, res) => {
           const { data: tagCandidates, error: tagError } = await supabase
             .from('establishments')
             .select('*')
-            .not('tags', 'is', null)
-            .neq('tags', '')
-            .neq('status', 'deleted');
+            .neq('status', 'deleted')
+            .ilike('tags', `%${cleanSearchStr}%`);
           
           if (!tagError && tagCandidates && tagCandidates.length > 0) {
             let tagFiltered = tagCandidates.filter((e: any) => {
@@ -1722,7 +1993,7 @@ app.get("/api/search", async (req, res) => {
             .order('rating', { ascending: false });
 
           // Fetch more than we need to allow for filtering/prioritization
-          const result = await query.limit(50);
+          const result = await query;
           if (result.error) return result;
 
           // JS post-filtering to guarantee 100% correct accent-insensitive matching
@@ -2047,7 +2318,7 @@ app.get("/api/establishments/:id/can-edit", async (req, res) => {
   }
 });
 
-app.put("/api/establishments/:id", async (req, res) => {
+app.put("/api/establishments/:id", mutationRateLimiter, async (req, res) => {
   const { id } = req.params;
   const registration = req.body;
   const userId = (req.headers['x-user-id'] || req.headers['x-vidalocal-user-id']) as string;
@@ -2100,6 +2371,11 @@ app.put("/api/establishments/:id", async (req, res) => {
         updatePayload.is_featured = registration.is_featured;
         updatePayload.is_verified = registration.is_verified;
         updatePayload.is_premium = registration.is_premium;
+        updatePayload.is_active = registration.is_active !== undefined ? registration.is_active : true;
+        updatePayload.featured_order = (registration.featured_order !== undefined && registration.featured_order !== '') ? Number(registration.featured_order) : null;
+        updatePayload.featured_start = (registration.featured_start !== undefined && registration.featured_start !== '') ? registration.featured_start : null;
+        updatePayload.featured_end = (registration.featured_end !== undefined && registration.featured_end !== '') ? registration.featured_end : null;
+        updatePayload.featured_type = registration.featured_type || 'normal';
       }
 
       console.log(`[API] Attempting update for ${id}. IsAdminGlobal: ${isAdminGlobal}, IsAdminByEmail: ${isAdminByEmail}`);
@@ -2244,6 +2520,11 @@ app.put("/api/establishments/:id", async (req, res) => {
           is_featured: registration.is_featured,
           is_verified: registration.is_verified,
           is_premium: registration.is_premium,
+          is_active: registration.is_active !== undefined ? registration.is_active : true,
+          featured_order: (registration.featured_order !== undefined && registration.featured_order !== '') ? Number(registration.featured_order) : null,
+          featured_start: (registration.featured_start !== undefined && registration.featured_start !== '') ? registration.featured_start : null,
+          featured_end: (registration.featured_end !== undefined && registration.featured_end !== '') ? registration.featured_end : null,
+          featured_type: registration.featured_type || 'normal',
           images: registration.images || [],
           tags: registration.tags || ''
         };
@@ -2590,7 +2871,7 @@ Se você identificar que o nome do comércio é fictício ou genérico e não po
   }
 });
 
-app.delete("/api/establishments/:id", async (req, res) => {
+app.delete("/api/establishments/:id", mutationRateLimiter, async (req, res) => {
   const { id } = req.params;
   const userId = req.headers['x-user-id'] as string;
   const userEmail = req.headers['x-user-email'] as string;
@@ -2617,8 +2898,13 @@ app.delete("/api/establishments/:id", async (req, res) => {
           realId = found.id;
           recordInDb = found;
         } else if (isMockId) {
-          // It's a mock ID not in DB, so we just "pretend" to delete
-          console.log(`[API] Mock ID ${id} requested for delete. No record in DB, returning success.`);
+          // It's a mock ID not in DB, so we remove it from the local in-memory array and return success
+          console.log(`[API] Mock ID ${id} requested for delete. No record in DB, removing from local array.`);
+          const idx = establishments.findIndex(e => String(e.id) === String(id) || String(e.short_id) === String(id));
+          if (idx !== -1) {
+            establishments.splice(idx, 1);
+          }
+          clearCache();
           return res.json({ success: true, message: "Mock establishment removed (not in DB)" });
         } else {
           return res.status(404).json({ error: "Estabelecimento não encontrado para exclusão." });
@@ -2677,6 +2963,17 @@ app.delete("/api/establishments/:id", async (req, res) => {
           .eq('id', recordInDb.id);
 
         if (error) throw error;
+        
+        // Also remove from the local in-memory array to be 100% synchronized
+        const idx = establishments.findIndex(e => 
+          String(e.id) === String(recordInDb.id) || 
+          String(e.short_id) === String(recordInDb.short_id) ||
+          String(e.id) === String(id) ||
+          String(e.short_id) === String(id)
+        );
+        if (idx !== -1) {
+          establishments.splice(idx, 1);
+        }
       }
       
       clearCache();
@@ -2994,7 +3291,7 @@ app.patch("/api/establishments/:id", async (req, res) => {
   }
 });
 
-app.post("/api/establishments/register", async (req, res) => {
+app.post("/api/establishments/register", mutationRateLimiter, async (req, res) => {
   console.log("[API] Hit POST /api/establishments/register");
   // return res.json({ status: "debug", message: "Reached server!" }); // Uncomment for deeper debug
   const registration = req.body;
@@ -3125,6 +3422,11 @@ app.post("/api/establishments/register", async (req, res) => {
         is_featured: registration.is_featured || false,
         is_verified: registration.is_verified || false,
         is_premium: registration.is_premium || false,
+        is_active: registration.is_active !== undefined ? registration.is_active : true,
+        featured_order: (registration.featured_order !== undefined && registration.featured_order !== '') ? Number(registration.featured_order) : null,
+        featured_start: (registration.featured_start !== undefined && registration.featured_start !== '') ? registration.featured_start : null,
+        featured_end: (registration.featured_end !== undefined && registration.featured_end !== '') ? registration.featured_end : null,
+        featured_type: registration.featured_type || 'normal',
         images: registration.images || [],
         tags: registration.tags || ''
       }]).select();
@@ -3237,6 +3539,11 @@ app.post("/api/establishments/register", async (req, res) => {
         is_featured: registration.is_featured || false,
         is_verified: registration.is_verified || false,
         is_premium: registration.is_premium || false,
+        is_active: registration.is_active !== undefined ? registration.is_active : true,
+        featured_order: (registration.featured_order !== undefined && registration.featured_order !== '') ? Number(registration.featured_order) : null,
+        featured_start: (registration.featured_start !== undefined && registration.featured_start !== '') ? registration.featured_start : null,
+        featured_end: (registration.featured_end !== undefined && registration.featured_end !== '') ? registration.featured_end : null,
+        featured_type: registration.featured_type || 'normal',
         images: registration.images || [],
         tags: registration.tags || '',
         created_at: new Date().toISOString()
@@ -3258,6 +3565,312 @@ app.post("/api/establishments/register", async (req, res) => {
       error: "Erro interno ao processar cadastro", 
       message: error.message 
     });
+  }
+});
+
+// ==========================================
+// --- SPRINT 2.1 — ROTAS DE REIVINDICAÇÃO ---
+// ==========================================
+
+async function checkIfAdmin(supabase: any, userId: string, userEmailFromHeader?: string): Promise<boolean> {
+  const emailToCheck = (userEmailFromHeader || '').trim().toLowerCase();
+  if (emailToCheck === 'alcidinopk@gmail.com') return true;
+  if (!userId) return false;
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, email')
+      .eq('id', userId)
+      .maybeSingle();
+    if (profile?.role === 'admin' || profile?.email?.toLowerCase() === 'alcidinopk@gmail.com') {
+      return true;
+    }
+  } catch (error) {
+    console.error('[checkIfAdmin] Error checking admin role:', error);
+  }
+  return false;
+}
+
+// 1. Enviar solicitação de reivindicação
+app.post("/api/business-claims", mutationRateLimiter, async (req, res) => {
+  const { 
+    establishment_id, 
+    requester_name, 
+    requester_email, 
+    requester_phone, 
+    requester_message,
+    requester_role,
+    proof_document_url
+  } = req.body;
+
+  const requester_user_id = req.headers['x-user-id'] as string;
+  const requesterEmailFromHeader = req.headers['x-user-email'] as string;
+
+  if (!establishment_id || !requester_name || !requester_email || !requester_phone || !requester_message) {
+    return res.status(400).json({ error: "Todos os campos obrigatórios devem ser preenchidos." });
+  }
+
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(503).json({ error: "Database service unavailable." });
+    }
+
+    // A. Verificar se a empresa já está reivindicada
+    const { data: est, error: estError } = await supabase
+      .from('establishments')
+      .select('id, name, is_claimed, owner_user_id')
+      .eq('id', establishment_id)
+      .maybeSingle();
+
+    if (estError || !est) {
+      return res.status(404).json({ error: "Estabelecimento não encontrado para reivindicação." });
+    }
+
+    // Se a empresa já possui proprietário confirmado, impedir reinvidicação exceto por admin
+    if (est.is_claimed || est.owner_user_id) {
+      const isAdmin = await checkIfAdmin(supabase, requester_user_id || '', requesterEmailFromHeader);
+      if (!isAdmin) {
+        return res.status(403).json({ error: "Esta empresa já possui um proprietário confirmado." });
+      }
+    }
+
+    // B. Verificar se já existe uma reivindicação pendente para esta empresa
+    const { data: existingClaims, error: claimsError } = await supabase
+      .from('business_claims')
+      .select('id')
+      .eq('establishment_id', establishment_id)
+      .eq('status', 'pending');
+
+    if (claimsError) {
+      return res.status(500).json({ error: "Erro ao verificar reivindicações existentes." });
+    }
+
+    if (existingClaims && existingClaims.length > 0) {
+      return res.status(400).json({ error: "Não permitir duas reivindicações pendentes para a mesma empresa." });
+    }
+
+    // C. Inserir a reivindicação
+    const { data: inserted, error: insertError } = await supabase
+      .from('business_claims')
+      .insert({
+        establishment_id,
+        requester_user_id: requester_user_id || null,
+        requester_name,
+        requester_email,
+        requester_phone,
+        requester_message,
+        requester_role: requester_role || '',
+        proof_document_url: proof_document_url || '',
+        status: 'pending'
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      throw insertError;
+    }
+
+    // Auditoria de logs
+    console.log(`[Claim Auditing] Solicitação criada:`);
+    console.log(`- ID: ${inserted.id}`);
+    console.log(`- Solicitante: ${requester_name} (${requester_email})`);
+    console.log(`- Empresa: ${est.name} (ID: ${establishment_id})`);
+    console.log(`- Data: ${new Date().toISOString()}`);
+
+    clearCache();
+
+    return res.json({ 
+      success: true, 
+      message: "Sua solicitação foi enviada para análise da equipe VidaLocal.", 
+      data: inserted 
+    });
+
+  } catch (error: any) {
+    console.error("[Claim Error] Submitting claim:", error);
+    res.status(500).json({ error: "Erro interno ao processar solicitação de reivindicação.", message: error.message });
+  }
+});
+
+// 2. Trazer todas as reivindicações para painel administrativo
+app.get("/api/admin/business-claims", async (req, res) => {
+  const userId = req.headers['x-user-id'] as string;
+  const userEmail = req.headers['x-user-email'] as string;
+
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(503).json({ error: "Database service unavailable." });
+    }
+
+    const isAdmin = await checkIfAdmin(supabase, userId, userEmail);
+    if (!isAdmin) {
+      return res.status(403).json({ error: "Acesso negado: Apenas administradores podem visualizar reivindicações." });
+    }
+
+    const { data: claims, error: claimsError } = await supabase
+      .from('business_claims')
+      .select(`
+        *,
+        establishments (
+          id,
+          name,
+          short_id,
+          address,
+          status,
+          user_id,
+          owner_user_id,
+          is_claimed
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (claimsError) {
+      throw claimsError;
+    }
+
+    return res.json(claims || []);
+
+  } catch (error: any) {
+    console.error("[Claim Error] Fetching claims:", error);
+    res.status(500).json({ error: "Erro ao obter reivindicações.", message: error.message });
+  }
+});
+
+// 3. Resolver reivindicação (Aprovar / Recusar)
+app.post("/api/admin/business-claims/:id/resolve", mutationRateLimiter, async (req, res) => {
+  const { id } = req.params;
+  const { status, admin_notes } = req.body; // status: 'approved' | 'rejected'
+  const reviewerId = req.headers['x-user-id'] as string;
+  const reviewerEmail = req.headers['x-user-email'] as string;
+
+  if (!['approved', 'rejected'].includes(status)) {
+    return res.status(400).json({ error: "Status inválido fornecido. Use 'approved' ou 'rejected'." });
+  }
+
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(503).json({ error: "Database service unavailable." });
+    }
+
+    const isAdmin = await checkIfAdmin(supabase, reviewerId, reviewerEmail);
+    if (!isAdmin) {
+      return res.status(403).json({ error: "Acesso negado: Operação restrita a administradores." });
+    }
+
+    // Buscar a reivindicação
+    const { data: claim, error: fetchError } = await supabase
+      .from('business_claims')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError || !claim) {
+      return res.status(404).json({ error: "Solicitação de reivindicação não encontrada." });
+    }
+
+    const { data: est, error: estFetchError } = await supabase
+      .from('establishments')
+      .select('id, name, short_id')
+      .eq('id', claim.establishment_id)
+      .maybeSingle();
+
+    if (estFetchError || !est) {
+      return res.status(404).json({ error: "Estabelecimento associado não encontrado." });
+    }
+
+    const reviewedAt = new Date().toISOString();
+
+    if (status === 'approved') {
+      // Registrar no banco: associar o estabelecimento ao usuário solicitante
+      // atualizar owner_user_id e marcar empresa como reivindicada
+      const { error: updateEstError } = await supabase
+        .from('establishments')
+        .update({
+          owner_user_id: claim.requester_user_id || reviewerId, // fallback ao revisor caso requester não tenha ID
+          user_id: claim.requester_user_id || reviewerId,       // sincronizar user_id pra compatibilidade de gerenciamento
+          is_claimed: true
+        })
+        .eq('id', claim.establishment_id);
+
+      if (updateEstError) {
+        throw updateEstError;
+      }
+
+      // Adicionar acesso na tabela de permissões (user_permissions) como 'owner'
+      if (claim.requester_user_id && est.short_id) {
+        await supabase
+          .from('user_permissions')
+          .insert({
+            user_id: claim.requester_user_id,
+            establishment_short_id: est.short_id,
+            role: 'owner'
+          });
+      }
+
+      // Atualizar status da reivindicação
+      const { error: updateClaimError } = await supabase
+        .from('business_claims')
+        .update({
+          status: 'approved',
+          admin_notes: admin_notes || 'Reivindicação de empresa aprovada pelo administrador.',
+          reviewed_by: reviewerId || null,
+          reviewed_at: reviewedAt,
+          updated_at: reviewedAt
+        })
+        .eq('id', id);
+
+      if (updateClaimError) {
+        throw updateClaimError;
+      }
+
+      // Auditoria em logs
+      console.log(`[Claim Auditing] Reivindicação APROVADA:`);
+      console.log(`- ID Reivindicação: ${id}`);
+      console.log(`- Solicitante: ${claim.requester_name} (${claim.requester_email})`);
+      console.log(`- Empresa: ${est.name}`);
+      console.log(`- Aprovado por: ${reviewerEmail || reviewerId}`);
+      console.log(`- Quando: ${reviewedAt}`);
+
+    } else {
+      // Caso de recusa
+      const { error: updateClaimError } = await supabase
+        .from('business_claims')
+        .update({
+          status: 'rejected',
+          admin_notes: admin_notes || 'Reivindicação de empresa recusada pelo administrador.',
+          reviewed_by: reviewerId || null,
+          reviewed_at: reviewedAt,
+          updated_at: reviewedAt
+        })
+        .eq('id', id);
+
+      if (updateClaimError) {
+        throw updateClaimError;
+      }
+
+      // Auditoria em logs
+      console.log(`[Claim Auditing] Reivindicação RECUSADA:`);
+      console.log(`- ID Reivindicação: ${id}`);
+      console.log(`- Solicitante: ${claim.requester_name} (${claim.requester_email})`);
+      console.log(`- Empresa: ${est.name}`);
+      console.log(`- Recusado por: ${reviewerEmail || reviewerId}`);
+      console.log(`- Motivo: ${admin_notes || 'Sem observações'}`);
+      console.log(`- Quando: ${reviewedAt}`);
+    }
+
+    clearCache();
+
+    return res.json({ 
+      success: true, 
+      message: status === 'approved' ? 'Reivindicação aprovada e propriedade transferida com sucesso!' : 'Reivindicação recusada com sucesso.',
+      status 
+    });
+
+  } catch (error: any) {
+    console.error("[Claim Error] Resolving claim:", error);
+    res.status(500).json({ error: "Erro ao resolver reivindicação.", message: error.message });
   }
 });
 

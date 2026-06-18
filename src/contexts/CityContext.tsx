@@ -78,17 +78,22 @@ export const CityProvider = ({ children }: { children: ReactNode }) => {
 
       // 2. If no saved city, try Geolocation (Automatic detection)
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            await resolveCityByGeo(pos.coords.latitude, pos.coords.longitude);
-            setIsLoading(false);
-          },
-          (error) => {
-            console.warn("Geolocation denied or failed, using default city:", error);
-            setIsLoading(false);
-          },
-          { timeout: 3000, enableHighAccuracy: false }
-        );
+        try {
+          navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+              await resolveCityByGeo(pos.coords.latitude, pos.coords.longitude);
+              setIsLoading(false);
+            },
+            (error) => {
+              console.warn("Geolocation denied or failed, using default city:", error);
+              setIsLoading(false);
+            },
+            { timeout: 3000, enableHighAccuracy: false }
+          );
+        } catch (geoErr) {
+          console.warn("Synchronous geolocation error occurred, using default city:", geoErr);
+          setIsLoading(false);
+        }
       } else {
         setIsLoading(false);
       }

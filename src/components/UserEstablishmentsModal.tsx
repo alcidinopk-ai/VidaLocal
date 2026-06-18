@@ -70,13 +70,16 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/establishments/user/${user.id}`);
+      const response = await fetch(`/api/establishments/user/${user.id}?t=${Date.now()}`);
       const data = await response.json();
       
       console.log("[UserEst] Response received:", data);
       
       if (response.ok) {
-        setEstablishments(data);
+        const activeEsts = Array.isArray(data) 
+          ? data.filter((e: any) => e.status !== 'deleted' && !e.deleted)
+          : [];
+        setEstablishments(activeEsts);
       } else {
         setError(data.error || data.message || "Erro ao carregar seus cadastros.");
       }
@@ -131,6 +134,15 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
       
       if (response.ok) {
         setDeleteSuccess(true);
+        
+        // Emit custom event so that all other loaded lists/views remove this establishment immediately
+        window.dispatchEvent(new CustomEvent('vida360:establishment-updated', { 
+          detail: { id: establishmentToDelete.id, deleted: true, status: 'deleted' } 
+        }));
+
+        // Instantly remove from local state for ultimate responsiveness
+        setEstablishments(prev => prev.filter(e => e.id !== establishmentToDelete.id));
+
         setTimeout(() => {
           setEstablishmentToDelete(null);
           setDeleteSuccess(false);
@@ -248,6 +260,7 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
                             alt={maps.title} 
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             referrerPolicy="no-referrer"
+                            loading="lazy"
                           />
                         </div>
                       )}
@@ -346,6 +359,7 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
                             alt={est.name} 
                             className="w-full h-full object-cover"
                             referrerPolicy="no-referrer"
+                            loading="lazy"
                           />
                         </div>
                       )}

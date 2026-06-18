@@ -70,6 +70,12 @@ CREATE TABLE IF NOT EXISTS establishments (
   is_featured BOOLEAN DEFAULT FALSE,
   is_verified BOOLEAN DEFAULT FALSE,
   is_premium BOOLEAN DEFAULT FALSE,
+  is_active BOOLEAN DEFAULT TRUE,
+  featured_order INTEGER,
+  featured_start TIMESTAMPTZ,
+  featured_end TIMESTAMPTZ,
+  featured_type TEXT DEFAULT 'normal',
+  deleted_at TIMESTAMPTZ,
   is_open_24_hours BOOLEAN DEFAULT FALSE,
   images TEXT[] DEFAULT '{}',
   tags TEXT DEFAULT '',
@@ -77,6 +83,14 @@ CREATE TABLE IF NOT EXISTS establishments (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Safe migration statements if columns need to be appended dynamically
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS featured_order INTEGER;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS featured_start TIMESTAMPTZ;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS featured_end TIMESTAMPTZ;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS featured_type TEXT DEFAULT 'normal';
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
 -- 6.1 Profiles table
 CREATE TABLE IF NOT EXISTS profiles (
@@ -219,7 +233,10 @@ SELECT 'Espetinho do Adão B13', 1, 'Espetinho', 'Av. Goiás, 1438, Centro, Guru
 SELECT 'Delicias da Polly', 1, 'Restaurante', 'Av. Maranhão, 1245, Centro, Gurupi - TO', '6333124455', '63992334455', 4.9, 'approved', id, -11.7275, -49.0660, 'Comida caseira, lanches e sobremesas feitas com carinho.', true, true, true, ARRAY['https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80', 'https://images.unsplash.com/photo-1476224483472-279815b0019e?w=800&q=80'] FROM cities WHERE slug = 'gurupi' UNION ALL
 SELECT 'Mecânica do Neném', 6, 'Oficina / Centro Automotivo', 'Av. Maranhão, 2560, Setor Industrial, Gurupi - TO', '6333121122', '63984112233', 4.5, 'approved', id, -11.7350, -49.0720, 'Manutenção preventiva e corretiva para seu veículo com confiança.', false, false, false, ARRAY['https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800&q=80', 'https://images.unsplash.com/photo-1487754164641-a09bd0ec07aa?w=800&q=80'] FROM cities WHERE slug = 'gurupi' UNION ALL
 SELECT 'Pet Shop Amigão', 5, 'Pet Shop (varejo)', 'Av. Goiás, 2100, Centro, Gurupi - TO', '6333128877', '63999887766', 4.7, 'approved', id, -11.7320, -49.0685, 'Tudo para o seu pet: rações, acessórios e banho e tosa.', false, false, false, ARRAY['https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800&q=80', 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=800&q=80'] FROM cities WHERE slug = 'gurupi' UNION ALL
-SELECT 'Pizzaria Bella Italia', 1, 'Pizzaria', 'Av. Pará, 1500, Centro, Gurupi - TO', '6333129988', '63992112233', 4.6, 'approved', id, -11.7295, -49.0670, 'Pizzas artesanais com massa fina e ingredientes selecionados.', true, true, true, ARRAY['https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80', 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=80'] FROM cities WHERE slug = 'gurupi' UNION ALL
+SELECT 'Pizzaria Bella Italia', 1, 'Pizzaria', 'Av. Pará, 1500, Centro, Gurupi - TO', '6333129988', '63992112233', 4.6, 'approved', id, -11.7295, -49.0670, 'Pizzas artesanais com massa fina e ingredientes selecionados.', true, true, true, ARRAY['https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80', 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=80'] FROM cities WHERE slug = 'gurupi'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO establishments (name, category_id, sub_category, address, phone, whatsapp, rating, status, city_id, latitude, longitude, description)
 SELECT 'Casa de Carnes Boi de Ouro', 1, 'Açougue', 'Av. Maranhão, 1500, Centro, Gurupi - TO', '6333124455', '63992113344', 4.9, 'approved', id, -11.7290, -49.0675, 'Carnes nobres e selecionadas para o seu churrasco.' FROM cities WHERE slug = 'gurupi' UNION ALL
 SELECT 'Supermercado Beira Rio', 1, 'Supermercado / Mercado', 'Av. Goiás, 2500, Gurupi - TO', '6333131000', '6333131000', 4.5, 'approved', id, -11.7360, -49.0710, 'O melhor preço e variedade para sua casa.' FROM cities WHERE slug = 'gurupi' UNION ALL
 SELECT 'Drogaria Ultra Popular', 1, 'Farmácia', 'Av. Goiás, 1100, Centro, Gurupi - TO', '6333122020', '6333122020', 4.7, 'approved', id, -11.7270, -49.0660, 'Farmácia com descontos reais em medicamentos.' FROM cities WHERE slug = 'gurupi' UNION ALL
@@ -291,3 +308,64 @@ SELECT 'Restaurante Tio Patinhas', 1, 'Restaurante', 'Av. Prefeito João de Sous
 SELECT 'Premier Hotel', 1, 'Hospedagem (hotel, pousada, temporada)', 'Av. Bernardo Sayão, Araguaína - TO', '6334113000', NULL, 4.6, 'approved', id, -7.2050, -48.2200, 'Conforto e praticidade para sua estadia em Araguaína.' FROM cities WHERE slug = 'araguaina' UNION ALL
 SELECT 'Colégio Santa Cruz', 10, 'Escola (infantil ao médio)', 'Av. Dom Emanuel, Araguaína - TO', '6334114455', NULL, 4.8, 'approved', id, -7.1910, -48.2040, 'Instituição de ensino tradicional em Araguaína.' FROM cities WHERE slug = 'araguaina'
 ON CONFLICT DO NOTHING;
+
+-- 8. ÍNDICES DE PERFORMANCE E OTIMIZAÇÃO (AUDITORIA DE BANCO DE DADOS)
+-- Índices para chaves estrangeiras (Foreign Keys) para acelerar Joins e Deletes
+CREATE INDEX IF NOT EXISTS idx_cities_state_id ON cities(state_id);
+CREATE INDEX IF NOT EXISTS idx_search_keywords_intent_id ON search_keywords(intent_id);
+CREATE INDEX IF NOT EXISTS idx_intent_type_map_intent_id ON intent_type_map(intent_id);
+CREATE INDEX IF NOT EXISTS idx_establishments_city_id ON establishments(city_id);
+CREATE INDEX IF NOT EXISTS idx_user_permissions_user_id ON user_permissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_permissions_establishment_short_id ON user_permissions(establishment_short_id);
+
+-- Índices de busca e filtros frequentes para otimizar consultas do VivaLocal
+CREATE INDEX IF NOT EXISTS idx_establishments_status_approved ON establishments(status) WHERE status = 'approved';
+CREATE INDEX IF NOT EXISTS idx_establishments_city_featured ON establishments(city_id, is_featured) WHERE is_featured = TRUE;
+CREATE INDEX IF NOT EXISTS idx_establishments_category ON establishments(category_id);
+CREATE INDEX IF NOT EXISTS idx_establishment_opening_hours_est_id ON establishment_opening_hours(establishment_id);
+CREATE INDEX IF NOT EXISTS idx_search_keywords_keyword ON search_keywords(keyword);
+CREATE INDEX IF NOT EXISTS idx_cities_slug ON cities(slug);
+
+-- 9. SPRINT 2.1 — REIVINDICAR EMPRESA
+-- Colunas de suporte em establishments
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS owner_user_id UUID;
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS is_claimed BOOLEAN DEFAULT FALSE;
+
+-- Tabela de reivindicações
+CREATE TABLE IF NOT EXISTS business_claims (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  establishment_id UUID REFERENCES establishments(id) ON DELETE CASCADE,
+  requester_user_id UUID,
+  requester_name TEXT NOT NULL,
+  requester_email TEXT NOT NULL,
+  requester_phone TEXT NOT NULL,
+  requester_message TEXT NOT NULL,
+  requester_role TEXT, -- cargo na empresa
+  proof_document_url TEXT,
+  status TEXT DEFAULT 'pending', -- pending, approved, rejected
+  admin_notes TEXT,
+  reviewed_by UUID,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Índices para business_claims
+CREATE INDEX IF NOT EXISTS idx_business_claims_establishment ON business_claims(establishment_id);
+CREATE INDEX IF NOT EXISTS idx_business_claims_requester ON business_claims(requester_user_id);
+CREATE INDEX IF NOT EXISTS idx_business_claims_status ON business_claims(status);
+
+-- Habilitar RLS se aplicável
+ALTER TABLE business_claims ENABLE ROW LEVEL SECURITY;
+
+-- Políticas flexíveis para reivindicações de negócios
+DROP POLICY IF EXISTS "Business Claims: Leitura pública" ON business_claims;
+CREATE POLICY "Business Claims: Leitura pública" ON business_claims FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Business Claims: Inserção por autenticados" ON business_claims;
+CREATE POLICY "Business Claims: Inserção por autenticados" ON business_claims FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Business Claims: Modificação por admins" ON business_claims;
+CREATE POLICY "Business Claims: Modificação por admins" ON business_claims FOR ALL USING (true);
+
+

@@ -196,3 +196,64 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 8. ÍNDICES DE PERFORMANCE E OTIMIZAÇÃO (AUDITORIA DE BANCO DE DADOS)
+-- Índices para chaves estrangeiras (Foreign Keys) para acelerar Joins e Deletes
+CREATE INDEX IF NOT EXISTS idx_cities_state_id ON cities(state_id);
+CREATE INDEX IF NOT EXISTS idx_search_keywords_intent_id ON search_keywords(intent_id);
+CREATE INDEX IF NOT EXISTS idx_intent_type_map_intent_id ON intent_type_map(intent_id);
+CREATE INDEX IF NOT EXISTS idx_establishments_city_id ON establishments(city_id);
+CREATE INDEX IF NOT EXISTS idx_user_permissions_user_id ON user_permissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_permissions_establishment_short_id ON user_permissions(establishment_short_id);
+
+-- Índices de busca e filtros frequentes para otimizar consultas do VivaLocal
+CREATE INDEX IF NOT EXISTS idx_establishments_status_approved ON establishments(status) WHERE status = 'approved';
+CREATE INDEX IF NOT EXISTS idx_establishments_city_featured ON establishments(city_id, is_featured) WHERE is_featured = TRUE;
+CREATE INDEX IF NOT EXISTS idx_establishments_category ON establishments(category_id);
+CREATE INDEX IF NOT EXISTS idx_establishment_opening_hours_est_id ON establishment_opening_hours(establishment_id);
+CREATE INDEX IF NOT EXISTS idx_search_keywords_keyword ON search_keywords(keyword);
+CREATE INDEX IF NOT EXISTS idx_cities_slug ON cities(slug);
+
+-- 9. SPRINT 2.1 — REIVINDICAR EMPRESA
+-- Colunas de suporte em establishments
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS owner_user_id UUID;
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS is_claimed BOOLEAN DEFAULT FALSE;
+
+-- Tabela de reivindicações
+CREATE TABLE IF NOT EXISTS business_claims (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  establishment_id UUID REFERENCES establishments(id) ON DELETE CASCADE,
+  requester_user_id UUID,
+  requester_name TEXT NOT NULL,
+  requester_email TEXT NOT NULL,
+  requester_phone TEXT NOT NULL,
+  requester_message TEXT NOT NULL,
+  requester_role TEXT, -- cargo na empresa
+  proof_document_url TEXT,
+  status TEXT DEFAULT 'pending', -- pending, approved, rejected
+  admin_notes TEXT,
+  reviewed_by UUID,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Índices para business_claims
+CREATE INDEX IF NOT EXISTS idx_business_claims_establishment ON business_claims(establishment_id);
+CREATE INDEX IF NOT EXISTS idx_business_claims_requester ON business_claims(requester_user_id);
+CREATE INDEX IF NOT EXISTS idx_business_claims_status ON business_claims(status);
+
+-- Habilitar RLS se aplicável
+ALTER TABLE business_claims ENABLE ROW LEVEL SECURITY;
+
+-- Políticas flexíveis para reivindicações de negócios
+DROP POLICY IF EXISTS "Business Claims: Leitura pública" ON business_claims;
+CREATE POLICY "Business Claims: Leitura pública" ON business_claims FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Business Claims: Inserção por autenticados" ON business_claims;
+CREATE POLICY "Business Claims: Inserção por autenticados" ON business_claims FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Business Claims: Modificação por admins" ON business_claims;
+CREATE POLICY "Business Claims: Modificação por admins" ON business_claims FOR ALL USING (true);
+
+

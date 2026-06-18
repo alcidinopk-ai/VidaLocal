@@ -68,36 +68,7 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
         if (!res.ok) throw new Error('Failed to fetch featured');
         const data = await res.json();
         if (Array.isArray(data)) {
-          let sortedData = [...data];
-          if (userLocation) {
-            sortedData.sort((a, b) => {
-              // Priority 1: Premium
-              if (a.is_premium && !b.is_premium) return -1;
-              if (!a.is_premium && b.is_premium) return 1;
-
-              // Priority 2: Featured
-              if (a.is_featured && !b.is_featured) return -1;
-              if (!a.is_featured && b.is_featured) return 1;
-
-              // Priority 3: Distance
-              const distA = calculateDistance(userLocation.latitude, userLocation.longitude, a.latitude, a.longitude);
-              const distB = calculateDistance(userLocation.latitude, userLocation.longitude, b.latitude, b.longitude);
-              if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
-              if (isFinite(distA) && !isFinite(distB)) return -1;
-              if (!isFinite(distA) && isFinite(distB)) return 1;
-              return 0;
-            });
-          } else {
-            // Even without location, sort premium then featured
-            sortedData.sort((a, b) => {
-              if (a.is_premium && !b.is_premium) return -1;
-              if (!a.is_premium && b.is_premium) return 1;
-              if (a.is_featured && !b.is_featured) return -1;
-              if (!a.is_featured && b.is_featured) return 1;
-              return 0;
-            });
-          }
-          setEstablishments(sortedData);
+          setEstablishments(data);
         } else {
           console.error("Featured API returned non-array data:", data);
           setEstablishments([]);
@@ -118,7 +89,7 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
       window.removeEventListener('vida360:refresh-featured', fetchFeatured);
       window.removeEventListener('vida360:establishment-updated', fetchFeatured);
     };
-  }, [currentCity.id, userLocation]);
+  }, [currentCity.id]);
 
   if (isLoading) {
     return (
@@ -145,8 +116,8 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
       <div className="mt-12 px-6 max-w-7xl mx-auto w-full pb-12">
         <div className="bg-zinc-50 border border-dashed border-zinc-200 rounded-[32px] p-12 text-center">
           <MapPin className="w-8 h-8 text-zinc-300 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-zinc-900">Nenhum destaque em {currentCity.name}</h3>
-          <p className="text-sm text-zinc-500 mt-2">Seja o primeiro a sugerir um local incrível nesta cidade!</p>
+          <h3 className="text-lg font-bold text-zinc-900">Em breve novos destaques da sua cidade.</h3>
+          <p className="text-sm text-zinc-500 mt-2">Destaque os seus lugares favoritos ou seja o primeiro a sugerir um local incrível!</p>
         </div>
       </div>
     );
@@ -189,6 +160,7 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
                           alt={est.name} 
                           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                           referrerPolicy="no-referrer"
+                          loading="lazy"
                         />
                       );
                     }

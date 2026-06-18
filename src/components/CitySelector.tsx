@@ -77,9 +77,7 @@ export const CitySelectorModal = ({ isOpen, onClose }: { isOpen: boolean; onClos
         .then(res => res.json())
         .then(city => {
           if (city && city.active) {
-            if (confirm(`Encontramos ${city.name} - ${city.uf}. Deseja selecionar esta cidade?`)) {
-              handleSelectCity(city);
-            }
+            handleSelectCity(city);
           }
           setIsLocating(false);
         })

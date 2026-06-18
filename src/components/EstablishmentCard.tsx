@@ -21,7 +21,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Heart
+  Heart,
+  Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock } from 'lucide-react';
@@ -32,6 +33,8 @@ import { useFavorites } from '../contexts/FavoritesContext';
 import { supabase } from '../lib/supabase';
 import { InteractionHistory } from './InteractionHistory';
 import { RegisterEstablishmentModal } from './RegisterEstablishmentModal';
+import { ClaimBusinessModal } from './ClaimBusinessModal';
+import { ShieldCheck } from 'lucide-react';
 import { getBusinessStatus } from '../utils/hours';
 import { getDirectionsUrl } from '../utils/maps';
 import { parseImageArray } from '../utils/imageCompression';
@@ -85,6 +88,30 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isFullDetailsOpen, setIsFullDetailsOpen] = useState(defaultOpen);
 
+  // States for Sprint 2.1 - Claim Business
+  const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
+  const [isClaimedState, setIsClaimedState] = useState((chunk.maps as any)?.is_claimed || !!(chunk.maps as any)?.owner_user_id);
+  const [claimPending, setClaimPending] = useState(false);
+
+  React.useEffect(() => {
+    setIsClaimedState((chunk.maps as any)?.is_claimed || !!(chunk.maps as any)?.owner_user_id);
+  }, [chunk]);
+
+  React.useEffect(() => {
+    const handler = (event: any) => {
+      if (event.detail && event.detail.id === chunk.maps?.id) {
+        if (event.detail.is_claimed !== undefined) {
+          setIsClaimedState(event.detail.is_claimed);
+        }
+        if (event.detail.claim_pending !== undefined) {
+          setClaimPending(event.detail.claim_pending);
+        }
+      }
+    };
+    window.addEventListener('vida360:establishment-updated', handler);
+    return () => window.removeEventListener('vida360:establishment-updated', handler);
+  }, [chunk.maps?.id]);
+
   const rawImages = chunk.maps?.images || [];
   const images = parseImageArray(rawImages).filter(
     (img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/'))
@@ -120,6 +147,15 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   const shareText = `Confira ${title} no VidaLocal: ${uri && uri !== '#' ? uri : `https://www.google.com/maps/search/?api=1&query=${location?.latitude || ''},${location?.longitude || ''}`}`;
 
   const statusInfo = getBusinessStatus(chunk.maps?.hours);
+
+  const rawWebsite = chunk.maps?.website;
+  let formattedWebsite = "";
+  if (rawWebsite) {
+    const trimmed = rawWebsite.trim();
+    if (trimmed) {
+      formattedWebsite = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    }
+  }
 
   React.useEffect(() => {
     const checkPermission = async () => {
@@ -173,6 +209,12 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
       
       if (response.ok) {
         setDeleteStatus('success');
+        
+        // Emit custom event so all other active views (like maps, lists, etc.) filter this out immediately
+        window.dispatchEvent(new CustomEvent('vida360:establishment-updated', { 
+          detail: { id: chunk.maps.id, deleted: true, status: 'deleted' } 
+        }));
+
         setTimeout(() => {
           setShowDeleteConfirm(false);
           if (onRefresh) onRefresh();
@@ -297,6 +339,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
               alt={`${title} - Foto ${currentImageIndex + 1}`}
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               referrerPolicy="no-referrer"
+              loading="lazy"
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-100 text-zinc-400 gap-2">
@@ -535,6 +578,19 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
         onSuccess={() => {
           if (onRefresh) onRefresh();
           else setTimeout(() => window.location.reload(), 2000);
+        }}
+      />
+
+      <ClaimBusinessModal 
+        isOpen={isClaimModalOpen}
+        onClose={() => setIsClaimModalOpen(false)}
+        establishment={{
+          id: chunk.maps?.id || '',
+          name: title,
+          address: chunk.maps?.address
+        }}
+        onSuccess={() => {
+          setClaimPending(true);
         }}
       />
 
@@ -804,6 +860,17 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                   >
                     <Phone className="w-5 h-5" />
                   </a>
+                  {formattedWebsite && (
+                    <a 
+                      href={formattedWebsite}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-transform active:scale-95 shadow-xl"
+                      title="Website"
+                    >
+                      <Globe className="w-5 h-5" />
+                    </a>
+                  )}
                 </div>
               </div>
 
@@ -869,6 +936,32 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                         )}
                       </div>
                     </div>
+
+                    {/* Website Row */}
+                    {formattedWebsite && (
+                      <div className="flex gap-4 sm:gap-6">
+                        <a 
+                          href={formattedWebsite}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-10 h-10 sm:w-14 sm:h-14 shrink-0 rounded-xl sm:rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 hover:border-emerald-100 transition-colors shadow-sm"
+                          title="Visitar Website"
+                        >
+                          <Globe className="w-5 h-5 sm:w-6 sm:h-6" />
+                        </a>
+                        <div className="min-w-0">
+                          <h4 className="text-[10px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest mb-1">Website</h4>
+                          <a 
+                            href={formattedWebsite}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs sm:text-sm font-bold text-emerald-600 hover:text-emerald-700 hover:underline leading-relaxed break-all block"
+                          >
+                            {rawWebsite}
+                          </a>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-6">
@@ -881,6 +974,41 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                         </p>
                       </div>
                     )}
+
+                    {/* Reivindicar Empresa Box */}
+                    <div className="p-5 bg-zinc-50 rounded-[28px] sm:rounded-[32px] border border-zinc-100 flex flex-col gap-2">
+                      <h4 className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest">Propriedade</h4>
+                      {isClaimedState ? (
+                        <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100/50">
+                          <ShieldCheck className="w-5 h-5 shrink-0 text-emerald-500" />
+                          <span className="text-xs font-bold">Empresa administrada pelo proprietário.</span>
+                        </div>
+                      ) : claimPending ? (
+                        <div className="flex items-center gap-2 text-amber-600 bg-amber-50/50 p-3 rounded-2xl border border-amber-100/50">
+                          <Clock className="w-5 h-5 shrink-0 text-amber-500 animate-pulse" />
+                          <span className="text-xs font-bold">Sua solicitação foi enviada para análise da equipe VidaLocal.</span>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => handleAction(() => {
+                            if (isClaimedState && !isAdmin) {
+                              toast.error("Este estabelecimento já possui proprietário ativo confirmado.");
+                            } else {
+                              setIsClaimModalOpen(true);
+                            }
+                          })}
+                          className="flex items-center justify-between gap-3 text-left w-full p-2 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-xl transition-all group"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-zinc-800">Esta empresa é sua?</p>
+                            <p className="text-[10px] text-zinc-500 font-medium">Reivindique o estabelecimento para assumir a gestão.</p>
+                          </div>
+                          <span className="shrink-0 px-3 py-1.5 bg-[#00897b]/10 text-[#00897b] font-black text-[10px] uppercase rounded-lg group-hover:bg-[#00897b] group-hover:text-white transition-all">
+                            Reivindicar
+                          </span>
+                        </button>
+                      )}
+                    </div>
 
                     {/* Actions (Desktop Only) */}
                     <div className="hidden sm:flex flex-col gap-2.5">
@@ -897,6 +1025,16 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                       >
                         <Navigation2 className="w-4 h-4 fill-white" /> Traçar Rota
                       </a>
+                      {formattedWebsite && (
+                        <a 
+                          href={formattedWebsite} 
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2.5 w-full py-4 bg-emerald-600 text-white rounded-[20px] font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-900/10 hover:scale-[1.01] transition-all"
+                        >
+                          <Globe className="w-4 h-4" /> Visitar Website
+                        </a>
+                      )}
                       <div className="grid grid-cols-2 gap-2.5">
                         <a 
                           href={whatsappUrl} 

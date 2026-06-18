@@ -41,8 +41,9 @@ export const UserProfileModal = ({ isOpen, onClose }: UserProfileModalProps) => 
     avatar_url: ''
   });
 
-  // Fetch all states on mount
+  // Fetch all states when modal is opened
   useEffect(() => {
+    if (!isOpen) return;
     const fetchStates = async () => {
       setLoadingStates(true);
       try {
@@ -56,10 +57,11 @@ export const UserProfileModal = ({ isOpen, onClose }: UserProfileModalProps) => 
       }
     };
     fetchStates();
-  }, []);
+  }, [isOpen]);
 
   // Fetch cities when state changes
   useEffect(() => {
+    if (!isOpen) return;
     const fetchCities = async () => {
       if (!formData.state) {
         setCities([]);
@@ -77,7 +79,7 @@ export const UserProfileModal = ({ isOpen, onClose }: UserProfileModalProps) => 
       }
     };
     fetchCities();
-  }, [formData.state]);
+  }, [formData.state, isOpen]);
 
   useEffect(() => {
     if (profile) {

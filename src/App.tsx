@@ -51,6 +51,7 @@ import { FeaturedEstablishments } from './components/FeaturedEstablishments';
 import { NearbyEstablishments } from './components/NearbyEstablishments';
 import { UserProfileModal } from './components/UserProfileModal';
 import { UserManagementModal } from './components/UserManagementModal';
+import { AdminClaimsModal } from './components/AdminClaimsModal';
 import { AllCategoriesModal } from './components/AllCategoriesModal';
 import { Logo } from './components/Logo';
 
@@ -225,6 +226,7 @@ export default function App() {
   const [isUserEstModalOpen, setIsUserEstModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
+  const [isAdminClaimsModalOpen, setIsAdminClaimsModalOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<{ intents: any[], types: string[] }>({ intents: [], types: [] });
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [view, setView] = useState<'home' | 'subcategories' | 'chat' | 'maintenance'>('home');
@@ -272,9 +274,14 @@ export default function App() {
       const updated = customEvent.detail;
       if (!updated || !updated.id) return;
 
-      // 1. Update categoryEstablishments
+      const isDeleted = updated.deleted || updated.status === 'deleted';
+
+      // 1. Update/Filter categoryEstablishments
       setCategoryEstablishments(prev => {
         if (!Array.isArray(prev)) return prev;
+        if (isDeleted) {
+          return prev.filter(est => est.id !== updated.id && (!updated.custom_source_mock_id || est.id !== updated.custom_source_mock_id));
+        }
         return prev.map(est => {
           if (est.id === updated.id || (updated.custom_source_mock_id && est.id === updated.custom_source_mock_id)) {
             return { ...est, ...updated, id: updated.id };
@@ -283,9 +290,12 @@ export default function App() {
         });
       });
 
-      // 2. Update allGroundingChunks
+      // 2. Update/Filter allGroundingChunks
       setAllGroundingChunks(prev => {
         if (!Array.isArray(prev)) return prev;
+        if (isDeleted) {
+          return prev.filter(chunk => chunk.maps?.id !== updated.id && (!updated.custom_source_mock_id || chunk.maps?.id !== updated.custom_source_mock_id));
+        }
         return prev.map(chunk => {
           if (chunk.maps?.id === updated.id || (updated.custom_source_mock_id && chunk.maps?.id === updated.custom_source_mock_id)) {
             return {
@@ -401,36 +411,51 @@ export default function App() {
     
     // Try to get real location
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const realLoc = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          };
-          setLocation(realLoc);
-          setIsRealLocation(true);
-          setLocationName("Minha Localização (GPS)");
-          setIsDetecting(false);
-          console.log("Real location detected:", realLoc);
-          if (onSuccess) onSuccess(realLoc);
-        },
-        (error) => {
-          console.warn("Error detecting real location, using city defaults:", error);
-          setIsDetecting(false);
-          // Use functional update to check current location state without dependency
-          setLocation(prev => {
-            if (!prev) {
-              setIsRealLocation(false);
-              setLocationName(`${currentCity.name} – ${currentCity.uf}`);
-              if (onSuccess) onSuccess(defaultLoc);
-              return defaultLoc;
-            }
-            if (onSuccess) onSuccess(prev);
-            return prev;
-          });
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
+      try {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const realLoc = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            };
+            setLocation(realLoc);
+            setIsRealLocation(true);
+            setLocationName("Minha Localização (GPS)");
+            setIsDetecting(false);
+            console.log("Real location detected:", realLoc);
+            if (onSuccess) onSuccess(realLoc);
+          },
+          (error) => {
+            console.warn("Error detecting real location, using city defaults:", error);
+            setIsDetecting(false);
+            // Use functional update to check current location state without dependency
+            setLocation(prev => {
+              if (!prev) {
+                setIsRealLocation(false);
+                setLocationName(`${currentCity.name} – ${currentCity.uf}`);
+                if (onSuccess) onSuccess(defaultLoc);
+                return defaultLoc;
+              }
+              if (onSuccess) onSuccess(prev);
+              return prev;
+            });
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      } catch (err) {
+        console.warn("Synchronous geolocation error in App.tsx detectLocation:", err);
+        setIsDetecting(false);
+        setLocation(prev => {
+          if (!prev) {
+            setIsRealLocation(false);
+            setLocationName(`${currentCity.name} – ${currentCity.uf}`);
+            if (onSuccess) onSuccess(defaultLoc);
+            return defaultLoc;
+          }
+          if (onSuccess) onSuccess(prev);
+          return prev;
+        });
+      }
     } else {
       setIsDetecting(false);
       setLocation(prev => {
@@ -536,6 +561,7 @@ export default function App() {
             uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
             phone: est.phone,
             whatsapp: est.whatsapp,
+            website: est.website,
             user_id: est.user_id,
             is_featured: est.is_featured,
             is_verified: est.is_verified,
@@ -772,6 +798,7 @@ export default function App() {
             uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
             phone: est.phone,
             whatsapp: est.whatsapp,
+            website: est.website,
             user_id: est.user_id,
             is_featured: est.is_featured,
             is_verified: est.is_verified,
@@ -895,7 +922,7 @@ export default function App() {
                   id: est.id, title: est.name, categoryId: est.category_id, subCategory: est.sub_category,
                   cityId: est.city_id, address: est.address, hours: est.hours, description: est.description,
                   uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
-                  phone: est.phone, whatsapp: est.whatsapp, user_id: est.user_id, is_featured: est.is_featured,
+                  phone: est.phone, whatsapp: est.whatsapp, website: est.website, user_id: est.user_id, is_featured: est.is_featured,
                   is_verified: est.is_verified, is_premium: est.is_premium, opening_hours: est.opening_hours,
                   images: est.images || [],
                   tags: est.tags,
@@ -1181,6 +1208,12 @@ export default function App() {
                           Usuários
                         </button>
                         <button 
+                          onClick={() => setIsAdminClaimsModalOpen(true)}
+                          className="text-[9px] sm:text-[10px] font-bold text-[#e65100] hover:underline transition-colors uppercase tracking-tight sm:tracking-widest"
+                        >
+                          Reivindicações
+                        </button>
+                        <button 
                           onClick={() => setView('maintenance')}
                           className="text-[9px] sm:text-[10px] font-bold text-[#f57c00] hover:underline transition-colors uppercase tracking-tight sm:tracking-widest"
                         >
@@ -1418,7 +1451,7 @@ export default function App() {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 10 }}
-                            className="absolute top-full left-0 right-0 mt-3 bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-zinc-200 overflow-hidden z-[60] p-6 text-left"
+                            className="absolute top-full left-0 right-0 mt-3 bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-zinc-200 overflow-y-auto max-h-[60vh] lg:max-h-[none] z-[60] p-4 sm:p-6 text-left"
                           >
                             {input.length < 2 ? (
                               <div>
@@ -1683,6 +1716,7 @@ export default function App() {
                               },
                               phone: est.phone,
                               whatsapp: est.whatsapp,
+                              website: est.website,
                               rating: est.rating,
                               address: est.address,
                               hours: est.hours,
@@ -1967,7 +2001,7 @@ export default function App() {
             <X className="w-5 h-5" />
           </button>
         )}
-        <div className="w-[400px] h-full">
+        <div className="w-full lg:w-[400px] h-full">
           <MapDisplay 
             chunks={allGroundingChunks} 
             userLocation={location} 
@@ -2022,6 +2056,10 @@ export default function App() {
       <UserManagementModal
         isOpen={isUserManagementModalOpen}
         onClose={() => setIsUserManagementModalOpen(false)}
+      />
+      <AdminClaimsModal
+        isOpen={isAdminClaimsModalOpen}
+        onClose={() => setIsAdminClaimsModalOpen(false)}
       />
       <AuthModal 
         isOpen={isAuthModalOpen} 

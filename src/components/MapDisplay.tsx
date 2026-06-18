@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigation, Compass, Loader2, X, MapPin } from 'lucide-react';
+import { Navigation, Compass, Loader2, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { GroundingChunk } from '../services/geminiService';
 import { EstablishmentCard } from './EstablishmentCard';
@@ -37,8 +37,8 @@ const calculateDistance = (lat1: any, lon1: any, lat2: any, lon2: any) => {
 
 export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, isRealLocation, isLoading, onClose, onRefresh }) => {
   const [selectedRadius, setSelectedRadius] = React.useState<number | null>(null);
-  const mapChunks = chunks.filter(c => c.maps);
-
+  const mapChunks = React.useMemo(() => chunks.filter(c => c.maps), [chunks]);
+  
   const radiusOptions = [
     { label: 'Todos', value: null },
     { label: '1 km', value: 1 },
