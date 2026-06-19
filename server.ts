@@ -46,6 +46,99 @@ const clearCache = () => {
   console.log('[Cache] API cache cleared due to data mutation');
 };
 
+async function safeSupabaseWrite(
+  supabase: any,
+  tableName: string,
+  operation: 'insert' | 'update',
+  payload: any,
+  idToUpdate?: string
+): Promise<{ data: any[] | null; error: any }> {
+  let currentPayload = Array.isArray(payload) 
+    ? payload.map((p: any) => ({ ...p }))
+    : { ...payload };
+
+  let attempts = 0;
+  const maxAttempts = 8;
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    try {
+      let result;
+      if (operation === 'insert') {
+        const toInsert = Array.isArray(currentPayload) ? currentPayload : [currentPayload];
+        result = await supabase.from(tableName).insert(toInsert).select();
+      } else {
+        result = await supabase.from(tableName).update(currentPayload).eq('id', idToUpdate).select();
+      }
+
+      if (!result.error) {
+        return { data: result.data, error: null };
+      }
+
+      const error = result.error;
+      const isMissingColumnError = 
+        error.code === '42703' || 
+        error.code === 'PGRST204' || 
+        (error.message && error.message.toLowerCase().includes('could not find') && error.message.toLowerCase().includes('column'));
+
+      if (isMissingColumnError && error.message) {
+        let match = error.message.match(/Could not find the '([^']+)' column/i);
+        if (!match) {
+          match = error.message.match(/column "([^"]+)" of relation/i);
+        }
+        if (!match) {
+          match = error.message.match(/column '([^']+)' does not exist/i);
+        }
+
+        if (match && match[1]) {
+          const columnName = match[1];
+          console.warn(`[SafeSupabaseWrite] Missing column detected: '${columnName}'. Removing from payload for retry ${attempts + 1}...`);
+          
+          if (Array.isArray(currentPayload)) {
+            currentPayload = currentPayload.map((p: any) => {
+              const newP = { ...p };
+              delete newP[columnName];
+              return newP;
+            });
+          } else {
+            delete currentPayload[columnName];
+          }
+          continue;
+        }
+
+        const knownSuspiciousColumns = ['featured_order', 'featured_end', 'featured_start', 'featured_type', 'owner_user_id', 'is_claimed'];
+        let removedAny = false;
+        
+        for (const col of knownSuspiciousColumns) {
+          if (error.message.includes(col)) {
+            console.warn(`[SafeSupabaseWrite] Known issue with establishments column (${col}). Removing from payload for retry.`);
+            if (Array.isArray(currentPayload)) {
+              currentPayload = currentPayload.map((p: any) => {
+                const newP = { ...p };
+                delete newP[col];
+                return newP;
+              });
+            } else {
+              delete currentPayload[col];
+            }
+            removedAny = true;
+          }
+        }
+        
+        if (removedAny) continue;
+      }
+
+      return { data: null, error };
+
+    } catch (err: any) {
+      console.error(`[SafeSupabaseWrite] Unexpected error on attempt ${attempts}:`, err);
+      return { data: null, error: { message: err.message, code: err.code || 'UNEXPECTED' } };
+    }
+  }
+
+  return { data: null, error: { message: "Maximum recovery retries reached.", code: "MAX_RETRIES" } };
+}
+
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[Process] Unhandled Rejection:', reason);
 });
@@ -2413,20 +2506,22 @@ app.put("/api/establishments/:id", mutationRateLimiter, async (req, res) => {
             short_id: generateShortId()
           };
           
-          const { data: insertedData, error: insertError } = await supabase
-            .from('establishments')
-            .insert([insertPayload])
-            .select();
+          const { data: insertedData, error: insertError } = await safeSupabaseWrite(
+            supabase,
+            'establishments',
+            'insert',
+            insertPayload
+          );
             
           if (insertError) {
             console.error(`[Supabase Error] Creating replacement for mock ${id}:`, insertError);
             return res.status(500).json({ error: "Erro ao salvar cópia do estabelecimento: " + insertError.message });
           }
           
-          console.log(`[API] Mock establishment ${id} converted to real database row: ${insertedData[0].id}`);
+          console.log(`[API] Mock establishment ${id} converted to real database row: ${insertedData?.[0]?.id}`);
           clearCache();
           return res.json({
-            ...insertedData[0],
+            ...insertedData?.[0],
             custom_source_mock_id: id
           });
         }
@@ -2437,11 +2532,13 @@ app.put("/api/establishments/:id", mutationRateLimiter, async (req, res) => {
 
       console.log(`[API] Record found! Real UUID: ${recordToUpdate.id}. Proceeding with update...`);
 
-      const { data, error } = await supabase
-        .from('establishments')
-        .update(updatePayload)
-        .eq('id', recordToUpdate.id)
-        .select();
+      const { data, error } = await safeSupabaseWrite(
+        supabase,
+        'establishments',
+        'update',
+        updatePayload,
+        recordToUpdate.id
+      );
 
       if (error) {
         console.error(`[Supabase Error] Updating establishment ${id}:`, JSON.stringify(error, null, 2));
@@ -3399,7 +3496,7 @@ app.post("/api/establishments/register", mutationRateLimiter, async (req, res) =
       // Ensure user_id is a valid UUID or null
       const userId = (registration.userId && registration.userId.length > 10) ? registration.userId : null;
       
-      const { data, error } = await supabase.from('establishments').insert([{
+      const insertPayload = {
         name: registration.name,
         short_id: sId,
         category_id: Number(registration.categoryId),
@@ -3429,7 +3526,14 @@ app.post("/api/establishments/register", mutationRateLimiter, async (req, res) =
         featured_type: registration.featured_type || 'normal',
         images: registration.images || [],
         tags: registration.tags || ''
-      }]).select();
+      };
+
+      const { data, error } = await safeSupabaseWrite(
+        supabase,
+        'establishments',
+        'insert',
+        insertPayload
+      );
 
       if (error) {
         console.error("[Supabase Error] Registering establishment:", JSON.stringify(error, null, 2));
