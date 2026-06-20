@@ -137,7 +137,18 @@ const calculateDistance = (lat1: number, lon1: number, lat2?: number, lon2?: num
 };
 
 export default function App() {
-  const { currentCity, setCity, isLoading: isCityLoading, skipLoading } = useCity();
+  const { 
+    currentCity, 
+    setCity, 
+    isLoading: isCityLoading, 
+    skipLoading,
+    selectionMode,
+    gpsCity,
+    gpsError,
+    isLocatingGps,
+    revertToGps,
+    locationPermissionStatus
+  } = useCity();
   const { 
     user, 
     profile, 
@@ -237,6 +248,26 @@ export default function App() {
 
   const [isMobile, setIsMobile] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast.success("Conexão reestabelecida! O VidaLocal está online.");
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.warning("Você está sem conexão com a internet. O VidaLocal passará a obter resultados do cache local offline.");
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -744,6 +775,26 @@ export default function App() {
   ) => {
     if (isLoading || !query.trim()) return;
 
+    // Offline mode support
+    if (!navigator.onLine) {
+      const cachedDataStr = localStorage.getItem('vida360_last_search_cache');
+      if (cachedDataStr) {
+        try {
+          const cachedData = JSON.parse(cachedDataStr);
+          toast.info(`Você está sem conexão com a internet. Exibindo os últimos resultados salvos para: "${cachedData.query}".`);
+          setMessages(cachedData.messages);
+          setAllGroundingChunks(cachedData.allGroundingChunks);
+          setView('chat');
+          setIsMapOpen(true);
+        } catch (parseErr) {
+          toast.error("Não foi possível carregar os resultados salvos no cache offline.");
+        }
+      } else {
+        toast.error("Você está sem conexão com a internet e não há buscas salvas anteriores.");
+      }
+      return;
+    }
+
     // Direct to chat view if not already there
     if (view !== 'chat') {
       setView('chat');
@@ -761,6 +812,7 @@ export default function App() {
     }
 
     try {
+      let cacheChunks: GroundingChunk[] = [];
       const searchParams = new URLSearchParams({
         q: query,
         city_id: String(currentCity.id)
@@ -816,6 +868,7 @@ export default function App() {
 
       // Show local results immediately in the map
       if (localChunks.length > 0) {
+        cacheChunks = [...localChunks];
         setAllGroundingChunks(prev => {
           // Prioritize newChunks that have data from our DB
           const filteredPrev = prev.filter(
@@ -940,6 +993,7 @@ export default function App() {
                   return 0;
                 });
               }
+              cacheChunks = nearbyChunks.slice(0, 5);
               setAllGroundingChunks(nearbyChunks.slice(0, 5));
               setIsMapOpen(true);
               response.text = `Puxa, não encontrei estabelecimentos para **"${query}"** no momento. \n\nComo nosso assistente de IA também está temporariamente indisponível, utilizei seu GPS para encontrar os **locais mais próximos de você** em ${currentCity.name}.`;
@@ -995,6 +1049,15 @@ export default function App() {
       });
       
       if (chunksWithDescriptions.length > 0) {
+        // Merge chunksWithDescriptions with localChunks so we have all of them
+        const mergedCache = [...chunksWithDescriptions];
+        localChunks.forEach(lc => {
+          if (!mergedCache.some(mc => mc.maps?.id === lc.maps?.id || isSimilarName(mc.maps?.title, lc.maps?.title))) {
+            mergedCache.push(lc);
+          }
+        });
+        cacheChunks = mergedCache;
+
         setAllGroundingChunks(prev => {
           const newChunks = chunksWithDescriptions.filter(nc => !prev.some(pc => isSimilarName(pc.maps?.title, nc.maps?.title)));
           let combined = [...newChunks, ...prev];
@@ -1028,8 +1091,45 @@ export default function App() {
         });
         setIsMapOpen(true);
       }
+
+      // Save last search to LocalStorage Cache
+      try {
+        const finalCachedChunks = cacheChunks.length > 0 ? cacheChunks : (localChunks.length > 0 ? localChunks : []);
+        const cacheObj = {
+          query,
+          messages: clearPrevious 
+            ? [{ role: 'user', text: query }, response]
+            : [...messages, { role: 'user', text: query }, response],
+          allGroundingChunks: finalCachedChunks,
+          timestamp: Date.now(),
+          cityId: currentCity.id,
+          cityName: currentCity.name,
+          cityUf: currentCity.uf
+        };
+        localStorage.setItem('vida360_last_search_cache', JSON.stringify(cacheObj));
+        console.log(`[Cache] Successfully cached last search "${query}" with ${finalCachedChunks.length} chunks.`);
+      } catch (cacheErr) {
+        console.warn("[Cache] Failed to save search to LocalStorage:", cacheErr);
+      }
+
     } catch (err) {
       console.error("Search error:", err);
+      
+      const cachedDataStr = localStorage.getItem('vida360_last_search_cache');
+      if (cachedDataStr) {
+        try {
+          const cachedData = JSON.parse(cachedDataStr);
+          toast.info(`Houve uma falha na conexão. Exibindo resultados offline salvos de sua última busca: "${cachedData.query}".`);
+          setMessages(cachedData.messages);
+          setAllGroundingChunks(cachedData.allGroundingChunks);
+          setView('chat');
+          setIsMapOpen(true);
+        } catch (parseErr) {
+          toast.error("Não foi possível carregar os resultados offline salvos.");
+        }
+      } else {
+        toast.error("Não foi possível realizar a busca e não há resultados salvos em cache.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -1382,6 +1482,116 @@ export default function App() {
                         )}
                       </button>
                     </div>
+
+                    {/* Smart Current City Detection Display (Sprint 2.3) */}
+                    <div className="mb-6 flex flex-col items-center justify-center">
+                      {isLocatingGps ? (
+                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 text-xs font-bold rounded-2xl animate-pulse">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                          Obtendo localização pelo GPS...
+                        </div>
+                      ) : gpsError ? (
+                        <div className="inline-block p-4 bg-rose-50 border border-rose-100 rounded-2xl max-w-md mx-auto shadow-xs text-center">
+                          <div className="flex items-center gap-2 text-rose-800 text-xs font-extrabold uppercase tracking-wider justify-center">
+                            ⚠️ Acesso à localização indisponível
+                          </div>
+                          <p className="text-rose-700 text-xs mt-1.5 leading-relaxed font-semibold">
+                            {gpsError}
+                          </p>
+                          <div className="mt-3 flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                const btn = document.querySelector('[data-selector-trigger="true"]') as HTMLButtonElement;
+                                if (btn) btn.click();
+                              }}
+                              className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-full transition-all shadow-xs cursor-pointer"
+                            >
+                              Escolher Manualmente
+                            </button>
+                            <button
+                              onClick={revertToGps}
+                              disabled={isLocatingGps}
+                              className="px-4 py-1.5 bg-white hover:bg-zinc-50 text-zinc-700 font-bold text-xs border border-zinc-200 rounded-full transition-all flex items-center gap-1 shadow-xs cursor-pointer"
+                            >
+                              <RefreshCw className="w-3 h-3 text-zinc-500" />
+                              Tentar GPS
+                            </button>
+                          </div>
+                        </div>
+                      ) : selectionMode === 'gps' ? (
+                        <div className="inline-flex flex-col items-center justify-center px-6 py-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl shadow-xs select-none">
+                          <div className="flex items-center gap-1.5 text-emerald-800 text-xs font-bold uppercase tracking-wider">
+                            <span className="animate-pulse flex h-1.5 w-1.5 relative">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                            </span>
+                            📍 Você está em
+                          </div>
+                          <div className="text-zinc-900 font-extrabold text-xl sm:text-2xl mt-1 tracking-tight">
+                            {currentCity.name} - {currentCity.uf}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="inline-flex flex-col items-center justify-center px-6 py-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl shadow-xs lg:hover:shadow-md transition-all select-none">
+                          <div className="flex items-center gap-1.5 text-amber-800 text-xs font-bold uppercase tracking-wider">
+                            📍 Você está em {gpsCity ? `(GPS: ${gpsCity.name})` : ''}
+                          </div>
+                          <div className="text-zinc-900 font-extrabold text-xl sm:text-2xl mt-1 tracking-tight">
+                            {currentCity.name} - {currentCity.uf}
+                          </div>
+                          <button
+                            onClick={revertToGps}
+                            disabled={isLocatingGps}
+                            className="mt-2.5 px-3 py-1 bg-white hover:bg-zinc-50 text-emerald-700 hover:text-emerald-800 font-bold text-xs border border-zinc-200 rounded-full transition-all flex items-center gap-1 shadow-xs shrink-0 cursor-pointer"
+                          >
+                            <Compass className="w-3 h-3 text-emerald-600 animate-pulse" />
+                            Voltar para minha localização
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Offline Banner & Cache Restoration (Sprint 2.4 Cache) */}
+                    {!isOnline && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-8 p-4 bg-zinc-800 text-white rounded-2xl max-w-md mx-auto shadow-sm select-none border border-zinc-700 text-center"
+                      >
+                        <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider justify-center">
+                          <Globe className="w-4 h-4 text-amber-400 animate-pulse" />
+                          Modo Offline Ativo
+                        </div>
+                        <p className="text-zinc-300 text-xs mt-1.5 leading-relaxed font-semibold">
+                          Você está desconectado da internet. É possível visualizar os locais salvos em cache da sua última busca realizada.
+                        </p>
+                        {localStorage.getItem('vida360_last_search_cache') && (
+                          <div className="mt-3 flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                const cachedDataStr = localStorage.getItem('vida360_last_search_cache');
+                                if (cachedDataStr) {
+                                  try {
+                                    const cachedData = JSON.parse(cachedDataStr);
+                                    setMessages(cachedData.messages);
+                                    setAllGroundingChunks(cachedData.allGroundingChunks);
+                                    setView('chat');
+                                    setIsMapOpen(true);
+                                    toast.info(`Busca offline restaurada: "${cachedData.query}"`);
+                                  } catch (e) {
+                                    toast.error("Erro ao carregar cache.");
+                                  }
+                                }
+                              }}
+                              className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-zinc-900 font-extrabold text-xs rounded-full transition-all flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
+                            >
+                              <Search className="w-3.5 h-3.5 text-zinc-900" />
+                              Ver Última Busca ("{JSON.parse(localStorage.getItem('vida360_last_search_cache') || '{}').query || ''}")
+                            </button>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
 
                     {/* Logo Branded Display */}
                     <Logo 

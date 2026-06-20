@@ -1188,13 +1188,78 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
   const { lat, lng } = req.body;
   
   try {
+    // 1. Try to get real town/city name and state UF via reverseGeocode (Nominatim)
+    const geocoded = await reverseGeocode(lat, lng);
+    
+    if (geocoded && geocoded.cityName && geocoded.stateUf) {
+      const { cityName, stateUf } = geocoded;
+      const cleanCityNameInput = cityName.trim().toLowerCase();
+      const cleanStateUfInput = stateUf.trim().toUpperCase();
+      console.log(`[ResolveByGeo] Reverse geocoded location to: ${cityName} - ${stateUf}`);
+
+      const supabase = getSupabaseAdmin();
+      if (supabase) {
+        try {
+          // Query active cities with joining state uf
+          const { data, error } = await supabase
+            .from('cities')
+            .select('*, states!inner(uf)')
+            .eq('active', true);
+
+          if (!error && data && data.length > 0) {
+            // Find EXACT or fuzzy match by name
+            const found = data.find(c => {
+              const dbCityName = String(c.name || '').trim().toLowerCase();
+              const dbStateUf = String(c.states?.uf || c.states?.[0]?.uf || '').trim().toUpperCase();
+              
+              const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ç/g, "c").replace(/-/g, " ");
+              
+              const matchName = normalize(dbCityName) === normalize(cleanCityNameInput) || 
+                                normalize(dbCityName).includes(normalize(cleanCityNameInput)) || 
+                                normalize(cleanCityNameInput).includes(normalize(dbCityName));
+              
+              return matchName && dbStateUf === cleanStateUfInput;
+            });
+
+            if (found) {
+              console.log(`[ResolveByGeo] Matched database city: ${found.name} (${found.id})`);
+              return res.json({ ...found, uf: found.states?.uf || found.states?.[0]?.uf || "" });
+            }
+          }
+        } catch (err: any) {
+          console.warn("[ResolveByGeo] DB error querying matching city names:", err);
+        }
+      }
+
+      // Check against fallback local mock data
+      const localMatch = cities.find(c => {
+        const localCityName = c.name.trim().toLowerCase();
+        const localState = states.find(s => s.id === c.state_id);
+        const localStateUf = localState ? localState.uf.trim().toUpperCase() : "";
+
+        const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ç/g, "c").replace(/-/g, " ");
+
+        const matchName = normalize(localCityName) === normalize(cleanCityNameInput) || 
+                          normalize(localCityName).includes(normalize(cleanCityNameInput)) || 
+                          normalize(cleanCityNameInput).includes(normalize(localCityName));
+
+        return matchName && localStateUf === cleanStateUfInput && c.active;
+      });
+
+      if (localMatch) {
+        const localState = states.find(s => s.id === localMatch.state_id);
+        console.log(`[ResolveByGeo] Matched local mock city: ${localMatch.name} (${localMatch.id})`);
+        return res.json({ ...localMatch, uf: localState?.uf || "" });
+      }
+    }
+
+    // 2. Fallback to Pythagoras distance-based nearest active city (either from DB or Local Mock)
+    console.log(`[ResolveByGeo] Exact map reverse-geocoded match not found or API failed. Falling back to nearest active city distance-based.`);
     const supabase = getSupabaseAdmin();
     if (supabase) {
       try {
         const { data, error } = await supabase.from('cities').select('*, states(uf)').eq('active', true);
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
+        if (!error && data && data.length > 0) {
           let nearest = data[0];
           let minDist = Infinity;
           data.forEach(c => {
@@ -1204,7 +1269,7 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
           return res.json({ ...nearest, uf: nearest.states?.uf || nearest.states?.[0]?.uf || "" });
         }
       } catch (err: any) {
-        console.warn("[Supabase] Fallback to mock cities due to fetch error in resolve-by-geo");
+        console.warn("[ResolveByGeo] Fallback to mock cities due to DB error in resolve-by-geo");
       }
     }
 
@@ -1216,6 +1281,7 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
     });
     const state = states.find(s => s.id === nearest.state_id);
     res.json({ ...nearest, uf: state?.uf });
+
   } catch (error) {
     console.error("Error resolving city by geo:", error);
     res.json(cities[0]);
@@ -3425,13 +3491,14 @@ app.post("/api/establishments/register", mutationRateLimiter, async (req, res) =
       let targetCityId = Number(registration.cityId);
       let targetStateId: number | null = null;
 
-      // TRIGGER LÓGICA: Se houver coordenadas geográficas específicas (latitude e longitude),
-      // fazemos o Geocoding reverso para garantir o vínculo correto da cidade (especialmente se for nova).
+      // TRIGGER LÓGICA: Se houver coordenadas geográficas específicas (latitude e longitude)
+      // e nenhuma cidade válida foi fornecida, fazemos o Geocoding reverso para vincular a cidade.
+      // Se a cityId já foi fornecida manualmente, nós a respeitamos para evitar alterar a cidade cadastrada.
       const lat = registration.latitude;
       const lng = registration.longitude;
       const hasCoords = (lat && lng);
 
-      if (hasCoords) {
+      if (hasCoords && (!targetCityId || isNaN(targetCityId) || targetCityId <= 0)) {
         try {
           console.log(`[API Register] Geocoding coordinates: ${lat}, ${lng}...`);
           const geo = await reverseGeocode(lat, lng);
@@ -3446,7 +3513,7 @@ app.post("/api/establishments/register", mutationRateLimiter, async (req, res) =
         } catch (geoErr) {
           console.error("[API Register] Auto-geocoding resolution failed:", geoErr);
         }
-      } else if ((!targetCityId || targetCityId <= 0) && (registration.cityLat && registration.cityLng)) {
+      } else if ((!targetCityId || isNaN(targetCityId) || targetCityId <= 0) && (registration.cityLat && registration.cityLng)) {
         // Fallback para coordenadas da cidade se fornecidas
         try {
           console.log(`[API Register] Missing city_id but city center coordinates exist. Geocoding city center...`);

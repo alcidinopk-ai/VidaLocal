@@ -10,7 +10,7 @@ interface State {
 }
 
 export const CitySelectorModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
-  const { currentCity, setCity } = useCity();
+  const { currentCity, setCity, revertToGps, isLocatingGps } = useCity();
   const [tab, setTab] = useState<'search' | 'browse'>('search');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<City[]>([]);
@@ -63,28 +63,16 @@ export const CitySelectorModal = ({ isOpen, onClose }: { isOpen: boolean; onClos
     }
   };
 
-  const handleUseLocation = () => {
-    if (!navigator.geolocation) return;
-    
+  const handleUseLocation = async () => {
     setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        fetch('/api/cities/resolve-by-geo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-        })
-        .then(res => res.json())
-        .then(city => {
-          if (city && city.active) {
-            handleSelectCity(city);
-          }
-          setIsLocating(false);
-        })
-        .catch(() => setIsLocating(false));
-      },
-      () => setIsLocating(false)
-    );
+    try {
+      await revertToGps();
+      onClose();
+    } catch (e) {
+      console.error("[CitySelector] Error using GPS location link:", e);
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -230,6 +218,7 @@ export const CitySelectorButton = () => {
   return (
     <>
       <button 
+        data-selector-trigger="true"
         onClick={() => setIsModalOpen(true)}
         className="px-4 py-2 bg-white/80 hover:bg-white border border-zinc-200/80 backdrop-blur-md rounded-full text-zinc-800 text-xs font-bold flex items-center gap-2 transition-all shadow-xs cursor-pointer"
       >
