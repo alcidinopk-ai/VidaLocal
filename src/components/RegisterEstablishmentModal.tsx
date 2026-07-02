@@ -138,12 +138,14 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
 
   const [lastInitializedId, setLastInitializedId] = useState<string | null>(null);
   const [wasOpen, setWasOpen] = useState(false);
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
 
   React.useEffect(() => {
     setImageErrors({});
     if (!isOpen) {
       setLastInitializedId(null);
       setWasOpen(false);
+      setHasRestoredDraft(false);
       return;
     }
 
@@ -259,35 +261,91 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
           setOpeningHours(newHours);
         }
       } else {
-        setFormData({
-          name: '',
-          categoryId: '',
-          subCategory: [],
-          address: '',
-          phone: '',
-          whatsapp: '',
-          website: '',
-          hours: '',
-          is_open_24_hours: false,
-          description: '',
-          latitude: null,
-          longitude: null,
-          mapsLink: '',
-          plusCode: '',
-          is_featured: false,
-          is_verified: false,
-          is_premium: false,
-          featured_order: '',
-          featured_start: '',
-          featured_end: '',
-          featured_type: 'normal',
-          is_active: true,
-          images: [],
-          tags: ''
-        });
+        let restored = false;
+        try {
+          const draftStr = localStorage.getItem('vida360_register_draft');
+          if (draftStr) {
+            const draft = JSON.parse(draftStr);
+            if (draft && draft.formData && (draft.formData.name || draft.formData.address || draft.formData.description || draft.formData.phone || draft.formData.whatsapp)) {
+              setFormData(draft.formData);
+              if (draft.openingHours && Array.isArray(draft.openingHours)) {
+                setOpeningHours(draft.openingHours);
+              }
+              setHasRestoredDraft(true);
+              restored = true;
+            }
+          }
+        } catch (e) {
+          console.error("Erro ao restaurar rascunho:", e);
+        }
+
+        if (!restored) {
+          setFormData({
+            name: '',
+            categoryId: '',
+            subCategory: [],
+            address: '',
+            phone: '',
+            whatsapp: '',
+            website: '',
+            hours: '',
+            is_open_24_hours: false,
+            description: '',
+            latitude: null,
+            longitude: null,
+            mapsLink: '',
+            plusCode: '',
+            is_featured: false,
+            is_verified: false,
+            is_premium: false,
+            featured_order: '',
+            featured_start: '',
+            featured_end: '',
+            featured_type: 'normal',
+            is_active: true,
+            images: [],
+            tags: ''
+          });
+          setOpeningHours([
+            { day: 0, label: 'Domingo', slots: [{ open: '08:00', close: '12:00' }], closed: true },
+            { day: 1, label: 'Segunda-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+            { day: 2, label: 'Terça-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+            { day: 3, label: 'Quarta-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+            { day: 4, label: 'Quinta-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+            { day: 5, label: 'Sexta-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+            { day: 6, label: 'Sábado', slots: [{ open: '08:00', close: '12:00' }], closed: false },
+          ]);
+        }
       }
     }
   }, [initialData, isOpen, wasOpen, lastInitializedId, currentCity]);
+
+  React.useEffect(() => {
+    if (isOpen && !initialData) {
+      const hasContent = Boolean(
+        formData.name ||
+        formData.address ||
+        formData.phone ||
+        formData.whatsapp ||
+        formData.description ||
+        formData.categoryId ||
+        (formData.images && formData.images.length > 0)
+      );
+      if (hasContent) {
+        try {
+          localStorage.setItem('vida360_register_draft', JSON.stringify({
+            formData,
+            openingHours,
+            timestamp: Date.now()
+          }));
+        } catch (e) {}
+      } else {
+        try {
+          localStorage.removeItem('vida360_register_draft');
+        } catch (e) {}
+      }
+    }
+  }, [formData, openingHours, isOpen, initialData]);
 
   const [isLocating, setIsLocating] = useState(false);
   const [isSuggestingHours, setIsSuggestingHours] = useState(false);
@@ -726,6 +784,10 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         }
 
         if (onSuccess) onSuccess();
+        try {
+          localStorage.removeItem('vida360_register_draft');
+        } catch (e) {}
+        setHasRestoredDraft(false);
         // Inform user about where it was saved
         if (result.supabase === false) {
           console.warn("[Register] Saved locally only (Supabase not configured)");
@@ -822,6 +884,61 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-8">
+              {!initialData && hasRestoredDraft && (
+                <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-teal-800 text-xs sm:text-sm font-medium mb-6">
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="w-4 h-4 text-teal-600 shrink-0" />
+                    <span>Rascunho anterior restaurado automaticamente! Continue de onde parou.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        localStorage.removeItem('vida360_register_draft');
+                      } catch (e) {}
+                      setHasRestoredDraft(false);
+                      setFormData({
+                        name: '',
+                        categoryId: '',
+                        subCategory: [],
+                        address: '',
+                        phone: '',
+                        whatsapp: '',
+                        website: '',
+                        hours: '',
+                        is_open_24_hours: false,
+                        description: '',
+                        latitude: null,
+                        longitude: null,
+                        mapsLink: '',
+                        plusCode: '',
+                        is_featured: false,
+                        is_verified: false,
+                        is_premium: false,
+                        featured_order: '',
+                        featured_start: '',
+                        featured_end: '',
+                        featured_type: 'normal',
+                        is_active: true,
+                        images: [],
+                        tags: ''
+                      });
+                      setOpeningHours([
+                        { day: 0, label: 'Domingo', slots: [{ open: '08:00', close: '12:00' }], closed: true },
+                        { day: 1, label: 'Segunda-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+                        { day: 2, label: 'Terça-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+                        { day: 3, label: 'Quarta-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+                        { day: 4, label: 'Quinta-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+                        { day: 5, label: 'Sexta-feira', slots: [{ open: '08:00', close: '18:00' }], closed: false },
+                        { day: 6, label: 'Sábado', slots: [{ open: '08:00', close: '12:00' }], closed: false },
+                      ]);
+                    }}
+                    className="px-3 py-1.5 bg-white hover:bg-teal-100/50 text-teal-700 font-bold rounded-xl border border-teal-200 transition-all shrink-0 cursor-pointer shadow-xs"
+                  >
+                    Descartar e começar do zero
+                  </button>
+                </div>
+              )}
               {error && (
                 <div className="p-6 bg-red-50/50 border border-red-100 rounded-3xl flex items-center gap-6 text-red-600 mb-8">
                   <div className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center shrink-0 shadow-lg shadow-red-200">

@@ -53,6 +53,7 @@ import { UserProfileModal } from './components/UserProfileModal';
 import { UserManagementModal } from './components/UserManagementModal';
 import { AdminClaimsModal } from './components/AdminClaimsModal';
 import { AllCategoriesModal } from './components/AllCategoriesModal';
+import { ResetPasswordModal } from './components/ResetPasswordModal';
 import { Logo } from './components/Logo';
 
 import { MaintenanceTools } from './components/MaintenanceTools';
@@ -144,7 +145,6 @@ export default function App() {
     skipLoading,
     selectionMode,
     gpsCity,
-    gpsError,
     isLocatingGps,
     revertToGps,
     locationPermissionStatus
@@ -157,7 +157,9 @@ export default function App() {
     isAuthModalOpen, 
     setIsAuthModalOpen,
     isRegisterUserModalOpen,
-    setIsRegisterUserModalOpen
+    setIsRegisterUserModalOpen,
+    isResetPasswordModalOpen,
+    setIsResetPasswordModalOpen
   } = useAuth();
   const [showSkip, setShowSkip] = useState(false);
   const { toast } = useToast();
@@ -342,6 +344,8 @@ export default function App() {
                 },
                 phone: updated.phone,
                 whatsapp: updated.whatsapp,
+                website: updated.website,
+                description: updated.description || chunk.maps?.description,
                 rating: updated.rating || chunk.maps?.rating || 5.0,
                 address: updated.address,
                 hours: updated.hours,
@@ -1025,7 +1029,7 @@ export default function App() {
             ...enrichedMaps, id: localMatch.id, categoryId: localMatch.category_id, subCategory: localMatch.sub_category,
             address: localMatch.address || enrichedMaps.address, hours: localMatch.hours || enrichedMaps.hours,
             description: localMatch.description || enrichedMaps.description, phone: localMatch.phone || enrichedMaps.phone,
-            whatsapp: localMatch.whatsapp || enrichedMaps.whatsapp, is_featured: localMatch.is_featured,
+            whatsapp: localMatch.whatsapp || enrichedMaps.whatsapp, website: localMatch.website || enrichedMaps.website, is_featured: localMatch.is_featured,
             is_verified: localMatch.is_verified, is_premium: localMatch.is_premium, plusCode: localMatch.plus_code || enrichedMaps.plusCode,
             images: localMatch.images || enrichedMaps.images || [],
             location: {
@@ -1489,34 +1493,6 @@ export default function App() {
                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 text-xs font-bold rounded-2xl animate-pulse">
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
                           Obtendo localização pelo GPS...
-                        </div>
-                      ) : gpsError ? (
-                        <div className="inline-block p-4 bg-rose-50 border border-rose-100 rounded-2xl max-w-md mx-auto shadow-xs text-center">
-                          <div className="flex items-center gap-2 text-rose-800 text-xs font-extrabold uppercase tracking-wider justify-center">
-                            ⚠️ Acesso à localização indisponível
-                          </div>
-                          <p className="text-rose-700 text-xs mt-1.5 leading-relaxed font-semibold">
-                            {gpsError}
-                          </p>
-                          <div className="mt-3 flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => {
-                                const btn = document.querySelector('[data-selector-trigger="true"]') as HTMLButtonElement;
-                                if (btn) btn.click();
-                              }}
-                              className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-full transition-all shadow-xs cursor-pointer"
-                            >
-                              Escolher Manualmente
-                            </button>
-                            <button
-                              onClick={revertToGps}
-                              disabled={isLocatingGps}
-                              className="px-4 py-1.5 bg-white hover:bg-zinc-50 text-zinc-700 font-bold text-xs border border-zinc-200 rounded-full transition-all flex items-center gap-1 shadow-xs cursor-pointer"
-                            >
-                              <RefreshCw className="w-3 h-3 text-zinc-500" />
-                              Tentar GPS
-                            </button>
-                          </div>
                         </div>
                       ) : selectionMode === 'gps' ? (
                         <div className="inline-flex flex-col items-center justify-center px-6 py-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl shadow-xs select-none">
@@ -2287,6 +2263,10 @@ export default function App() {
         isOpen={isAllCategoriesModalOpen}
         onClose={() => setIsAllCategoriesModalOpen(false)}
         onSelectCategory={handleCategoryClick}
+      />
+      <ResetPasswordModal
+        isOpen={isResetPasswordModalOpen}
+        onClose={() => setIsResetPasswordModalOpen(false)}
       />
     </div>
   );

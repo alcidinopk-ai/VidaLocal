@@ -24,6 +24,8 @@ interface AuthContextType {
   setIsAuthModalOpen: (isOpen: boolean) => void;
   isRegisterUserModalOpen: boolean;
   setIsRegisterUserModalOpen: (isOpen: boolean) => void;
+  isResetPasswordModalOpen: boolean;
+  setIsResetPasswordModalOpen: (isOpen: boolean) => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -37,6 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isRegisterUserModalOpen, setIsRegisterUserModalOpen] = useState(false);
+  const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
 
   const fetchProfile = async (userId: string, currentUser?: User | null) => {
     console.log('[AuthContext] Fetching profile for:', userId);
@@ -141,8 +144,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (currentUser) {
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'USER_UPDATED' && !profile)) {
-          setIsLoading(true); // Re-show loading if we need to fetch profile
           fetchProfile(currentUser.id, currentUser).finally(() => setIsLoading(false));
+        }
+        if (event === 'PASSWORD_RECOVERY') {
+          console.log('[AuthContext] PASSWORD_RECOVERY event captured!');
+          setIsResetPasswordModalOpen(true);
         }
       } else {
         setProfile(null);
@@ -151,7 +157,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Google OAuth popup message listener
+    const handleOAuthMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'SUPABASE_OAUTH_SUCCESS') {
+        console.log('[AuthContext] Popup notify success. Checking session...');
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user) {
+            setUser(session.user);
+            fetchProfile(session.user.id, session.user);
+          }
+        });
+      }
+    };
+    window.addEventListener('message', handleOAuthMessage);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('message', handleOAuthMessage);
+    };
   }, []);
 
   const signOut = async () => {
@@ -170,6 +193,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsAuthModalOpen,
       isRegisterUserModalOpen,
       setIsRegisterUserModalOpen,
+      isResetPasswordModalOpen,
+      setIsResetPasswordModalOpen,
       signOut, 
       refreshProfile 
     }}>
