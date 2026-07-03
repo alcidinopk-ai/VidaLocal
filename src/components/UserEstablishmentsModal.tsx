@@ -13,7 +13,8 @@ import {
   Trash2,
   Heart,
   ExternalLink,
-  Navigation2
+  Navigation2,
+  Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
@@ -36,6 +37,9 @@ interface Establishment {
   sub_category: string;
   created_at: string;
   images?: any;
+  website?: string;
+  phone?: string;
+  whatsapp?: string;
 }
 
 export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = ({ isOpen, onClose }) => {
@@ -292,18 +296,32 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
                           )}
                         </div>
 
-                        {maps.uri && (
-                          <div className="flex items-center gap-2 mt-2 pt-0.5">
-                            <a 
-                              href={maps.uri}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-[9px] font-black text-[#00897b] hover:underline"
-                            >
-                              <Navigation2 className="w-2.5 h-2.5 fill-current" />
-                              Ver no Google Maps
-                              <ExternalLink className="w-2.5 h-2.5 ml-0.5" />
-                            </a>
+                        {(maps.uri || maps.website) && (
+                          <div className="flex items-center flex-wrap gap-3 mt-2 pt-0.5">
+                            {maps.uri && (
+                              <a 
+                                href={maps.uri}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-[9px] font-black text-[#00897b] hover:underline"
+                              >
+                                <Navigation2 className="w-2.5 h-2.5 fill-current" />
+                                Ver no Google Maps
+                                <ExternalLink className="w-2.5 h-2.5 ml-0.5" />
+                              </a>
+                            )}
+                            {maps.website && (
+                              <a 
+                                href={maps.website.startsWith('http') ? maps.website : `https://${maps.website}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-[9px] font-black text-emerald-600 hover:underline"
+                              >
+                                <Globe className="w-2.5 h-2.5" />
+                                Visitar Website
+                                <ExternalLink className="w-2.5 h-2.5 ml-0.5" />
+                              </a>
+                            )}
                           </div>
                         )}
                       </div>
@@ -376,6 +394,20 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
                               <Calendar className="w-3 h-3 text-zinc-400" />
                               <span>Sugerido em: {new Date(est.created_at).toLocaleDateString('pt-BR')}</span>
                             </div>
+                            {est.website && (
+                              <div className="flex items-center gap-2 mt-1 text-[10px] text-emerald-600 font-bold">
+                                <Globe className="w-3 h-3" />
+                                <a 
+                                  href={est.website.startsWith('http') ? est.website : `https://${est.website}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="hover:underline flex items-center gap-1 truncate max-w-[200px]"
+                                >
+                                  {est.website}
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              </div>
+                            )}
                           </div>
                           
                           <div className="flex flex-col items-end gap-2 shrink-0">

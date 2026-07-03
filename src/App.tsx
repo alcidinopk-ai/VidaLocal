@@ -59,6 +59,7 @@ import { Logo } from './components/Logo';
 import { MaintenanceTools } from './components/MaintenanceTools';
 import { ExportTools } from './components/ExportTools';
 import { CATEGORIES, SUB_CATEGORIES } from './constants/taxonomy';
+import { calculateHaversineDistance, formatDistance, sortByDistanceAsc, auditEstablishmentsCoordinates, auditUserLocationLog } from './utils/geo';
 
 const PREDEFINED_LOCATIONS = [
   { name: 'Gurupi Center', lat: -11.7298, lng: -49.0678 },
@@ -121,21 +122,7 @@ const isSimilarName = (name1?: string, name2?: string): boolean => {
   return false;
 };
 
-const calculateDistance = (lat1: number, lon1: number, lat2?: number, lon2?: number) => {
-  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) {
-    return Infinity;
-  }
-  const R = 6371; // Radius of the earth in km
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const d = R * c; // Distance in km
-  return d;
-};
+const calculateDistance = calculateHaversineDistance;
 
 export default function App() {
   const { 
@@ -564,6 +551,35 @@ export default function App() {
 
   const [initialFetchError, setInitialFetchError] = useState<string | null>(null);
 
+  // Requisito 7: Atualização Automática contínua do GPS do usuário (>= 100m)
+  const lastProcessedGpsRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const newLat = position.coords.latitude;
+        const newLng = position.coords.longitude;
+        const last = lastProcessedGpsRef.current;
+        
+        // Atualiza se mudou ~100m (0.1 km) ou se for a primeira leitura de watchPosition
+        if (!last || calculateHaversineDistance(last.latitude, last.longitude, newLat, newLng) >= 0.1) {
+          lastProcessedGpsRef.current = { latitude: newLat, longitude: newLng };
+          const realLoc = { latitude: newLat, longitude: newLng };
+          setLocation(realLoc);
+          setIsRealLocation(true);
+          setLocationName("Minha Localização (GPS)");
+          auditUserLocationLog(newLat, newLng, position.coords.accuracy, currentCity.name);
+          window.dispatchEvent(new CustomEvent('vida360:location-changed', { detail: realLoc }));
+        }
+      },
+      (err) => console.warn("GPS Watch error:", err),
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
+    
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [currentCity.name]);
+
   useEffect(() => {
     detectLocation();
     
@@ -644,7 +660,7 @@ export default function App() {
           if (location) {
             const distA = calculateDistance(location.latitude, location.longitude, a.latitude, a.longitude);
             const distB = calculateDistance(location.latitude, location.longitude, b.latitude, b.longitude);
-            if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+            if (isFinite(distA) && isFinite(distB)) return distA - distB;
             if (isFinite(distA) && !isFinite(distB)) return -1;
             if (!isFinite(distA) && isFinite(distB)) return 1;
           }
@@ -679,7 +695,7 @@ export default function App() {
         const sorted = [...prev].sort((a, b) => {
           const distA = calculateDistance(location.latitude, location.longitude, a.latitude, a.longitude);
           const distB = calculateDistance(location.latitude, location.longitude, b.latitude, b.longitude);
-          if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+          if (isFinite(distA) && isFinite(distB)) return distA - distB;
           if (isFinite(distA) && !isFinite(distB)) return -1;
           if (!isFinite(distA) && isFinite(distB)) return 1;
 
@@ -707,7 +723,7 @@ export default function App() {
           if (locA && locB) {
             const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
             const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
-            if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+            if (isFinite(distA) && isFinite(distB)) return distA - distB;
             if (isFinite(distA) && !isFinite(distB)) return -1;
             if (!isFinite(distA) && isFinite(distB)) return 1;
           }
@@ -889,7 +905,7 @@ export default function App() {
               if (locA && locB) {
                 const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
                 const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
-                if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+                if (isFinite(distA) && isFinite(distB)) return distA - distB;
                 if (isFinite(distA) && !isFinite(distB)) return -1;
                 if (!isFinite(distA) && isFinite(distB)) return 1;
               }
@@ -1075,7 +1091,7 @@ export default function App() {
               if (locA && locB) {
                 const distA = calculateDistance(location.latitude, location.longitude, locA.latitude, locA.longitude);
                 const distB = calculateDistance(location.latitude, location.longitude, locB.latitude, locB.longitude);
-                if (distA !== distB && isFinite(distA) && isFinite(distB)) return distA - distB;
+                if (isFinite(distA) && isFinite(distB)) return distA - distB;
                 if (isFinite(distA) && !isFinite(distB)) return -1;
                 if (!isFinite(distA) && isFinite(distB)) return 1;
               }
@@ -1195,11 +1211,100 @@ export default function App() {
 
   const findNearbyEstablishments = useCallback(async () => {
     setShowSuggestions(false);
-    const runSearch = (loc: {latitude: number, longitude: number}) => {
+    const runSearch = async (loc: {latitude: number, longitude: number}) => {
       setView('chat');
       setSelectedSubCategory('Estabelecimentos mais próximos');
-      const query = `estabelecimentos mais próximos de mim em ${currentCity.name}`;
-      performSearch(query, true);
+      setIsLoading(true);
+      
+      try {
+        const res = await fetch(`/api/search?q=&city_id=${currentCity.id}`);
+        const data = await res.json();
+        
+        if (!Array.isArray(data) || data.length === 0) {
+          setMessages(prev => [...prev, {
+            role: 'model',
+            text: `Não foram encontrados estabelecimentos cadastrados em ${currentCity.name}.`
+          }]);
+          setIsLoading(false);
+          return;
+        }
+
+        // Auditoria das coordenadas (Requisito 1)
+        auditEstablishmentsCoordinates(data, currentCity);
+
+        // Ordenar rigorosamente por distância crescente sem desempates secundários (Requisito 4 e 5)
+        const sorted = sortByDistanceAsc(data, loc.latitude, loc.longitude).filter(e => isFinite(e.distance));
+        
+        // Log temporário no console (Requisito 2 e 9)
+        auditUserLocationLog(loc.latitude, loc.longitude, undefined, currentCity.name, {
+          analyzedCount: sorted.length,
+          sampleDistances: sorted.slice(0, 5).map(e => `${e.name}: ${e.formattedDistance}`)
+        });
+
+        // Expansão de raio automática: 500 m -> 1 km -> 2 km -> 5 km -> 10 km -> toda a cidade (Requisito 5)
+        const radiuses = [0.5, 1, 2, 5, 10, Infinity];
+        let foundRadius = Infinity;
+        let filtered = sorted;
+        
+        for (const r of radiuses) {
+          const inRadius = sorted.filter(e => e.distance <= r);
+          if (inRadius.length > 0) {
+            foundRadius = r;
+            filtered = inRadius;
+            break;
+          }
+        }
+
+        let noticeMsg = "";
+        if (foundRadius > 0.5 && foundRadius !== Infinity) {
+          noticeMsg = `\n\n⚠️ *Nenhum estabelecimento foi encontrado em até 500 m. O raio de busca foi ampliado automaticamente para ${foundRadius} km para mostrar as opções mais próximas!*`;
+          toast.info(`Raio ampliado para ${foundRadius} km`, 5000);
+        } else if (foundRadius === Infinity && sorted.length > 0 && sorted[0].distance > 0.5) {
+          noticeMsg = `\n\n⚠️ *Nenhum estabelecimento foi encontrado no raio inicial. Exibindo os estabelecimentos disponíveis na cidade por ordem de proximidade.*`;
+          toast.info(`Exibindo locais por proximidade em toda a cidade`, 5000);
+        }
+
+        const chunks: GroundingChunk[] = filtered.map(est => ({
+          maps: {
+            id: est.id,
+            title: est.name,
+            categoryId: est.category_id,
+            subCategory: est.sub_category,
+            cityId: est.city_id,
+            address: est.address,
+            hours: est.hours,
+            description: est.description,
+            uri: est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`,
+            phone: est.phone,
+            whatsapp: est.whatsapp,
+            website: est.website,
+            user_id: est.user_id,
+            is_featured: est.is_featured,
+            is_verified: est.is_verified,
+            is_premium: est.is_premium,
+            opening_hours: est.opening_hours,
+            images: est.images || [],
+            tags: est.tags,
+            plusCode: est.plus_code || est.plusCode,
+            location: { latitude: est.latitude, longitude: est.longitude }
+          }
+        }));
+
+        setAllGroundingChunks(chunks);
+        setIsMapOpen(true);
+
+        const listText = filtered.slice(0, 12).map((est, idx) => `**${idx + 1}º — ${est.name}** (${est.formattedDistance})\n📍 Endereço: ${est.address}`).join("\n\n");
+        
+        setMessages(prev => [...prev, {
+          role: 'model',
+          text: `📍 **Estabelecimentos Mais Próximos de Você em ${currentCity.name}:**\n\n${listText}${noticeMsg}`,
+          groundingChunks: chunks
+        }]);
+      } catch (err) {
+        console.error("Erro no Perto de Mim:", err);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     if (!location) {
@@ -1208,7 +1313,7 @@ export default function App() {
     }
     
     runSearch(location);
-  }, [location, detectLocation, currentCity, performSearch, setShowSuggestions]);
+  }, [location, detectLocation, currentCity, setShowSuggestions, toast]);
 
 
   const refreshData = useCallback(() => {

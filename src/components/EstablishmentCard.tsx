@@ -433,6 +433,18 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
             >
               <Share2 className="w-3.5 h-3.5" />
             </button>
+            {formattedWebsite && (
+              <a 
+                href={formattedWebsite}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="p-2 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-all shadow-xl"
+                title="Website"
+              >
+                <Globe className="w-3.5 h-3.5" />
+              </a>
+            )}
           </div>
 
           {images.length > 1 && (
@@ -490,7 +502,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
               <div className="flex items-center gap-1">
                 <Navigation2 className="w-3 h-3 text-blue-500" />
                 <span className="text-[10px] font-bold text-blue-600 tracking-tight">
-                  {distance.endsWith('de você') ? distance : `${distance} de você`}
+                  {distance.startsWith('📍') ? distance : (distance.includes('m') || distance.includes('km') ? `📍 ${distance.replace(' de você', '')}` : `${distance}`)}
                 </span>
               </div>
               
@@ -903,7 +915,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                         <p className="text-xs sm:text-sm font-bold text-zinc-800 leading-relaxed truncate sm:whitespace-normal">{chunk.maps?.address}</p>
                         <div className="flex items-center gap-2 mt-1.5 text-blue-600 font-black text-[10px] sm:text-sm">
                           <Navigation2 className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />
-                          {distance.endsWith('de você') ? distance : `${distance} de você`}
+                          {distance.startsWith('📍') ? distance : (distance.includes('m') || distance.includes('km') ? `📍 ${distance.replace(' de você', '')}` : `${distance}`)}
                         </div>
                       </div>
                     </div>
@@ -1010,8 +1022,8 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                       )}
                     </div>
 
-                    {/* Actions (Desktop Only) */}
-                    <div className="hidden sm:flex flex-col gap-2.5">
+                    {/* Actions */}
+                    <div className="flex flex-col gap-2.5">
                       <a 
                         href={routeUrl} 
                         target="_blank"

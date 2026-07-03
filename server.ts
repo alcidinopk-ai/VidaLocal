@@ -1253,8 +1253,17 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
       }
     }
 
-    // 2. Fallback to Pythagoras distance-based nearest active city (either from DB or Local Mock)
+    // 2. Fallback to Haversine distance-based nearest active city (either from DB or Local Mock)
     console.log(`[ResolveByGeo] Exact map reverse-geocoded match not found or API failed. Falling back to nearest active city distance-based.`);
+    
+    const calcHaversine = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * (Math.PI / 180);
+      const dLon = (lon2 - lon1) * (Math.PI / 180);
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    };
+
     const supabase = getSupabaseAdmin();
     if (supabase) {
       try {
@@ -1263,7 +1272,7 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
           let nearest = data[0];
           let minDist = Infinity;
           data.forEach(c => {
-            const d = Math.sqrt(Math.pow(c.latitude - lat, 2) + Math.pow(c.longitude - lng, 2));
+            const d = calcHaversine(lat, lng, c.latitude, c.longitude);
             if (d < minDist) { minDist = d; nearest = c; }
           });
           return res.json({ ...nearest, uf: nearest.states?.uf || nearest.states?.[0]?.uf || "" });
@@ -1276,7 +1285,7 @@ app.post("/api/cities/resolve-by-geo", async (req, res) => {
     let nearest = cities[0];
     let minDist = Infinity;
     cities.forEach(c => {
-      const d = Math.sqrt(Math.pow(c.latitude - lat, 2) + Math.pow(c.longitude - lng, 2));
+      const d = calcHaversine(lat, lng, c.latitude, c.longitude);
       if (d < minDist) { minDist = d; nearest = c; }
     });
     const state = states.find(s => s.id === nearest.state_id);
@@ -1409,7 +1418,7 @@ const getFuseInstance = () => {
   if (fuseInstance) return fuseInstance;
   
   // Collect all unique sub-categories and some common terms
-  const subCategories = Array.from(new Set(establishments.map(e => e.sub_category)));
+  const subCategories = Array.from(new Set([...establishments.map(e => e.sub_category), ...SUB_CATEGORIES.map(sc => sc.name)]));
   const commonTerms = [
     "restaurante", "lanchonete", "pizzaria", "farmácia", "supermercado", "açougue", 
     "oficina", "pet shop", "academia", "escola", "hospital", "clínica", 
@@ -1423,7 +1432,12 @@ const getFuseInstance = () => {
     "sorveteria", "açaí", "cafeteria", "bar", "pub", "boate", "cervejaria",
     "espetinho", "churrascaria", "japonês", "sushi", "chinês", "italiano",
     "hamburgueria", "pastelaria", "lanche", "comida caseira", "marmitex",
-    "ótica", "óticas", "óptica", "ópticas", "otica", "oticas"
+    "ótica", "óticas", "óptica", "ópticas", "otica", "oticas",
+    "odontologia", "fisioterapia", "psicologia", "nutrição", "veterinária", "banco de sangue",
+    "caps", "ubs", "upa", "samu", "bancos", "lotéricas", "correios", "cartórios", "cemitérios", "funerárias",
+    "esmalteria", "madeireira", "marmoraria", "móveis planejados", "tradutor", "programador",
+    "professor particular", "costureira", "cooperativa", "grupos de apoio", "lar de idosos",
+    "música", "dança", "aeroporto", "rodoviária", "bicicletaria", "conveniência"
   ];
   const dictionary = Array.from(new Set([...subCategories, ...commonTerms]));
   
@@ -1932,6 +1946,8 @@ app.get("/api/search/suggest", async (req, res) => {
 
 app.get("/api/search", async (req, res) => {
   const rawQ = String(req.query.q || "");
+  const limitParam = Number(req.query.limit);
+  const maxLimit = (limitParam > 0 && !isNaN(limitParam)) ? limitParam : 1000;
   
   // Advanced pre-processing for proximity searches
   let processedQ = rawQ.toLowerCase()
@@ -2199,7 +2215,7 @@ app.get("/api/search", async (req, res) => {
             return 0;
           });
 
-          return { data: sortedData.slice(0, 20), error: null };
+          return { data: sortedData.slice(0, maxLimit), error: null };
         } catch (e: any) {
           const isNetworkError = e.message?.includes('fetch failed') || e.code === 'ENOTFOUND';
           console.error("[Supabase Exception]:", e.message);
@@ -2372,11 +2388,11 @@ app.get("/api/search", async (req, res) => {
       return 0;
     });
 
-    return res.json(sortedMockResults.slice(0, 20));
+    return res.json(sortedMockResults.slice(0, maxLimit));
   } catch (error) {
     console.error("Search error:", error);
     // Fallback to mock data on error
-    res.json(establishments.slice(0, 10));
+    res.json(establishments.slice(0, maxLimit));
   }
 });
 

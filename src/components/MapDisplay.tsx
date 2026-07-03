@@ -13,27 +13,7 @@ interface MapDisplayProps {
   onRefresh?: () => void;
 }
 
-const calculateDistance = (lat1: any, lon1: any, lat2: any, lon2: any) => {
-  const pLat1 = Number(lat1);
-  const pLon1 = Number(lon1);
-  const pLat2 = Number(lat2);
-  const pLon2 = Number(lon2);
-  
-  if (isNaN(pLat1) || isNaN(pLon1) || isNaN(pLat2) || isNaN(pLon2)) {
-    return 999999;
-  }
-
-  const R = 6371; // Radius of the earth in km
-  const dLat = (pLat2 - pLat1) * (Math.PI / 180);
-  const dLon = (pLon2 - pLon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(pLat1 * (Math.PI / 180)) * Math.cos(pLat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const d = R * c; // Distance in km
-  return d;
-};
+import { calculateHaversineDistance, formatDistance } from '../utils/geo';
 
 export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, isRealLocation, isLoading, onClose, onRefresh }) => {
   const [selectedRadius, setSelectedRadius] = React.useState<number | null>(null);
@@ -49,15 +29,9 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, is
 
   const getChunkDistance = (chunk: GroundingChunk): number => {
     if (!userLocation || !chunk.maps?.location) {
-      // Use name characters to generate a completely stable, deterministic estimated distance
-      const title = chunk.maps?.title || "Local";
-      let hash = 0;
-      for (let i = 0; i < title.length; i++) {
-        hash += title.charCodeAt(i);
-      }
-      return 0.5 + (hash % 15) / 10; // returns a stable distance between 0.5 and 1.9 km
+      return Infinity;
     }
-    return calculateDistance(
+    return calculateHaversineDistance(
       userLocation.latitude,
       userLocation.longitude,
       chunk.maps.location.latitude,
@@ -70,7 +44,7 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, is
     if (selectedRadius) {
       result = mapChunks.filter(chunk => {
         const dist = getChunkDistance(chunk);
-        return dist <= selectedRadius;
+        return isFinite(dist) && dist <= selectedRadius;
       });
     }
     
@@ -83,20 +57,8 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({ chunks, userLocation, is
   }, [mapChunks, selectedRadius, userLocation]);
 
   const getDistanceString = (chunk: GroundingChunk) => {
-    const isEstimated = !userLocation || !chunk.maps?.location;
     const dist = getChunkDistance(chunk);
-    
-    let formattedDist = "";
-    if (dist < 1) {
-      formattedDist = `${(dist * 1000).toFixed(0)} m`;
-    } else {
-      formattedDist = `${dist.toFixed(1).replace('.', ',')} km`;
-    }
-    
-    if (isEstimated) {
-      return `~${formattedDist}`;
-    }
-    return formattedDist;
+    return formatDistance(dist, true);
   };
 
   return (

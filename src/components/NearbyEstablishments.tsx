@@ -23,22 +23,12 @@ interface Establishment {
   is_featured?: boolean;
   images?: string[];
   maps_link?: string;
+  phone?: string;
+  website?: string;
+  description?: string;
 }
 
-const calculateDistance = (lat1: number, lon1: number, lat2?: number, lon2?: number) => {
-  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) {
-    return Infinity;
-  }
-  const R = 6371;
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-};
+import { calculateHaversineDistance, formatDistance, sortByDistanceAsc, auditEstablishmentsCoordinates } from '../utils/geo';
 
 export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitude: number; longitude: number } }) => {
   const { currentCity } = useCity();
@@ -68,6 +58,8 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
         const data = await res.json();
         if (Array.isArray(data)) {
           setRawEstablishments(data);
+          // Requisito 1: Auditoria das coordenadas
+          auditEstablishmentsCoordinates(data, currentCity);
         } else {
           setRawEstablishments([]);
         }
@@ -94,32 +86,12 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
       return;
     }
 
-    const sorted = rawEstablishments
-      .map(e => ({
-        ...e,
-        distance: calculateDistance(userLocation.latitude, userLocation.longitude, e.latitude, e.longitude)
-      }))
-      .sort((a, b) => {
-        // Priority 1: Distance (closest first)
-        if (a.distance !== b.distance && isFinite(a.distance) && isFinite(b.distance)) {
-          return a.distance - b.distance;
-        }
-        if (isFinite(a.distance) && !isFinite(b.distance)) return -1;
-        if (!isFinite(a.distance) && isFinite(b.distance)) return 1;
+    // Requisito 4 e 6: Ordenação estritamente por distância crescente, pegando os top 12
+    const sorted = sortByDistanceAsc(rawEstablishments, userLocation.latitude, userLocation.longitude)
+      .filter(e => isFinite(e.distance))
+      .slice(0, 12);
 
-        // Priority 2: Premium
-        if (a.is_premium && !b.is_premium) return -1;
-        if (!a.is_premium && b.is_premium) return 1;
-
-        // Priority 3: Featured
-        if (a.is_featured && !b.is_featured) return -1;
-        if (!a.is_featured && b.is_featured) return 1;
-
-        return 0;
-      })
-      .slice(0, 8);
-
-    setEstablishments(sorted);
+    setEstablishments(sorted as Establishment[]);
   }, [rawEstablishments, userLocation]);
 
   if (!userLocation || (establishments.length === 0 && !isLoading)) return null;
@@ -147,7 +119,7 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
           {establishments.map((est) => {
             const statusInfo = getBusinessStatus(est.hours);
             const distance = (est as any).distance;
-            const distStr = distance < 1 ? `${(distance * 1000).toFixed(0)} m` : `${distance.toFixed(1).replace('.', ',')} km`;
+            const distStr = formatDistance(distance, true);
             
             return (
               <React.Fragment key={est.id}>
@@ -314,10 +286,7 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
                     subCategory: selectedEst.sub_category
                   }
                 } as any}
-                distance={userLocation ? (() => {
-                  const dist = calculateDistance(userLocation.latitude, userLocation.longitude, selectedEst.latitude, selectedEst.longitude);
-                  return dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1).replace('.', ',')} km`;
-                })() : '---'}
+                distance={userLocation ? formatDistance(calculateHaversineDistance(userLocation.latitude, userLocation.longitude, selectedEst.latitude, selectedEst.longitude), true) : '---'}
                 userLocation={userLocation}
                 defaultOpen={true}
                 onCloseDetails={() => setSelectedEst(null)}

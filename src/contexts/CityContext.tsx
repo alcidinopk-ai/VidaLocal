@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { auditUserLocationLog } from '../utils/geo';
 
 export interface City {
   id: number;
@@ -133,6 +134,7 @@ export const CityProvider = ({ children }: { children: ReactNode }) => {
           setLocationPermissionStatus('granted');
           const resolved = await resolveCityByGeo(pos.coords.latitude, pos.coords.longitude);
           if (resolved) {
+            auditUserLocationLog(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, resolved.name);
             if (forceSelect || selectionMode === 'gps') {
               setCurrentCity(resolved);
             }
@@ -155,7 +157,7 @@ export const CityProvider = ({ children }: { children: ReactNode }) => {
           }
           resolve();
         },
-        { timeout: 7000, enableHighAccuracy: false }
+        { timeout: 7000, enableHighAccuracy: true }
       );
     });
   };
