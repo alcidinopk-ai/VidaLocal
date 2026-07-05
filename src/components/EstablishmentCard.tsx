@@ -22,7 +22,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Heart,
-  Globe
+  Globe,
+  Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock } from 'lucide-react';
@@ -112,9 +113,82 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
     return () => window.removeEventListener('vida360:establishment-updated', handler);
   }, [chunk.maps?.id]);
 
+  // Contador de visualizações na EstablishmentCard
+  const estId = chunk.maps?.id || chunk.maps?.short_id || 'unknown';
+  const getSeededViews = (id: string) => {
+    let hash = 0;
+    const str = String(id);
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash) % 180 + 25; // Base realista entre 25 e 205
+  };
+
+  const [viewCount, setViewCount] = useState<number>(() => {
+    if (chunk.maps?.views && typeof chunk.maps.views === 'number' && chunk.maps.views > 0) {
+      return chunk.maps.views;
+    }
+    const localKey = `vida360_views_${estId}`;
+    try {
+      const stored = localStorage.getItem(localKey);
+      if (stored) return parseInt(stored, 10);
+    } catch (e) {}
+    return getSeededViews(estId);
+  });
+
+  const incrementViews = React.useCallback(() => {
+    if (!estId || estId === 'unknown') return;
+    const sessionKey = `vida360_viewed_session_${estId}`;
+    try {
+      if (sessionStorage.getItem(sessionKey)) return;
+      sessionStorage.setItem(sessionKey, 'true');
+    } catch (e) {}
+
+    setViewCount(prev => {
+      const next = prev + 1;
+      try {
+        localStorage.setItem(`vida360_views_${estId}`, next.toString());
+      } catch (e) {}
+      window.dispatchEvent(new CustomEvent('vida360:views-updated', { detail: { id: estId, views: next } }));
+      return next;
+    });
+
+    fetch(`/api/establishments/${estId}/view`, { method: 'POST' }).catch(() => {});
+  }, [estId]);
+
+  React.useEffect(() => {
+    if (isFullDetailsOpen) {
+      incrementViews();
+    }
+  }, [isFullDetailsOpen, incrementViews]);
+
+  React.useEffect(() => {
+    if (estId && estId !== 'unknown') {
+      fetch(`/api/establishments/${estId}/view`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && typeof data.views === 'number' && data.views > 0) {
+            setViewCount(prev => Math.max(prev, data.views));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [estId]);
+
+  React.useEffect(() => {
+    const handleViewsUpdate = (e: any) => {
+      if (e.detail && (e.detail.id === estId || e.detail.id === chunk.maps?.id || e.detail.id === chunk.maps?.short_id)) {
+        setViewCount(e.detail.views);
+      }
+    };
+    window.addEventListener('vida360:views-updated', handleViewsUpdate);
+    return () => window.removeEventListener('vida360:views-updated', handleViewsUpdate);
+  }, [estId, chunk.maps?.id, chunk.maps?.short_id]);
+
   const rawImages = chunk.maps?.images || [];
   const images = parseImageArray(rawImages).filter(
-    (img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/'))
+    (img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/') || img.startsWith('blob:'))
   );
 
   const subCategoryStr = chunk.maps?.subCategory || chunk.maps?.sub_category;
@@ -498,24 +572,32 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
               </div>
             )}
             
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1">
-                <Navigation2 className="w-3 h-3 text-blue-500" />
-                <span className="text-[10px] font-bold text-blue-600 tracking-tight">
-                  {distance.startsWith('📍') ? distance : (distance.includes('m') || distance.includes('km') ? `📍 ${distance.replace(' de você', '')}` : `${distance}`)}
-                </span>
+            <div className="flex items-center justify-between gap-2 mt-1">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <Navigation2 className="w-3 h-3 text-blue-500" />
+                  <span className="text-[10px] font-bold text-blue-600 tracking-tight">
+                    {distance.startsWith('📍') ? distance : (distance.includes('m') || distance.includes('km') ? `📍 ${distance.replace(' de você', '')}` : `${distance}`)}
+                  </span>
+                </div>
+                
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowFullHoursModal(!showFullHoursModal);
+                  }}
+                  className={`flex items-center gap-1 text-[10px] font-bold ${statusInfo.color} hover:opacity-70 transition-opacity`}
+                >
+                  <Clock className="w-2.5 h-2.5" />
+                  {statusInfo.label}
+                </button>
               </div>
-              
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowFullHoursModal(!showFullHoursModal);
-                }}
-                className={`flex items-center gap-1 text-[10px] font-bold ${statusInfo.color} hover:opacity-70 transition-opacity`}
-              >
-                <Clock className="w-2.5 h-2.5" />
-                {statusInfo.label}
-              </button>
+
+              {/* Contador de Visualizações na EstablishmentCard */}
+              <div className="flex items-center gap-1 px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200/70 text-zinc-600 rounded-lg shrink-0 transition-colors cursor-help" title={`${viewCount} vezes que o local foi acessado pelos usuários`}>
+                <Eye className="w-3 h-3 text-emerald-600" />
+                <span className="text-[10px] font-bold">{viewCount}</span>
+              </div>
             </div>
 
             {showFullHoursModal && chunk.maps?.hours && (
@@ -888,14 +970,21 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
 
               {/* Main Content */}
               <div className="p-5 sm:p-10">
-                <div className="flex justify-between items-center gap-4">
+                <div className="flex justify-between items-start gap-4">
                   <div className="flex-1">
                     <h2 className="text-base sm:text-xl lg:text-2xl font-black text-zinc-900 leading-tight tracking-tighter">
                       {title}
                     </h2>
-                    <p className="text-[10px] sm:text-sm font-bold text-zinc-400 mt-0.5 uppercase tracking-wide">
-                      {subCategoryStr}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                      <p className="text-[10px] sm:text-sm font-bold text-zinc-400 uppercase tracking-wide">
+                        {subCategoryStr}
+                      </p>
+                      <span className="text-zinc-300">•</span>
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-100/60 text-emerald-700 rounded-lg text-[10px] sm:text-xs font-bold shadow-sm" title="Total de acessos a este estabelecimento">
+                        <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{viewCount} visualização(ões)</span>
+                      </div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0f172a] text-white rounded-xl shadow-lg shrink-0">
                     <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />

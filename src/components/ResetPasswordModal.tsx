@@ -42,7 +42,10 @@ export const ResetPasswordModal = ({ isOpen, onClose }: ResetPasswordModalProps)
       setSuccess('Sua senha foi redefinida com sucesso! Agora você já pode usar a nova senha.');
       setTimeout(() => {
         onClose();
-      }, 2500);
+        if (typeof window !== 'undefined' && (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery'))) {
+          try { window.history.replaceState({}, document.title, '/'); } catch (e) {}
+        }
+      }, 2000);
     } catch (err: any) {
       setError(err.message || 'Erro ao redefinir sua senha. Certifique-se de que o link ainda é válido.');
     } finally {

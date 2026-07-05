@@ -52,13 +52,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (error) {
         console.error('[AuthContext] Error fetching profile:', error);
-        setRole('user');
-        return;
       }
       
       if (!data) {
         console.log('[AuthContext] No profile found, creating one...');
-        // If profile doesn't exist, create it as a regular user
         const targetUser = currentUser || user;
         const newProfileData = { 
           id: userId, 
@@ -77,13 +74,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .select('*')
           .single();
         
-        if (!createError && newProfile) {
+        if (createError || !newProfile) {
+          console.warn('[AuthContext] Profile creation error or delay, retrying fetch...', createError);
+          const { data: retryData } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+          if (retryData) {
+            setProfile(retryData);
+            setRole(retryData.role);
+            return;
+          }
+          // Fallback to in-memory profile to ensure UI and role continuity
+          const fallbackProfile: Profile = {
+            id: userId,
+            role: 'user',
+            email: targetUser?.email || '',
+            full_name: targetUser?.user_metadata?.full_name || '',
+            avatar_url: targetUser?.user_metadata?.avatar_url || '',
+            phone: targetUser?.user_metadata?.phone || ''
+          };
+          setProfile(fallbackProfile);
+          setRole('user');
+        } else {
           console.log('[AuthContext] Profile created successfully');
           setProfile(newProfile);
           setRole(newProfile.role);
-        } else {
-          console.error('[AuthContext] Error creating profile:', createError);
-          setRole('user');
         }
       } else {
         console.log('[AuthContext] Profile loaded:', data.role);
@@ -92,6 +105,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (err) {
       console.error('[AuthContext] Unexpected error in fetchProfile:', err);
+      const targetUser = currentUser || user;
+      setProfile({ id: userId, role: 'user', email: targetUser?.email || '' });
       setRole('user');
     }
   };
@@ -112,6 +127,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    // Clean URL if OAuth or recovery params are present after session is processed
+    const cleanUrlIfNeeded = () => {
+      if (typeof window !== 'undefined' && (
+        window.location.search.includes('code=') || 
+        window.location.hash.includes('access_token=') ||
+        window.location.hash.includes('error=') ||
+        window.location.search.includes('error=')
+      )) {
+        setTimeout(() => {
+          try {
+            const cleanPath = window.location.pathname === '/auth/callback' ? '/' : window.location.pathname;
+            window.history.replaceState({}, document.title, cleanPath);
+          } catch (e) {}
+        }, 500);
+      }
+    };
+
+    // Check if URL indicates password recovery
+    if (typeof window !== 'undefined' && (window.location.href.includes('type=recovery') || window.location.hash.includes('type=recovery'))) {
+      setIsResetPasswordModalOpen(true);
+      setIsAuthModalOpen(false);
+      setIsRegisterUserModalOpen(false);
+    }
+
     // Check active sessions and sets the user
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) {
@@ -124,14 +163,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log('[AuthContext] Initial session:', currentUser ? 'Found' : 'Not found');
       setUser(currentUser);
       if (currentUser) {
+        setIsAuthModalOpen(false);
+        setIsRegisterUserModalOpen(false);
         fetchProfile(currentUser.id, currentUser).finally(() => {
           setIsLoading(false);
+          cleanUrlIfNeeded();
           console.log('[AuthContext] Initial load complete (user logged in)');
         });
       } else {
         setProfile(null);
         setRole(null);
         setIsLoading(false);
+        cleanUrlIfNeeded();
         console.log('[AuthContext] Initial load complete (no user)');
       }
     });
@@ -143,12 +186,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(currentUser);
       
       if (currentUser) {
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          setIsAuthModalOpen(false);
+          setIsRegisterUserModalOpen(false);
+          cleanUrlIfNeeded();
+        }
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'USER_UPDATED' && !profile)) {
           fetchProfile(currentUser.id, currentUser).finally(() => setIsLoading(false));
         }
         if (event === 'PASSWORD_RECOVERY') {
           console.log('[AuthContext] PASSWORD_RECOVERY event captured!');
           setIsResetPasswordModalOpen(true);
+          setIsAuthModalOpen(false);
+          setIsRegisterUserModalOpen(false);
         }
       } else {
         setProfile(null);
@@ -157,13 +207,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     });
 
-    // Google OAuth popup message listener
+    // Handle visibility change to auto-refresh session after sleep / tab switch / PWA resume
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !isPlaceholder) {
+        supabase.auth.getSession().then(({ data: { session }, error }) => {
+          if (error || !session) {
+            if (user) {
+              setUser(null);
+              setProfile(null);
+              setRole(null);
+            }
+          } else if (session.user && session.user.id !== user?.id) {
+            setUser(session.user);
+            fetchProfile(session.user.id, session.user);
+          }
+        });
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Google OAuth popup message listener (backwards compatibility)
     const handleOAuthMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'SUPABASE_OAUTH_SUCCESS') {
+      if (event.data?.type === 'SUPABASE_OAUTH_SUCCESS' || event.data?.type === 'OAUTH_AUTH_SUCCESS') {
         console.log('[AuthContext] Popup notify success. Checking session...');
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (session?.user) {
             setUser(session.user);
+            setIsAuthModalOpen(false);
+            setIsRegisterUserModalOpen(false);
             fetchProfile(session.user.id, session.user);
           }
         });
@@ -173,14 +244,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return () => {
       subscription.unsubscribe();
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('message', handleOAuthMessage);
     };
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('[AuthContext] Error during signOut:', e);
+    }
+    setUser(null);
     setProfile(null);
     setRole(null);
+    setIsAuthModalOpen(false);
+    setIsRegisterUserModalOpen(false);
+    setIsResetPasswordModalOpen(false);
   };
 
   return (

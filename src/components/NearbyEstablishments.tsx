@@ -26,6 +26,7 @@ interface Establishment {
   phone?: string;
   website?: string;
   description?: string;
+  views?: number;
 }
 
 import { calculateHaversineDistance, formatDistance, sortByDistanceAsc, auditEstablishmentsCoordinates } from '../utils/geo';
@@ -283,7 +284,8 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
                     is_premium: selectedEst.is_premium,
                     is_verified: selectedEst.is_verified,
                     images: selectedEst.images,
-                    subCategory: selectedEst.sub_category
+                    subCategory: selectedEst.sub_category,
+                    views: selectedEst.views
                   }
                 } as any}
                 distance={userLocation ? formatDistance(calculateHaversineDistance(userLocation.latitude, userLocation.longitude, selectedEst.latitude, selectedEst.longitude), true) : '---'}

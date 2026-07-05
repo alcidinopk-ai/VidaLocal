@@ -73,22 +73,17 @@ export const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }: RegisterModa
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/`,
-          skipBrowserRedirect: true
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
         }
       });
       if (oauthError) throw oauthError;
-      if (data?.url) {
-        const popup = window.open(data.url, 'google-login', 'width=570,height=600,status=no,menubar=no,toolbar=no');
-        if (!popup) {
-          throw new Error('O bloqueador de popups impediu a autenticação. Por favor, permita popups para este site.');
-        }
-      } else {
-        throw new Error('Não foi possível obter a URL de autenticação com o Google.');
-      }
     } catch (err: any) {
       setError(err.message || 'Erro ao autenticar com o Google.');
       setIsLoading(false);
@@ -117,20 +112,47 @@ export const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }: RegisterModa
       if (signUpError) throw signUpError;
 
       if (data.user) {
+        // Garantir criação imediata do perfil na tabela profiles
+        try {
+          await supabase.from('profiles').upsert([{
+            id: data.user.id,
+            role: 'user',
+            email: formData.email,
+            full_name: formData.fullName,
+            phone: formData.phone
+          }]);
+        } catch (e) {}
+
         if (!data.session) {
+          // Se o projeto do Supabase requer confirmação, chamamos auto-confirm para nunca exigir email do usuário
+          await fetch('/api/auth/auto-confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: data.user.id,
+              email: formData.email,
+              password: formData.password,
+              fullName: formData.fullName,
+              phone: formData.phone
+            })
+          }).catch(() => null);
+
           try {
             await supabase.auth.signInWithPassword({
               email: formData.email,
               password: formData.password,
             });
           } catch (loginErr) {
-            console.warn('[Register] Auto login signInWithPassword optional attempt:', loginErr);
+            console.warn('[Register] Auto login signInWithPassword attempt:', loginErr);
           }
         }
         setSuccess('Conta criada com sucesso. Bem-vindo ao VidaLocal!');
         setTimeout(() => {
           onClose();
-        }, 2200);
+          if (window.location.pathname !== '/') {
+            try { window.history.pushState({}, document.title, '/'); } catch (e) {}
+          }
+        }, 1500);
       }
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro ao realizar o cadastro.');

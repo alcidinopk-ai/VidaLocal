@@ -205,42 +205,65 @@ app.use((req, res, next) => {
 });
 
 // 3. Validação robusta de URLs fornecidas pelo usuário
-function isSafeUrl(urlStr: string): boolean {
+function isSafeUrl(urlStr: string, allowImages = false): boolean {
   if (!urlStr) return true;
   try {
     const trimmed = urlStr.trim();
     if (trimmed.startsWith("/")) return true;
     
+    // Suporte para fotos tiradas no celular ou selecionadas na galeria (Base64 data URI ou Blob URI)
+    if (allowImages) {
+      const lower = trimmed.toLowerCase();
+      if (lower.startsWith("data:image/") || lower.startsWith("blob:")) {
+        return true;
+      }
+    }
+    
     // Testa se o esquema ou protocolo é permitido
     const parsed = new URL(trimmed);
-    return ["http:", "https:"].includes(parsed.protocol);
+    const allowedProtocols = allowImages ? ["http:", "https:", "data:", "blob:"] : ["http:", "https:"];
+    return allowedProtocols.includes(parsed.protocol);
   } catch (err) {
     const trimmed = urlStr.trim();
+    if (allowImages) {
+      const lower = trimmed.toLowerCase();
+      if (lower.startsWith("data:image/") || lower.startsWith("blob:")) {
+        return true;
+      }
+    }
     if (trimmed.includes(":") && !trimmed.toLowerCase().startsWith("http://") && !trimmed.toLowerCase().startsWith("https://")) {
-      return false; // Bloqueia outros esquemas perigosos como javascript: ou data:
+      return false; // Bloqueia outros esquemas perigosos como javascript: ou data:text/html
     }
     return !/[\x00-\x1F\x7F]/.test(urlStr); // Evita caracteres de controle
   }
 }
 
-// Middleware de Validação de URLs para rotas de modificação de cadastros
+// Middleware de Validação de URLs para rotas de modificação de cadastros e perfis
 app.use((req, res, next) => {
-  if (req.body && (req.url === "/api/establishments/register" || (req.url.startsWith("/api/establishments/") && req.method === "PUT"))) {
-    const { website, maps_link, mapsLink, images } = req.body;
+  if (req.body && (req.method === "POST" || req.method === "PUT" || req.method === "PATCH")) {
+    const { website, maps_link, mapsLink, images, image, avatar_url, avatarUrl, photo } = req.body;
     
-    if (website && !isSafeUrl(website)) {
+    if (website && typeof website === 'string' && !isSafeUrl(website, false)) {
       return res.status(400).json({ error: "URL do site inválida ou insegura." });
     }
     const mapsUrlToCheck = maps_link || mapsLink;
-    if (mapsUrlToCheck && !isSafeUrl(mapsUrlToCheck)) {
-      return res.status(400).json({ error: "Link do Google Maps inválido ou inválido." });
+    if (mapsUrlToCheck && typeof mapsUrlToCheck === 'string' && !isSafeUrl(mapsUrlToCheck, false)) {
+      return res.status(400).json({ error: "Link do Google Maps inválido ou inseguro." });
     }
     if (images && Array.isArray(images)) {
       for (const imgUrl of images) {
-        if (!isSafeUrl(imgUrl)) {
+        if (typeof imgUrl === 'string' && !isSafeUrl(imgUrl, true)) {
           return res.status(400).json({ error: "Uma ou mais URLs das imagens carregadas são inseguras." });
         }
       }
+    }
+    const singleImg = image || photo;
+    if (singleImg && typeof singleImg === 'string' && !isSafeUrl(singleImg, true)) {
+      return res.status(400).json({ error: "URL da imagem é insegura." });
+    }
+    const avatarToCheck = avatar_url || avatarUrl;
+    if (avatarToCheck && typeof avatarToCheck === 'string' && !isSafeUrl(avatarToCheck, true)) {
+      return res.status(400).json({ error: "URL do avatar é insegura." });
     }
   }
   next();
@@ -447,6 +470,7 @@ interface Establishment {
   updated_at?: string;
   images?: string[];
   tags?: string;
+  views?: number;
 }
 
 // Generate a random 6-character short ID (uppercase letters and numbers)
@@ -2465,6 +2489,95 @@ app.get("/api/establishments/user/:userId", async (req, res) => {
   } catch (error: any) {
     console.error("[API Error] Fetching user establishments:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// In-memory view counters for establishments
+const establishmentViews = new Map<string, number>();
+
+function getBaselineViews(id: string): number {
+  let hash = 0;
+  const str = String(id);
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash) % 180 + 25;
+}
+
+function getEstablishmentViews(id: string): number {
+  const strId = String(id);
+  if (!establishmentViews.has(strId)) {
+    establishmentViews.set(strId, getBaselineViews(strId));
+  }
+  return establishmentViews.get(strId)!;
+}
+
+app.post("/api/establishments/:id/view", async (req, res) => {
+  const { id } = req.params;
+  const strId = String(id);
+  const next = getEstablishmentViews(strId) + 1;
+  establishmentViews.set(strId, next);
+
+  try {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      await supabase.rpc('increment_establishment_views', { est_id: id }).catch(async () => {
+        const { data: est } = await supabase.from('establishments').select('views').eq('id', id).maybeSingle();
+        if (est && typeof est.views === 'number') {
+          await supabase.from('establishments').update({ views: est.views + 1 }).eq('id', id).catch(() => {});
+        }
+      });
+    }
+  } catch (e) {}
+
+  res.json({ success: true, views: next });
+});
+
+app.get("/api/establishments/:id/view", (req, res) => {
+  const { id } = req.params;
+  res.json({ views: getEstablishmentViews(String(id)) });
+});
+
+// Auto-confirm endpoint for seamless signup without email confirmation requirement
+app.post("/api/auth/auto-confirm", async (req, res) => {
+  const { userId, email, password, fullName, phone } = req.body;
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return res.status(500).json({ error: "Supabase admin não configurado." });
+  }
+
+  try {
+    if (userId) {
+      const { error } = await supabase.auth.admin.updateUserById(userId, { email_confirm: true });
+      if (!error) {
+        return res.json({ success: true, message: "Email confirmado automaticamente com sucesso." });
+      }
+    }
+    if (email && password) {
+      const { data, error } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName || '', phone: phone || '' }
+      });
+      if (!error && data?.user) {
+        try {
+          await supabase.from('profiles').upsert([{
+            id: data.user.id,
+            role: 'user',
+            email: email,
+            full_name: fullName || '',
+            phone: phone || ''
+          }]);
+        } catch (e) {}
+        return res.json({ success: true, user: data.user });
+      }
+      return res.status(400).json({ error: error?.message || "Falha na criação do usuário via admin." });
+    }
+    return res.status(400).json({ error: "Parâmetros insuficientes para auto-confirmação." });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 });
 

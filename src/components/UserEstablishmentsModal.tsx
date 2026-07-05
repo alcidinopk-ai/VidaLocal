@@ -249,7 +249,7 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
                   const subCat = maps.subCategory || maps.sub_category || 'Estabelecimento';
                   const rawImages = maps.images || [];
                   const parsedImgs = parseImageArray(rawImages);
-                  const image = parsedImgs.find((img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/'))) || null;
+                  const image = parsedImgs.find((img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/') || img.startsWith('blob:'))) || null;
 
                   return (
                     <div 
@@ -364,7 +364,7 @@ export const UserEstablishmentsModal: React.FC<UserEstablishmentsModalProps> = (
               <div className="space-y-4">
                 {establishments.map((est) => {
                   const parsedImgs = parseImageArray(est.images);
-                  const thumbImg = parsedImgs.find((img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/'))) || null;
+                  const thumbImg = parsedImgs.find((img: any) => typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image/') || img.startsWith('blob:'))) || null;
                   return (
                     <div 
                       key={est.id} 

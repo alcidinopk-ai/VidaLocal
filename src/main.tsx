@@ -8,12 +8,8 @@ import { FavoritesProvider } from './contexts/FavoritesContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
-// Bypass full rendering in OAuth popups
-const isPopup = typeof window !== 'undefined' && window.opener && (
-  window.name === 'google-login' || 
-  window.location.hash.includes('access_token=') || 
-  window.location.search.includes('code=')
-);
+// Bypass full rendering strictly in legacy OAuth popups
+const isPopup = typeof window !== 'undefined' && window.opener && window.name === 'google-login';
 
 if (isPopup) {
   // Let Supabase load to parse the token (it runs on import)

@@ -81,7 +81,9 @@ export async function compressImage(file: File): Promise<File> {
           }
 
           const fileExtension = format === 'image/webp' ? '.webp' : '.jpg';
-          const originalNameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || 'image';
+          const safeName = file.name || 'mobile_photo.jpg';
+          const lastDotIdx = safeName.lastIndexOf('.');
+          const originalNameWithoutExt = lastDotIdx > 0 ? safeName.substring(0, lastDotIdx) : safeName;
           
           const compressedFile = new File(
             [compressedBlob], 
@@ -145,7 +147,7 @@ export async function compressAndUploadImage(
   }
 
   // 2. Build unique filename to prevent overwriting
-  const fileExtension = optimizedFile.name.split('.').pop() || 'webp';
+  const fileExtension = (optimizedFile.name && optimizedFile.name.split('.').pop()) || (optimizedFile.type && optimizedFile.type.split('/').pop()) || 'webp';
   const timestamp = Date.now();
   const randomStr = Math.random().toString(36).substring(2, 10);
   const safeFileName = `${timestamp}_${randomStr}.${fileExtension}`;
@@ -251,9 +253,19 @@ export function parseImageArray(input: any): string[] {
       }
     }
 
-    // Comma-separated fallback
-    if (trimmed.includes('http') || trimmed.includes('data:image/')) {
-      return trimmed.split(',').map(item => item.trim()).filter(Boolean);
+    // Check if it is a direct data URI or blob URL (never split by comma since data URIs contain a comma!)
+    if (trimmed.startsWith('data:image/') || trimmed.startsWith('blob:')) {
+      return [trimmed];
+    }
+
+    // Comma-separated fallback for standard http/https URLs
+    if (trimmed.includes('http://') || trimmed.includes('https://')) {
+      if (trimmed.includes(', http') || trimmed.includes(',http')) {
+        return trimmed.split(/,\s*(?=https?:\/\/)/i).map(item => item.trim()).filter(Boolean);
+      }
+      if (!trimmed.includes(' ')) {
+        return trimmed.split(',').map(item => item.trim()).filter(item => item.startsWith('http'));
+      }
     }
 
     // Single string

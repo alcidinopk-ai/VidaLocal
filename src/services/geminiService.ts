@@ -42,6 +42,7 @@ export interface GroundingChunk {
       longitude: number;
     };
     rating?: string | number;
+    views?: number;
   };
   web?: {
     uri: string;

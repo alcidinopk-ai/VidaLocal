@@ -151,7 +151,7 @@ export default function App() {
   const [showSkip, setShowSkip] = useState(false);
   const { toast } = useToast();
 
-  // Auth callback handling (runs in the popup)
+  // Auth callback handling (runs in popup or redirect callback)
   const isAuthCallback = window.location.pathname === '/auth/callback';
 
   useEffect(() => {
@@ -159,8 +159,6 @@ export default function App() {
       const handleCallback = async () => {
         console.log('[Auth] Handler in callback page running...');
         try {
-          // Supabase exchanges the code for a session automatically if detectSessionInUrl is true
-          // but we call getSession to be sure it's processed and we have the session.
           const { data, error } = await supabase.auth.getSession();
           if (error) throw error;
           
@@ -168,11 +166,10 @@ export default function App() {
           
           if (window.opener) {
             window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
-            // Give it a moment to send the message before closing
             setTimeout(() => window.close(), 800);
           } else {
-            // If opened directly (not as popup), just go home
-            window.location.href = '/';
+            // Clean navigation without page reload
+            try { window.history.replaceState({}, document.title, '/'); } catch (e) {}
           }
         } catch (err: any) {
           console.error('[Auth] Callback error:', err);
@@ -183,11 +180,10 @@ export default function App() {
             }, '*');
             setTimeout(() => window.close(), 1500);
           } else {
-            // Show error on screen if not in popup
             toast.error('Erro de autenticação: ' + err.message);
             setTimeout(() => {
-              window.location.href = '/';
-            }, 3000);
+              try { window.history.replaceState({}, document.title, '/'); } catch (e) {}
+            }, 2500);
           }
         }
       };

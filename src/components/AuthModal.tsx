@@ -58,7 +58,24 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
           email,
           password,
         });
-        if (loginError) throw loginError;
+        if (loginError) {
+          if (loginError.message.toLowerCase().includes('confirm') || loginError.message.toLowerCase().includes('verified')) {
+            // Se o projeto do Supabase exige confirmação por email, realizamos auto-confirmação antes de desistir
+            const res = await fetch('/api/auth/auto-confirm', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password })
+            }).catch(() => null);
+            if (res && res.ok) {
+              const retry = await supabase.auth.signInWithPassword({ email, password });
+              if (!retry.error) {
+                onClose();
+                return;
+              }
+            }
+          }
+          throw loginError;
+        }
         onClose();
       }
     } catch (err: any) {
@@ -75,22 +92,17 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/`,
-          skipBrowserRedirect: true,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
         },
       });
       if (oauthError) throw oauthError;
-      if (data?.url) {
-        const popup = window.open(data.url, 'google-login', 'width=570,height=600,status=no,menubar=no,toolbar=no');
-        if (!popup) {
-          throw new Error('O bloqueador de popups impediu a autenticação. Por favor, permita popups para este site.');
-        }
-      } else {
-        throw new Error('Não foi possível obter a URL de autenticação com o Google.');
-      }
     } catch (err: any) {
       setError(err.message || 'Erro ao autenticar com o Google.');
       setIsLoading(false);
