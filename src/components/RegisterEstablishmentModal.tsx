@@ -107,6 +107,15 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
     phone: '',
     whatsapp: '',
     website: '',
+    instagram_url: '',
+    facebook_url: '',
+    whatsapp_url: '',
+    youtube_url: '',
+    tiktok_url: '',
+    linkedin_url: '',
+    twitter_url: '',
+    telegram_url: '',
+    google_maps_url: '',
     hours: '',
     is_open_24_hours: false,
     description: '',
@@ -156,25 +165,42 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
       setLastInitializedId(currentId);
 
       if (initialData) {
-        // Process subCategory into array if it's a string
+        // Process subCategory / sub_category into array robustly
         let subCats: string[] = [];
-        if (initialData.subCategory) {
-          if (Array.isArray(initialData.subCategory)) {
-            subCats = initialData.subCategory;
-          } else if (typeof initialData.subCategory === 'string') {
-            // Handle both ' | ' and ', ' separators
-            if (initialData.subCategory.includes(' | ')) {
-              subCats = initialData.subCategory.split(' | ').map(s => s.trim()).filter(Boolean);
+        const rawSubCategory = initialData.subCategory || initialData.sub_category;
+        
+        if (rawSubCategory) {
+          if (Array.isArray(rawSubCategory)) {
+            subCats = rawSubCategory.map(s => String(s || '').trim()).filter(Boolean);
+          } else if (typeof rawSubCategory === 'string') {
+            if (rawSubCategory.includes(' | ')) {
+              subCats = rawSubCategory.split(' | ').map(s => s.trim()).filter(Boolean);
+            } else if (rawSubCategory.includes(',')) {
+              subCats = rawSubCategory.split(/,\s*(?![^()]*\))/).map(s => s.trim()).filter(Boolean);
             } else {
-              // Regex to split by comma but NOT inside parentheses
-              subCats = initialData.subCategory.split(/,\s*(?![^()]*\))/).map(s => s.trim()).filter(Boolean);
+              subCats = [rawSubCategory.trim()].filter(Boolean);
             }
           }
-        } else if (initialData.sub_category) {
-          if (initialData.sub_category.includes(' | ')) {
-            subCats = initialData.sub_category.split(' | ').map((s: string) => s.trim()).filter(Boolean);
-          } else {
-            subCats = initialData.sub_category.split(/,\s*(?![^()]*\))/).map((s: string) => s.trim()).filter(Boolean);
+        }
+
+        // Process categoryId robustly, with fallback lookup
+        let catIdStr = String(initialData.category_id || initialData.categoryId || '');
+        if (!catIdStr && initialData.category) {
+          const catName = typeof initialData.category === 'object' 
+            ? (initialData.category.name || '') 
+            : String(initialData.category);
+          const foundCat = CATEGORIES.find(c => c.name.toLowerCase() === catName.toLowerCase());
+          if (foundCat) {
+            catIdStr = String(foundCat.id);
+          }
+        }
+
+        // Guess categoryId from subcategories if still empty
+        if (!catIdStr && subCats.length > 0) {
+          const firstSubName = subCats[0];
+          const foundSub = SUB_CATEGORIES.find(sc => sc.name.toLowerCase() === firstSubName.toLowerCase());
+          if (foundSub) {
+            catIdStr = String(foundSub.categoryId);
           }
         }
 
@@ -210,12 +236,21 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
 
         setFormData({
           name: initialData.name || initialData.title || '',
-          categoryId: String(initialData.category_id || initialData.categoryId || ''),
+          categoryId: catIdStr,
           subCategory: subCats,
           address: initialData.address || '',
           phone: initialData.phone || '',
           whatsapp: initialData.whatsapp || '',
           website: initialData.website || '',
+          instagram_url: initialData.instagram_url || initialData.instagramUrl || '',
+          facebook_url: initialData.facebook_url || initialData.facebookUrl || '',
+          whatsapp_url: initialData.whatsapp_url || initialData.whatsappUrl || '',
+          youtube_url: initialData.youtube_url || initialData.youtubeUrl || '',
+          tiktok_url: initialData.tiktok_url || initialData.tiktokUrl || '',
+          linkedin_url: initialData.linkedin_url || initialData.linkedinUrl || '',
+          twitter_url: initialData.twitter_url || initialData.twitterUrl || '',
+          telegram_url: initialData.telegram_url || initialData.telegramUrl || '',
+          google_maps_url: initialData.google_maps_url || initialData.googleMapsUrl || '',
           hours: initialData.hours || '',
           is_open_24_hours: initialData.is_open_24_hours || false,
           description: initialData.description || '',
@@ -288,6 +323,15 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             phone: '',
             whatsapp: '',
             website: '',
+            instagram_url: '',
+            facebook_url: '',
+            whatsapp_url: '',
+            youtube_url: '',
+            tiktok_url: '',
+            linkedin_url: '',
+            twitter_url: '',
+            telegram_url: '',
+            google_maps_url: '',
             hours: '',
             is_open_24_hours: false,
             description: '',
@@ -677,6 +721,37 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
       return;
     }
 
+    // Validate social media URLs before saving
+    const socialFields = [
+      { name: "Instagram", key: "instagram_url" },
+      { name: "Facebook", key: "facebook_url" },
+      { name: "WhatsApp Business", key: "whatsapp_url" },
+      { name: "YouTube", key: "youtube_url" },
+      { name: "TikTok", key: "tiktok_url" },
+      { name: "LinkedIn", key: "linkedin_url" },
+      { name: "X (Twitter)", key: "twitter_url" },
+      { name: "Telegram", key: "telegram_url" },
+      { name: "Google Maps", key: "google_maps_url" }
+    ];
+
+    for (const f of socialFields) {
+      const val = formData[f.key as keyof typeof formData];
+      if (val && typeof val === 'string' && val.trim().length > 0) {
+        const trimmed = val.trim();
+        let isValid = false;
+        try {
+          const url = new URL(trimmed);
+          isValid = url.protocol === 'http:' || url.protocol === 'https:';
+        } catch (err) {
+          isValid = false;
+        }
+        if (!isValid) {
+          setError(`Por favor, insira uma URL válida para o ${f.name} (ex: https://...).`);
+          return;
+        }
+      }
+    }
+
     setIsLoading(true);
     setError(null);
     
@@ -771,6 +846,12 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
         setIsSubmitted(true);
         toast.success(isUpdate ? 'Local salvo com sucesso!' : 'Local cadastrado com sucesso!');
         
+        // Clear client-side search cache so fresh data is loaded on the next search
+        try {
+          localStorage.removeItem('vida360_last_search_cache');
+          console.log("[Register] Client-side search cache cleared successfully");
+        } catch (e) {}
+        
         // Dispatch global update event so any listing components or layouts can update immediately
         const updatedEst = result && (result.id ? result : result.data);
         if (updatedEst && updatedEst.id) {
@@ -804,6 +885,15 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
             phone: '',
             whatsapp: '',
             website: '',
+            instagram_url: '',
+            facebook_url: '',
+            whatsapp_url: '',
+            youtube_url: '',
+            tiktok_url: '',
+            linkedin_url: '',
+            twitter_url: '',
+            telegram_url: '',
+            google_maps_url: '',
             hours: '',
             is_open_24_hours: false,
             description: '',
@@ -837,7 +927,7 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -905,6 +995,15 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         phone: '',
                         whatsapp: '',
                         website: '',
+                        instagram_url: '',
+                        facebook_url: '',
+                        whatsapp_url: '',
+                        youtube_url: '',
+                        tiktok_url: '',
+                        linkedin_url: '',
+                        twitter_url: '',
+                        telegram_url: '',
+                        google_maps_url: '',
                         hours: '',
                         is_open_24_hours: false,
                         description: '',
@@ -1213,6 +1312,102 @@ export const RegisterEstablishmentModal: React.FC<RegisterEstablishmentModalProp
                         placeholder="https://..."
                         className="w-full px-6 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-base"
                       />
+                    </div>
+
+                    <div className="pt-6 border-t border-zinc-100 space-y-4">
+                      <h4 className="text-sm font-bold text-zinc-800 uppercase tracking-wider ml-1">Redes Sociais</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 mb-1 ml-1">Instagram</label>
+                          <input 
+                            type="url"
+                            value={formData.instagram_url}
+                            onChange={e => setFormData({...formData, instagram_url: e.target.value})}
+                            placeholder="https://instagram.com/minhaempresa"
+                            className="w-full px-5 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 mb-1 ml-1">Facebook</label>
+                          <input 
+                            type="url"
+                            value={formData.facebook_url}
+                            onChange={e => setFormData({...formData, facebook_url: e.target.value})}
+                            placeholder="https://facebook.com/minhaempresa"
+                            className="w-full px-5 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 mb-1 ml-1">WhatsApp Business (wa.me)</label>
+                          <input 
+                            type="url"
+                            value={formData.whatsapp_url}
+                            onChange={e => setFormData({...formData, whatsapp_url: e.target.value})}
+                            placeholder="https://wa.me/5563999999999"
+                            className="w-full px-5 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 mb-1 ml-1">YouTube</label>
+                          <input 
+                            type="url"
+                            value={formData.youtube_url}
+                            onChange={e => setFormData({...formData, youtube_url: e.target.value})}
+                            placeholder="https://youtube.com/@empresa"
+                            className="w-full px-5 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 mb-1 ml-1">TikTok</label>
+                          <input 
+                            type="url"
+                            value={formData.tiktok_url}
+                            onChange={e => setFormData({...formData, tiktok_url: e.target.value})}
+                            placeholder="https://tiktok.com/@empresa"
+                            className="w-full px-5 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 mb-1 ml-1">LinkedIn</label>
+                          <input 
+                            type="url"
+                            value={formData.linkedin_url}
+                            onChange={e => setFormData({...formData, linkedin_url: e.target.value})}
+                            placeholder="https://linkedin.com/company/empresa"
+                            className="w-full px-5 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 mb-1 ml-1">X (Twitter)</label>
+                          <input 
+                            type="url"
+                            value={formData.twitter_url}
+                            onChange={e => setFormData({...formData, twitter_url: e.target.value})}
+                            placeholder="https://x.com/empresa"
+                            className="w-full px-5 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 mb-1 ml-1">Telegram</label>
+                          <input 
+                            type="url"
+                            value={formData.telegram_url}
+                            onChange={e => setFormData({...formData, telegram_url: e.target.value})}
+                            placeholder="https://t.me/minhaempresa"
+                            className="w-full px-5 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-bold text-zinc-500 mb-1 ml-1">Google Maps URL</label>
+                          <input 
+                            type="url"
+                            value={formData.google_maps_url}
+                            onChange={e => setFormData({...formData, google_maps_url: e.target.value})}
+                            placeholder="https://maps.google.com/?cid=..."
+                            className="w-full px-5 py-3 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-[#00897b]/20 transition-all text-sm"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     <div>

@@ -11,6 +11,7 @@ import { parseImageArray } from '../utils/imageCompression';
 interface Establishment {
   id: string;
   name: string;
+  category_id?: number;
   sub_category: string;
   address: string;
   rating: number;
@@ -31,6 +32,29 @@ interface Establishment {
 }
 
 import { calculateHaversineDistance, formatDistance } from '../utils/geo';
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+} as const;
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 15 },
+  show: { 
+    opacity: 1, 
+    y: 0,
+    transition: {
+      type: "spring" as const,
+      stiffness: 100,
+      damping: 15
+    }
+  }
+} as const;
 
 export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { latitude: number; longitude: number } }) => {
   const { currentCity } = useCity();
@@ -123,7 +147,13 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
         <button className="text-xs font-bold text-[#f57c00] hover:underline uppercase tracking-widest">Ver Todos</button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <motion.div 
+        key={establishments.length}
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+      >
         {establishments.map((est) => {
           const whatsappNumber = est.whatsapp ? est.whatsapp.replace(/\D/g, '') : "";
           const formattedWhatsapp = whatsappNumber 
@@ -134,10 +164,14 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
           const statusInfo = getBusinessStatus(est.hours);
           
           return (
-            <React.Fragment key={est.id}>
+            <motion.div 
+              key={est.id} 
+              variants={itemVariants}
+              className="flex flex-col h-full"
+            >
               <motion.div 
                 whileHover={{ y: -5 }}
-                className="group bg-white border border-zinc-100 rounded-[32px] overflow-hidden hover:shadow-xl hover:shadow-zinc-200 transition-all flex flex-col cursor-pointer"
+                className="group bg-white border border-zinc-100 rounded-[32px] overflow-hidden hover:shadow-xl hover:shadow-zinc-200 transition-all flex flex-col cursor-pointer h-full"
                 onClick={() => setSelectedEst(est)}
               >
                 <div className="relative w-full aspect-video bg-zinc-100 overflow-hidden">
@@ -181,63 +215,63 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
                     <span className="text-[9px] font-bold">{est.rating || '5.0'}</span>
                   </div>
 
-                    <div className="absolute bottom-3 inset-x-3 flex items-center justify-between gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <a 
-                        href={getDirectionsUrl(est.maps_link, est.latitude, est.longitude, userLocation)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!user) {
-                            e.preventDefault();
-                            setIsAuthModalOpen(true);
+                  <div className="absolute bottom-3 inset-x-3 flex items-center justify-between gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <a 
+                      href={getDirectionsUrl(est.maps_link, est.latitude, est.longitude, userLocation)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!user) {
+                          e.preventDefault();
+                          setIsAuthModalOpen(true);
+                        }
+                      }}
+                      className="flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-all shadow-xl"
+                      title="Traçar Rota"
+                    >
+                      <Navigation2 className="w-4 h-4" />
+                    </a>
+                    <a 
+                      href={whatsappUrl}
+                      target={whatsappUrl !== "#" ? "_blank" : undefined}
+                      rel="noopener noreferrer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (whatsappUrl === "#") {
+                          e.preventDefault();
+                          return;
+                        }
+                        if (!user) {
+                          e.preventDefault();
+                          setIsAuthModalOpen(true);
+                        }
+                      }}
+                      className={`flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white transition-all shadow-xl ${
+                        whatsappUrl !== "#" ? "hover:bg-black/40" : "opacity-40 cursor-not-allowed"
+                      }`}
+                      title="WhatsApp"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                    </a>
+                    <button 
+                      onClick={(e) => {
+                        handleAction(e, () => {
+                          const text = `Confira ${est.name} no VidaLocal!`;
+                          const url = est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`;
+                          if (navigator.share) {
+                            navigator.share({ title: est.name, text, url });
+                          } else {
+                            window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
                           }
-                        }}
-                        className="flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-all shadow-xl"
-                        title="Traçar Rota"
-                      >
-                        <Navigation2 className="w-4 h-4" />
-                      </a>
-                      <a 
-                        href={whatsappUrl}
-                        target={whatsappUrl !== "#" ? "_blank" : undefined}
-                        rel="noopener noreferrer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (whatsappUrl === "#") {
-                            e.preventDefault();
-                            return;
-                          }
-                          if (!user) {
-                            e.preventDefault();
-                            setIsAuthModalOpen(true);
-                          }
-                        }}
-                        className={`flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white transition-all shadow-xl ${
-                          whatsappUrl !== "#" ? "hover:bg-black/40" : "opacity-40 cursor-not-allowed"
-                        }`}
-                        title="WhatsApp"
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                      </a>
-                      <button 
-                        onClick={(e) => {
-                          handleAction(e, () => {
-                            const text = `Confira ${est.name} no VidaLocal!`;
-                            const url = est.maps_link || `https://www.google.com/maps/search/?api=1&query=${est.latitude},${est.longitude}`;
-                            if (navigator.share) {
-                              navigator.share({ title: est.name, text, url });
-                            } else {
-                              window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
-                            }
-                          });
-                        }}
-                        className="flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-all shadow-xl"
-                        title="Compartilhar"
-                      >
-                        <Share2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                        });
+                      }}
+                      className="flex-1 flex items-center justify-center p-2.5 bg-black/20 backdrop-blur-md border border-white/10 rounded-xl text-white hover:bg-black/40 transition-all shadow-xl"
+                      title="Compartilhar"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="p-5 flex-1 flex flex-col">
@@ -278,10 +312,10 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
                   )}
                 </div>
               </motion.div>
-            </React.Fragment>
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
 
       <AnimatePresence>
         {selectedEst && (
@@ -299,6 +333,8 @@ export const FeaturedEstablishments = ({ userLocation }: { userLocation?: { lati
                   maps: {
                     id: selectedEst.id,
                     title: selectedEst.name,
+                    category_id: selectedEst.category_id,
+                    categoryId: selectedEst.category_id,
                     uri: selectedEst.maps_link || '',
                     location: {
                       latitude: selectedEst.latitude,

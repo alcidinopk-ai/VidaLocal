@@ -43,6 +43,24 @@ export interface GroundingChunk {
     };
     rating?: string | number;
     views?: number;
+    instagram_url?: string;
+    instagramUrl?: string;
+    facebook_url?: string;
+    facebookUrl?: string;
+    whatsapp_url?: string;
+    whatsappUrl?: string;
+    youtube_url?: string;
+    youtubeUrl?: string;
+    tiktok_url?: string;
+    tiktokUrl?: string;
+    linkedin_url?: string;
+    linkedinUrl?: string;
+    twitter_url?: string;
+    twitterUrl?: string;
+    telegram_url?: string;
+    telegramUrl?: string;
+    google_maps_url?: string;
+    googleMapsUrl?: string;
   };
   web?: {
     uri: string;

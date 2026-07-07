@@ -23,7 +23,14 @@ import {
   ChevronRight,
   Heart,
   Globe,
-  Eye
+  Eye,
+  Instagram,
+  Facebook,
+  Youtube,
+  Linkedin,
+  Twitter,
+  Send,
+  Map
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock } from 'lucide-react';
@@ -65,9 +72,9 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   const { toast } = useToast();
   const { isFavorite, toggleFavorite } = useFavorites();
   const isFav = isFavorite(chunk.maps?.id || chunk.maps?.short_id);
-  const isAdmin = user && (role === 'admin' || user.email === 'alcidinopk@gmail.com');
-  const isOwner = user && chunk.maps?.user_id === user.id;
-  const [canEdit, setCanEdit] = useState(isAdmin || isOwner);
+  const isAdmin = user && (role === 'admin' || user.email?.toLowerCase() === 'alcidinopk@gmail.com');
+  const isOwner = user && (chunk.maps?.user_id === user.id || (chunk.maps as any)?.userId === user.id);
+  const [canEdit, setCanEdit] = useState(!!(isAdmin || isOwner));
   const [activeModal, setActiveModal] = useState<ModalType>(null);
 
   const handleAction = (action: () => void) => {
@@ -231,16 +238,67 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
     }
   }
 
+  // TikTok Icon SVG
+  const TikTokIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+    <svg 
+      viewBox="0 0 24 24" 
+      fill="currentColor" 
+      className={className}
+    >
+      <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.02 1.59 4.23.95 1.15 2.27 1.91 3.69 2.19v3.91c-1.39-.08-2.73-.61-3.83-1.48-.68-.53-1.25-1.19-1.68-1.93v7.41c.11 1.94-.49 3.88-1.68 5.37-1.46 1.83-3.82 2.85-6.13 2.72-2.18-.1-4.22-1.19-5.39-3.04-1.36-2.11-1.36-4.9 0-7.01 1.09-1.74 2.94-2.81 4.98-2.92v3.94c-1.07.03-2.06.66-2.52 1.63-.58 1.14-.37 2.62.51 3.54.83.89 2.13 1.15 3.23.63.8-.36 1.3-1.17 1.31-2.05V0z" />
+    </svg>
+  );
+
+  // Redes Sociais
+  const mapsAny = chunk.maps as any;
+  const instagramUrl = mapsAny?.instagram_url || mapsAny?.instagramUrl;
+  const facebookUrl = mapsAny?.facebook_url || mapsAny?.facebookUrl;
+  const whatsappBusinessUrl = mapsAny?.whatsapp_url || mapsAny?.whatsappUrl;
+  const youtubeUrl = mapsAny?.youtube_url || mapsAny?.youtubeUrl;
+  const tiktokUrl = mapsAny?.tiktok_url || mapsAny?.tiktokUrl;
+  const linkedinUrl = mapsAny?.linkedin_url || mapsAny?.linkedinUrl;
+  const twitterUrl = mapsAny?.twitter_url || mapsAny?.twitterUrl;
+  const telegramUrl = mapsAny?.telegram_url || mapsAny?.telegramUrl;
+  const googleMapsUrl = mapsAny?.google_maps_url || mapsAny?.googleMapsUrl;
+
+  const socialLinks = [
+    { name: "Instagram", url: instagramUrl, icon: Instagram, hoverClass: "text-[#E1306C] hover:bg-pink-50 hover:border-pink-200" },
+    { name: "Facebook", url: facebookUrl, icon: Facebook, hoverClass: "text-[#1877F2] hover:bg-blue-50 hover:border-blue-200" },
+    { name: "WhatsApp", url: whatsappBusinessUrl, icon: MessageCircle, hoverClass: "text-[#25D366] hover:bg-emerald-50 hover:border-emerald-200" },
+    { name: "YouTube", url: youtubeUrl, icon: Youtube, hoverClass: "text-[#FF0000] hover:bg-red-50 hover:border-red-200" },
+    { name: "TikTok", url: tiktokUrl, icon: TikTokIcon, hoverClass: "text-black dark:text-white hover:bg-zinc-100 hover:border-zinc-300" },
+    { name: "LinkedIn", url: linkedinUrl, icon: Linkedin, hoverClass: "text-[#0A66C2] hover:bg-sky-50 hover:border-sky-200" },
+    { name: "X (Twitter)", url: twitterUrl, icon: Twitter, hoverClass: "text-zinc-800 hover:bg-zinc-100 hover:border-zinc-300" },
+    { name: "Telegram", url: telegramUrl, icon: Send, hoverClass: "text-[#0088cc] hover:bg-sky-50 hover:border-sky-200" },
+    { name: "Google Maps", url: googleMapsUrl, icon: Map, hoverClass: "text-[#4285F4] hover:bg-blue-50 hover:border-blue-200" }
+  ].filter(link => link.url && link.url.trim().length > 0);
+
+  const hasAnySocial = socialLinks.length > 0;
+
   React.useEffect(() => {
     const checkPermission = async () => {
-      if (!user || !chunk.maps?.id) return;
-      if (isAdmin || isOwner) {
+      if (!user) {
+        setCanEdit(false);
+        return;
+      }
+      if (isAdmin) {
+        setCanEdit(true);
+        return;
+      }
+      
+      const targetId = chunk.maps?.id || chunk.maps?.short_id || (chunk.maps as any)?.shortId;
+      if (!targetId) {
+        setCanEdit(isOwner);
+        return;
+      }
+
+      if (isOwner) {
         setCanEdit(true);
         return;
       }
 
       try {
-        const response = await fetch(`/api/establishments/${chunk.maps.id}/can-edit`, {
+        const response = await fetch(`/api/establishments/${targetId}/can-edit`, {
           headers: { 
             'x-user-id': user.id,
             'x-user-email': user.email || ''
@@ -1163,6 +1221,32 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                           <Phone className="w-3.5 h-3.5" /> Ligar
                         </a>
                       </div>
+
+                      {hasAnySocial && (
+                        <div className="pt-3 border-t border-zinc-100">
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2.5 text-center sm:text-left">
+                            Redes Sociais
+                          </p>
+                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                            {socialLinks.map((social) => {
+                              const Icon = social.icon;
+                              return (
+                                <a
+                                  key={social.name}
+                                  href={social.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`p-3 rounded-2xl bg-zinc-50/50 border border-zinc-100 flex items-center justify-center transition-all shadow-sm hover:scale-105 ${social.hoverClass}`}
+                                  title={social.name}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Icon className="w-4 h-4 shrink-0" />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {canEdit && (
                         <div className="grid grid-cols-2 gap-2.5 mt-2">

@@ -46,6 +46,46 @@ const clearCache = () => {
   console.log('[Cache] API cache cleared due to data mutation');
 };
 
+function deserializeEstablishment(item: any): any {
+  if (!item) return item;
+  
+  if (Array.isArray(item)) {
+    return item.map(deserializeEstablishment);
+  }
+  
+  if (typeof item !== 'object') return item;
+  
+  if (typeof item.tags === 'string' && item.tags.includes('[meta:')) {
+    const match = item.tags.match(/\[meta:(.*?)\]/);
+    if (match && match[1]) {
+      try {
+        const meta = JSON.parse(match[1]);
+        if (meta.telegram_url !== undefined) {
+          item.telegram_url = meta.telegram_url;
+          item.telegramUrl = meta.telegram_url;
+        }
+        if (meta.google_maps_url !== undefined) {
+          item.google_maps_url = meta.google_maps_url;
+          item.googleMapsUrl = meta.google_maps_url;
+        }
+      } catch (e) {
+        console.error('[Metadata] Error parsing establishment meta from tags:', e);
+      }
+      // Remove the meta block from tags so it doesn't pollute the UI
+      item.tags = item.tags.replace(/\s*\[meta:.*?\]/g, '').trim();
+    }
+  }
+  
+  // Recursively process any other properties
+  for (const key of Object.keys(item)) {
+    if (item[key] && typeof item[key] === 'object') {
+      item[key] = deserializeEstablishment(item[key]);
+    }
+  }
+  
+  return item;
+}
+
 async function safeSupabaseWrite(
   supabase: any,
   tableName: string,
@@ -57,8 +97,39 @@ async function safeSupabaseWrite(
     ? payload.map((p: any) => ({ ...p }))
     : { ...payload };
 
+  const serializeMetadata = (item: any) => {
+    const meta: any = {};
+    if (item.telegram_url !== undefined) {
+      meta.telegram_url = item.telegram_url;
+    }
+    if (item.telegramUrl !== undefined) {
+      meta.telegram_url = item.telegramUrl;
+    }
+    if (item.google_maps_url !== undefined) {
+      meta.google_maps_url = item.google_maps_url;
+    }
+    if (item.googleMapsUrl !== undefined) {
+      meta.google_maps_url = item.googleMapsUrl;
+    }
+
+    if (Object.keys(meta).length > 0) {
+      let tagsStr = item.tags || '';
+      // Strip any existing metadata block first to avoid duplication
+      tagsStr = tagsStr.replace(/\s*\[meta:.*?\]/g, '');
+      item.tags = `${tagsStr} [meta:${JSON.stringify(meta)}]`.trim();
+    }
+  };
+
+  if (tableName === 'establishments') {
+    if (Array.isArray(currentPayload)) {
+      currentPayload.forEach(serializeMetadata);
+    } else {
+      serializeMetadata(currentPayload);
+    }
+  }
+
   let attempts = 0;
-  const maxAttempts = 8;
+  const maxAttempts = 20;
 
   while (attempts < maxAttempts) {
     attempts++;
@@ -72,22 +143,30 @@ async function safeSupabaseWrite(
       }
 
       if (!result.error) {
-        return { data: result.data, error: null };
+        const deserializedData = result.data ? result.data.map(deserializeEstablishment) : result.data;
+        return { data: deserializedData, error: null };
       }
 
       const error = result.error;
       const isMissingColumnError = 
         error.code === '42703' || 
         error.code === 'PGRST204' || 
-        (error.message && error.message.toLowerCase().includes('could not find') && error.message.toLowerCase().includes('column'));
+        (error.message && error.message.toLowerCase().includes('could not find') && error.message.toLowerCase().includes('column')) ||
+        (error.message && error.message.toLowerCase().includes('coluna') && error.message.toLowerCase().includes('não existe'));
 
       if (isMissingColumnError && error.message) {
         let match = error.message.match(/Could not find the '([^']+)' column/i);
         if (!match) {
-          match = error.message.match(/column "([^"]+)" of relation/i);
+          match = error.message.match(/column "([^"]+)"/i);
         }
         if (!match) {
-          match = error.message.match(/column '([^']+)' does not exist/i);
+          match = error.message.match(/coluna "([^"]+)"/i);
+        }
+        if (!match) {
+          match = error.message.match(/column '([^']+)'/i);
+        }
+        if (!match) {
+          match = error.message.match(/coluna '([^']+)'/i);
         }
 
         if (match && match[1]) {
@@ -106,7 +185,14 @@ async function safeSupabaseWrite(
           continue;
         }
 
-        const knownSuspiciousColumns = ['featured_order', 'featured_end', 'featured_start', 'featured_type', 'owner_user_id', 'is_claimed'];
+        const knownSuspiciousColumns = [
+          'featured_order', 'featured_end', 'featured_start', 'featured_type', 
+          'owner_user_id', 'is_claimed', 'is_active', 'is_featured', 
+          'is_verified', 'is_premium', 'is_open_24_hours', 'plus_code', 
+          'images', 'tags', 'state_id', 'instagram_url', 'facebook_url', 
+          'whatsapp_url', 'youtube_url', 'tiktok_url', 'linkedin_url', 'twitter_url',
+          'telegram_url', 'google_maps_url'
+        ];
         let removedAny = false;
         
         for (const col of knownSuspiciousColumns) {
@@ -204,6 +290,18 @@ app.use((req, res, next) => {
   next();
 });
 
+// Middleware to automatically deserialize social media links hidden in tags for all JSON responses
+app.use((req, res, next) => {
+  const originalJson = res.json;
+  res.json = function(body) {
+    if (body) {
+      body = deserializeEstablishment(body);
+    }
+    return originalJson.call(this, body);
+  };
+  next();
+});
+
 // 3. Validação robusta de URLs fornecidas pelo usuário
 function isSafeUrl(urlStr: string, allowImages = false): boolean {
   if (!urlStr) return true;
@@ -264,6 +362,30 @@ app.use((req, res, next) => {
     const avatarToCheck = avatar_url || avatarUrl;
     if (avatarToCheck && typeof avatarToCheck === 'string' && !isSafeUrl(avatarToCheck, true)) {
       return res.status(400).json({ error: "URL do avatar é insegura." });
+    }
+
+    // Validação de URLs de redes sociais
+    const socialFields = [
+      { name: "Instagram", keys: ["instagram_url", "instagramUrl"] },
+      { name: "Facebook", keys: ["facebook_url", "facebookUrl"] },
+      { name: "WhatsApp Business", keys: ["whatsapp_url", "whatsappUrl"] },
+      { name: "YouTube", keys: ["youtube_url", "youtubeUrl"] },
+      { name: "TikTok", keys: ["tiktok_url", "tiktokUrl"] },
+      { name: "LinkedIn", keys: ["linkedin_url", "linkedinUrl"] },
+      { name: "X (Twitter)", keys: ["twitter_url", "twitterUrl"] },
+      { name: "Telegram", keys: ["telegram_url", "telegramUrl"] },
+      { name: "Google Maps", keys: ["google_maps_url", "googleMapsUrl"] }
+    ];
+
+    for (const field of socialFields) {
+      for (const key of field.keys) {
+        const val = req.body[key];
+        if (val && typeof val === "string" && val.trim().length > 0) {
+          if (!isSafeUrl(val, false)) {
+            return res.status(400).json({ error: `URL do ${field.name} inválida ou insegura.` });
+          }
+        }
+      }
     }
   }
   next();
@@ -450,6 +572,15 @@ interface Establishment {
   whatsapp?: string;
   phone?: string;
   website?: string;
+  instagram_url?: string;
+  facebook_url?: string;
+  whatsapp_url?: string;
+  youtube_url?: string;
+  tiktok_url?: string;
+  linkedin_url?: string;
+  twitter_url?: string;
+  telegram_url?: string;
+  google_maps_url?: string;
   hours?: string;
   is_open_24_hours?: boolean;
   description?: string;
@@ -2638,6 +2769,15 @@ app.put("/api/establishments/:id", mutationRateLimiter, async (req, res) => {
         phone: registration.phone,
         whatsapp: registration.whatsapp,
         website: registration.website,
+        instagram_url: registration.instagram_url || registration.instagramUrl || null,
+        facebook_url: registration.facebook_url || registration.facebookUrl || null,
+        whatsapp_url: registration.whatsapp_url || registration.whatsappUrl || null,
+        youtube_url: registration.youtube_url || registration.youtubeUrl || null,
+        tiktok_url: registration.tiktok_url || registration.tiktokUrl || null,
+        linkedin_url: registration.linkedin_url || registration.linkedinUrl || null,
+        twitter_url: registration.twitter_url || registration.twitterUrl || null,
+        telegram_url: registration.telegram_url || registration.telegramUrl || null,
+        google_maps_url: registration.google_maps_url || registration.googleMapsUrl || null,
         hours: registration.hours,
         is_open_24_hours: registration.is_open_24_hours,
         description: registration.description,
@@ -3701,6 +3841,15 @@ app.post("/api/establishments/register", mutationRateLimiter, async (req, res) =
         phone: registration.phone,
         whatsapp: registration.whatsapp,
         website: registration.website,
+        instagram_url: registration.instagram_url || registration.instagramUrl || null,
+        facebook_url: registration.facebook_url || registration.facebookUrl || null,
+        whatsapp_url: registration.whatsapp_url || registration.whatsappUrl || null,
+        youtube_url: registration.youtube_url || registration.youtubeUrl || null,
+        tiktok_url: registration.tiktok_url || registration.tiktokUrl || null,
+        linkedin_url: registration.linkedin_url || registration.linkedinUrl || null,
+        twitter_url: registration.twitter_url || registration.twitterUrl || null,
+        telegram_url: registration.telegram_url || registration.telegramUrl || null,
+        google_maps_url: registration.google_maps_url || registration.googleMapsUrl || null,
         hours: registration.hours,
         is_open_24_hours: registration.is_open_24_hours || false,
         description: registration.description,

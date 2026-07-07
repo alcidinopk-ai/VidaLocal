@@ -35,6 +35,8 @@ interface Establishment {
   status: 'pending' | 'approved' | 'rejected';
   address: string;
   sub_category: string;
+  category_id?: number;
+  categoryId?: number;
   created_at: string;
   images?: any;
   website?: string;

@@ -11,6 +11,7 @@ import { parseImageArray } from '../utils/imageCompression';
 interface Establishment {
   id: string;
   name: string;
+  category_id?: number;
   sub_category: string;
   address: string;
   rating: number;
@@ -30,6 +31,29 @@ interface Establishment {
 }
 
 import { calculateHaversineDistance, formatDistance, sortByDistanceAsc, auditEstablishmentsCoordinates } from '../utils/geo';
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+} as const;
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 15 },
+  show: { 
+    opacity: 1, 
+    y: 0,
+    transition: {
+      type: "spring" as const,
+      stiffness: 100,
+      damping: 15
+    }
+  }
+} as const;
 
 export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitude: number; longitude: number } }) => {
   const { currentCity } = useCity();
@@ -116,17 +140,27 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <motion.div 
+          key={establishments.length}
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+        >
           {establishments.map((est) => {
             const statusInfo = getBusinessStatus(est.hours);
             const distance = (est as any).distance;
             const distStr = formatDistance(distance, true);
             
             return (
-              <React.Fragment key={est.id}>
+              <motion.div 
+                key={est.id} 
+                variants={itemVariants}
+                className="flex flex-col h-full"
+              >
                 <motion.div 
                   whileHover={{ y: -5 }}
-                  className="group bg-white border border-zinc-100 rounded-[32px] overflow-hidden hover:shadow-xl hover:shadow-zinc-200 transition-all flex flex-col relative cursor-pointer"
+                  className="group bg-white border border-zinc-100 rounded-[32px] overflow-hidden hover:shadow-xl hover:shadow-zinc-200 transition-all flex flex-col relative cursor-pointer h-full"
                   onClick={() => setSelectedEst(est)}
                 >
                   <div className="relative w-full aspect-video bg-zinc-100 overflow-hidden">
@@ -247,10 +281,10 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
                     )}
                   </div>
                 </motion.div>
-              </React.Fragment>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
       )}
 
       <AnimatePresence>
@@ -269,6 +303,8 @@ export const NearbyEstablishments = ({ userLocation }: { userLocation?: { latitu
                   maps: {
                     id: selectedEst.id,
                     title: selectedEst.name,
+                    category_id: selectedEst.category_id,
+                    categoryId: selectedEst.category_id,
                     uri: selectedEst.maps_link || '',
                     location: {
                       latitude: selectedEst.latitude,

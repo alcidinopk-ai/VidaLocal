@@ -80,6 +80,15 @@ CREATE TABLE IF NOT EXISTS establishments (
   images TEXT[] DEFAULT '{}',
   tags TEXT DEFAULT '',
   short_id TEXT UNIQUE,
+  instagram_url TEXT,
+  facebook_url TEXT,
+  whatsapp_url TEXT,
+  youtube_url TEXT,
+  tiktok_url TEXT,
+  linkedin_url TEXT,
+  twitter_url TEXT,
+  telegram_url TEXT,
+  google_maps_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -91,6 +100,15 @@ ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS featured_start TIM
 ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS featured_end TIMESTAMPTZ;
 ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS featured_type TEXT DEFAULT 'normal';
 ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS instagram_url TEXT;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS facebook_url TEXT;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS whatsapp_url TEXT;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS youtube_url TEXT;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS tiktok_url TEXT;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS linkedin_url TEXT;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS twitter_url TEXT;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS telegram_url TEXT;
+ALTER TABLE IF EXISTS establishments ADD COLUMN IF NOT EXISTS google_maps_url TEXT;
 
 -- 6.1 Profiles table
 CREATE TABLE IF NOT EXISTS profiles (

@@ -256,4 +256,15 @@ CREATE POLICY "Business Claims: Inserção por autenticados" ON business_claims 
 DROP POLICY IF EXISTS "Business Claims: Modificação por admins" ON business_claims;
 CREATE POLICY "Business Claims: Modificação por admins" ON business_claims FOR ALL USING (true);
 
+-- Adiciona colunas para Redes Sociais no cadastro de estabelecimentos
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS instagram_url TEXT;
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS facebook_url TEXT;
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS whatsapp_url TEXT;
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS youtube_url TEXT;
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS tiktok_url TEXT;
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS linkedin_url TEXT;
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS twitter_url TEXT;
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS telegram_url TEXT;
+ALTER TABLE establishments ADD COLUMN IF NOT EXISTS google_maps_url TEXT;
+
 

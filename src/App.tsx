@@ -124,6 +124,29 @@ const isSimilarName = (name1?: string, name2?: string): boolean => {
 
 const calculateDistance = calculateHaversineDistance;
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+} as const;
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 15 },
+  show: { 
+    opacity: 1, 
+    y: 0,
+    transition: {
+      type: "spring" as const,
+      stiffness: 100,
+      damping: 15
+    }
+  }
+} as const;
+
 export default function App() {
   const { 
     currentCity, 
@@ -340,7 +363,25 @@ export default function App() {
                 is_premium: updated.is_premium,
                 images: updated.images || chunk.maps?.images || [],
                 tags: updated.tags,
-                plusCode: updated.plus_code || updated.plusCode
+                plusCode: updated.plus_code || updated.plusCode,
+                instagram_url: updated.instagram_url || updated.instagramUrl,
+                instagramUrl: updated.instagram_url || updated.instagramUrl,
+                facebook_url: updated.facebook_url || updated.facebookUrl,
+                facebookUrl: updated.facebook_url || updated.facebookUrl,
+                whatsapp_url: updated.whatsapp_url || updated.whatsappUrl,
+                whatsappUrl: updated.whatsapp_url || updated.whatsappUrl,
+                youtube_url: updated.youtube_url || updated.youtubeUrl,
+                youtubeUrl: updated.youtube_url || updated.youtubeUrl,
+                tiktok_url: updated.tiktok_url || updated.tiktokUrl,
+                tiktokUrl: updated.tiktok_url || updated.tiktokUrl,
+                linkedin_url: updated.linkedin_url || updated.linkedinUrl,
+                linkedinUrl: updated.linkedin_url || updated.linkedinUrl,
+                twitter_url: updated.twitter_url || updated.twitterUrl,
+                twitterUrl: updated.twitter_url || updated.twitterUrl,
+                telegram_url: updated.telegram_url || updated.telegramUrl,
+                telegramUrl: updated.telegram_url || updated.telegramUrl,
+                google_maps_url: updated.google_maps_url || updated.googleMapsUrl,
+                googleMapsUrl: updated.google_maps_url || updated.googleMapsUrl
               }
             };
           }
@@ -617,6 +658,24 @@ export default function App() {
             images: est.images || [],
             tags: est.tags,
             plusCode: est.plus_code || est.plusCode,
+            instagram_url: est.instagram_url || est.instagramUrl,
+            instagramUrl: est.instagram_url || est.instagramUrl,
+            facebook_url: est.facebook_url || est.facebookUrl,
+            facebookUrl: est.facebook_url || est.facebookUrl,
+            whatsapp_url: est.whatsapp_url || est.whatsappUrl,
+            whatsappUrl: est.whatsapp_url || est.whatsappUrl,
+            youtube_url: est.youtube_url || est.youtubeUrl,
+            youtubeUrl: est.youtube_url || est.youtubeUrl,
+            tiktok_url: est.tiktok_url || est.tiktokUrl,
+            tiktokUrl: est.tiktok_url || est.tiktokUrl,
+            linkedin_url: est.linkedin_url || est.linkedinUrl,
+            linkedinUrl: est.linkedin_url || est.linkedinUrl,
+            twitter_url: est.twitter_url || est.twitterUrl,
+            twitterUrl: est.twitter_url || est.twitterUrl,
+            telegram_url: est.telegram_url || est.telegramUrl,
+            telegramUrl: est.telegram_url || est.telegramUrl,
+            google_maps_url: est.google_maps_url || est.googleMapsUrl,
+            googleMapsUrl: est.google_maps_url || est.googleMapsUrl,
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -875,6 +934,24 @@ export default function App() {
             images: est.images || [],
             tags: est.tags,
             plusCode: est.plus_code || est.plusCode,
+            instagram_url: est.instagram_url || est.instagramUrl,
+            instagramUrl: est.instagram_url || est.instagramUrl,
+            facebook_url: est.facebook_url || est.facebookUrl,
+            facebookUrl: est.facebook_url || est.facebookUrl,
+            whatsapp_url: est.whatsapp_url || est.whatsappUrl,
+            whatsappUrl: est.whatsapp_url || est.whatsappUrl,
+            youtube_url: est.youtube_url || est.youtubeUrl,
+            youtubeUrl: est.youtube_url || est.youtubeUrl,
+            tiktok_url: est.tiktok_url || est.tiktokUrl,
+            tiktokUrl: est.tiktok_url || est.tiktokUrl,
+            linkedin_url: est.linkedin_url || est.linkedinUrl,
+            linkedinUrl: est.linkedin_url || est.linkedinUrl,
+            twitter_url: est.twitter_url || est.twitterUrl,
+            twitterUrl: est.twitter_url || est.twitterUrl,
+            telegram_url: est.telegram_url || est.telegramUrl,
+            telegramUrl: est.telegram_url || est.telegramUrl,
+            google_maps_url: est.google_maps_url || est.googleMapsUrl,
+            googleMapsUrl: est.google_maps_url || est.googleMapsUrl,
             location: {
               latitude: est.latitude,
               longitude: est.longitude
@@ -996,6 +1073,24 @@ export default function App() {
                   images: est.images || [],
                   tags: est.tags,
                   plusCode: est.plus_code || est.plusCode,
+                  instagram_url: est.instagram_url || est.instagramUrl,
+                  instagramUrl: est.instagram_url || est.instagramUrl,
+                  facebook_url: est.facebook_url || est.facebookUrl,
+                  facebookUrl: est.facebook_url || est.facebookUrl,
+                  whatsapp_url: est.whatsapp_url || est.whatsappUrl,
+                  whatsappUrl: est.whatsapp_url || est.whatsappUrl,
+                  youtube_url: est.youtube_url || est.youtubeUrl,
+                  youtubeUrl: est.youtube_url || est.youtubeUrl,
+                  tiktok_url: est.tiktok_url || est.tiktokUrl,
+                  tiktokUrl: est.tiktok_url || est.tiktokUrl,
+                  linkedin_url: est.linkedin_url || est.linkedinUrl,
+                  linkedinUrl: est.linkedin_url || est.linkedinUrl,
+                  twitter_url: est.twitter_url || est.twitterUrl,
+                  twitterUrl: est.twitter_url || est.twitterUrl,
+                  telegram_url: est.telegram_url || est.telegramUrl,
+                  telegramUrl: est.telegram_url || est.telegramUrl,
+                  google_maps_url: est.google_maps_url || est.googleMapsUrl,
+                  googleMapsUrl: est.google_maps_url || est.googleMapsUrl,
                   location: { latitude: est.latitude, longitude: est.longitude }
                 }
               }));
@@ -1282,6 +1377,24 @@ export default function App() {
             images: est.images || [],
             tags: est.tags,
             plusCode: est.plus_code || est.plusCode,
+            instagram_url: est.instagram_url || est.instagramUrl,
+            instagramUrl: est.instagram_url || est.instagramUrl,
+            facebook_url: est.facebook_url || est.facebookUrl,
+            facebookUrl: est.facebook_url || est.facebookUrl,
+            whatsapp_url: est.whatsapp_url || est.whatsappUrl,
+            whatsappUrl: est.whatsapp_url || est.whatsappUrl,
+            youtube_url: est.youtube_url || est.youtubeUrl,
+            youtubeUrl: est.youtube_url || est.youtubeUrl,
+            tiktok_url: est.tiktok_url || est.tiktokUrl,
+            tiktokUrl: est.tiktok_url || est.tiktokUrl,
+            linkedin_url: est.linkedin_url || est.linkedinUrl,
+            linkedinUrl: est.linkedin_url || est.linkedinUrl,
+            twitter_url: est.twitter_url || est.twitterUrl,
+            twitterUrl: est.twitter_url || est.twitterUrl,
+            telegram_url: est.telegram_url || est.telegramUrl,
+            telegramUrl: est.telegram_url || est.telegramUrl,
+            google_maps_url: est.google_maps_url || est.googleMapsUrl,
+            googleMapsUrl: est.google_maps_url || est.googleMapsUrl,
             location: { latitude: est.latitude, longitude: est.longitude }
           }
         }));
@@ -1984,7 +2097,13 @@ export default function App() {
                     </div>
 
                     {/* Establishments List */}
-                    <div className="space-y-4 pb-20">
+                    <motion.div 
+                      key={`${activeCategoryId}-${selectedSubCategory}-${categoryEstablishments.length}`}
+                      variants={containerVariants}
+                      initial="hidden"
+                      animate="show"
+                      className="space-y-4 pb-20"
+                    >
                       {isCategoryLoading ? (
                         <div className="flex flex-col items-center justify-center py-12">
                           <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-4" />
@@ -2015,7 +2134,25 @@ export default function App() {
                               is_premium: est.is_premium,
                               images: est.images || (typeof est.image === 'string' ? [est.image] : []),
                               tags: est.tags,
-                              plusCode: est.plus_code || est.plusCode
+                              plusCode: est.plus_code || est.plusCode,
+                              instagram_url: est.instagram_url || est.instagramUrl,
+                              instagramUrl: est.instagram_url || est.instagramUrl,
+                              facebook_url: est.facebook_url || est.facebookUrl,
+                              facebookUrl: est.facebook_url || est.facebookUrl,
+                              whatsapp_url: est.whatsapp_url || est.whatsappUrl,
+                              whatsappUrl: est.whatsapp_url || est.whatsappUrl,
+                              youtube_url: est.youtube_url || est.youtubeUrl,
+                              youtubeUrl: est.youtube_url || est.youtubeUrl,
+                              tiktok_url: est.tiktok_url || est.tiktokUrl,
+                              tiktokUrl: est.tiktok_url || est.tiktokUrl,
+                              linkedin_url: est.linkedin_url || est.linkedinUrl,
+                              linkedinUrl: est.linkedin_url || est.linkedinUrl,
+                              twitter_url: est.twitter_url || est.twitterUrl,
+                              twitterUrl: est.twitter_url || est.twitterUrl,
+                              telegram_url: est.telegram_url || est.telegramUrl,
+                              telegramUrl: est.telegram_url || est.telegramUrl,
+                              google_maps_url: est.google_maps_url || est.googleMapsUrl,
+                              googleMapsUrl: est.google_maps_url || est.googleMapsUrl
                             }
                           };
                           
@@ -2031,14 +2168,15 @@ export default function App() {
                           }
 
                           return (
-                            <EstablishmentCard 
-                              key={est.id}
-                              chunk={chunk}
-                              distance={distStr}
-                              userLocation={location}
-                              isRealLocation={isRealLocation}
-                              onRefresh={refreshData}
-                            />
+                            <motion.div key={est.id} variants={itemVariants}>
+                              <EstablishmentCard 
+                                chunk={chunk}
+                                distance={distStr}
+                                userLocation={location}
+                                isRealLocation={isRealLocation}
+                                onRefresh={refreshData}
+                              />
+                            </motion.div>
                           );
                         })
                       ) : (
@@ -2046,7 +2184,7 @@ export default function App() {
                           <p className="text-sm text-zinc-400">Nenhum estabelecimento encontrado nesta categoria.</p>
                         </div>
                       )}
-                    </div>
+                    </motion.div>
                   </div>
                 </div>
 
