@@ -73,7 +73,11 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
   const { isFavorite, toggleFavorite } = useFavorites();
   const isFav = isFavorite(chunk.maps?.id || chunk.maps?.short_id);
   const isAdmin = user && (role === 'admin' || user.email?.toLowerCase() === 'alcidinopk@gmail.com');
-  const isOwner = user && (chunk.maps?.user_id === user.id || (chunk.maps as any)?.userId === user.id);
+  const isOwner = user && (
+    chunk.maps?.user_id === user.id || 
+    (chunk.maps as any)?.userId === user.id || 
+    (chunk.maps as any)?.owner_user_id === user.id
+  );
   const [canEdit, setCanEdit] = useState(!!(isAdmin || isOwner));
   const [activeModal, setActiveModal] = useState<ModalType>(null);
 
@@ -1135,39 +1139,32 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                     )}
 
                     {/* Reivindicar Empresa Box */}
-                    <div className="p-5 bg-zinc-50 rounded-[28px] sm:rounded-[32px] border border-zinc-100 flex flex-col gap-2">
-                      <h4 className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest">Propriedade</h4>
-                      {isClaimedState ? (
-                        <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100/50">
-                          <ShieldCheck className="w-5 h-5 shrink-0 text-emerald-500" />
-                          <span className="text-xs font-bold">Empresa administrada pelo proprietário.</span>
-                        </div>
-                      ) : claimPending ? (
-                        <div className="flex items-center gap-2 text-amber-600 bg-amber-50/50 p-3 rounded-2xl border border-amber-100/50">
-                          <Clock className="w-5 h-5 shrink-0 text-amber-500 animate-pulse" />
-                          <span className="text-xs font-bold">Sua solicitação foi enviada para análise da equipe VidaLocal.</span>
-                        </div>
-                      ) : (
-                        <button 
-                          onClick={() => handleAction(() => {
-                            if (isClaimedState && !isAdmin) {
-                              toast.error("Este estabelecimento já possui proprietário ativo confirmado.");
-                            } else {
-                              setIsClaimModalOpen(true);
-                            }
-                          })}
-                          className="flex items-center justify-between gap-3 text-left w-full p-2 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-xl transition-all group"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-xs font-black text-zinc-800">Esta empresa é sua?</p>
-                            <p className="text-[10px] text-zinc-500 font-medium">Reivindique o estabelecimento para assumir a gestão.</p>
+                    {!isClaimedState && !isOwner && (
+                      <div className="p-5 bg-zinc-50 rounded-[28px] sm:rounded-[32px] border border-zinc-100 flex flex-col gap-2">
+                        <h4 className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest">Propriedade</h4>
+                        {claimPending ? (
+                          <div className="flex items-center gap-2 text-amber-600 bg-amber-50/50 p-3 rounded-2xl border border-amber-100/50">
+                            <Clock className="w-5 h-5 shrink-0 text-amber-500 animate-pulse" />
+                            <span className="text-xs font-bold">Sua solicitação foi enviada para análise da equipe VidaLocal.</span>
                           </div>
-                          <span className="shrink-0 px-3 py-1.5 bg-[#00897b]/10 text-[#00897b] font-black text-[10px] uppercase rounded-lg group-hover:bg-[#00897b] group-hover:text-white transition-all">
-                            Reivindicar
-                          </span>
-                        </button>
-                      )}
-                    </div>
+                        ) : (
+                          <button 
+                            onClick={() => handleAction(() => {
+                              setIsClaimModalOpen(true);
+                            })}
+                            className="flex items-center justify-between gap-3 text-left w-full p-2 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-xl transition-all group"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs font-black text-zinc-800">Esta empresa é sua?</p>
+                              <p className="text-[10px] text-zinc-500 font-medium">Reivindique o estabelecimento para assumir a gestão.</p>
+                            </div>
+                            <span className="shrink-0 px-3 py-1.5 bg-[#00897b]/10 text-[#00897b] font-black text-[10px] uppercase rounded-lg group-hover:bg-[#00897b] group-hover:text-white transition-all">
+                              Reivindicar
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     {/* Actions */}
                     <div className="flex flex-col gap-2.5">

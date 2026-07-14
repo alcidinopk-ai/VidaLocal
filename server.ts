@@ -4,6 +4,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI, Type } from "@google/genai";
 import { getSupabaseAdmin } from "./src/lib/supabase-server.js";
+import { ClaimsStore } from "./src/lib/claims-store.js";
 import Fuse from "fuse.js";
 import { CATEGORIES, SUB_CATEGORIES } from "./src/constants/taxonomy.js";
 
@@ -81,6 +82,12 @@ function deserializeEstablishment(item: any): any {
     if (item[key] && typeof item[key] === 'object') {
       item[key] = deserializeEstablishment(item[key]);
     }
+  }
+  
+  // Inject calculated is_claimed and owner_user_id fields for frontend compatibility
+  if (item.user_id !== undefined) {
+    item.is_claimed = !!item.user_id;
+    item.owner_user_id = item.user_id;
   }
   
   return item;
@@ -656,13 +663,13 @@ async function canUserEdit(supabase: any, userId: string, establishmentIdOrShort
     // Fallback: check Auth email directly (most reliable for developer account) using safe optional chaining
     if (supabase.auth?.admin) {
       try {
-        const { data: authData, error: authError } = await supabase.auth.admin.getUser(userId);
+        const { data: authData, error: authError } = await supabase.auth.admin.getUserById(userId);
         if (!authError && authData?.user?.email?.toLowerCase() === 'alcidinopk@gmail.com') {
           console.log(`[Permissions] User ${userId} is the developer (via auth email). Permission granted.`);
           return true;
         }
       } catch (authErr) {
-        console.warn('[Permissions/Auth] Error calling supabase.auth.admin.getUser:', authErr);
+        console.warn('[Permissions/Auth] Error calling supabase.auth.admin.getUserById:', authErr);
       }
     }
 
@@ -4044,6 +4051,7 @@ async function checkIfAdmin(supabase: any, userId: string, userEmailFromHeader?:
 app.post("/api/business-claims", mutationRateLimiter, async (req, res) => {
   const { 
     establishment_id, 
+    establishment_name,
     requester_name, 
     requester_email, 
     requester_phone, 
@@ -4053,80 +4061,118 @@ app.post("/api/business-claims", mutationRateLimiter, async (req, res) => {
   } = req.body;
 
   const requester_user_id = req.headers['x-user-id'] as string;
-  const requesterEmailFromHeader = req.headers['x-user-email'] as string;
 
+  // 401: Usuário não autenticado
+  if (!requester_user_id) {
+    return res.status(401).json({ error: "Usuário não autenticado. Você precisa fazer login para reivindicar um estabelecimento." });
+  }
+
+  // 422: Dados inválidos (campos obrigatórios ausentes)
   if (!establishment_id || !requester_name || !requester_email || !requester_phone || !requester_message) {
-    return res.status(400).json({ error: "Todos os campos obrigatórios devem ser preenchidos." });
+    return res.status(422).json({ error: "Dados inválidos. Por favor, preencha todos os campos obrigatórios." });
   }
 
   try {
     const supabase = getSupabaseAdmin();
     if (!supabase) {
-      return res.status(503).json({ error: "Database service unavailable." });
+      return res.status(500).json({ error: "Erro interno. Serviço de banco de dados indisponível." });
     }
 
-    // A. Verificar se a empresa já está reivindicada
-    const { data: est, error: estError } = await supabase
-      .from('establishments')
-      .select('id, name, is_claimed, owner_user_id')
-      .eq('id', establishment_id)
-      .maybeSingle();
+    const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
-    if (estError || !est) {
-      return res.status(404).json({ error: "Estabelecimento não encontrado para reivindicação." });
-    }
+    let est: any = null;
 
-    // Se a empresa já possui proprietário confirmado, impedir reinvidicação exceto por admin
-    if (est.is_claimed || est.owner_user_id) {
-      const isAdmin = await checkIfAdmin(supabase, requester_user_id || '', requesterEmailFromHeader);
-      if (!isAdmin) {
-        return res.status(403).json({ error: "Esta empresa já possui um proprietário confirmado." });
+    // 1. Try to find by UUID if it's a valid UUID
+    if (isUuid(establishment_id)) {
+      const { data, error } = await supabase
+        .from('establishments')
+        .select('id, name, user_id, address, status, short_id')
+        .eq('id', establishment_id)
+        .maybeSingle();
+      
+      if (error) {
+        console.error("[Claim SQL Error] Error querying by UUID:", error.message);
+        return res.status(500).json({ error: "Erro ao consultar o estabelecimento no banco de dados.", details: error.message });
+      }
+      if (data) {
+        est = data;
       }
     }
 
-    // B. Verificar se já existe uma reivindicação pendente para esta empresa
-    const { data: existingClaims, error: claimsError } = await supabase
-      .from('business_claims')
-      .select('id')
-      .eq('establishment_id', establishment_id)
-      .eq('status', 'pending');
-
-    if (claimsError) {
-      return res.status(500).json({ error: "Erro ao verificar reivindicações existentes." });
+    // 2. Try to find by short_id if not found by UUID
+    if (!est) {
+      const { data, error } = await supabase
+        .from('establishments')
+        .select('id, name, user_id, address, status, short_id')
+        .eq('short_id', establishment_id)
+        .maybeSingle();
+      
+      if (error) {
+        console.error("[Claim SQL Error] Error querying by short_id:", error.message);
+        return res.status(500).json({ error: "Erro ao consultar o estabelecimento no banco de dados.", details: error.message });
+      }
+      if (data) {
+        est = data;
+      }
     }
 
+    // 3. Try to find by establishment_name as a fallback
+    if (!est && establishment_name) {
+      const cleanName = (n: string) => n.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      const targetClean = cleanName(establishment_name);
+      
+      const { data: allEsts, error } = await supabase
+        .from('establishments')
+        .select('id, name, user_id, address, status, short_id');
+      
+      if (error) {
+        console.error("[Claim SQL Error] Error fetching all for name-matching:", error.message);
+        return res.status(500).json({ error: "Erro ao listar estabelecimentos para busca por nome.", details: error.message });
+      }
+
+      if (allEsts) {
+        const matched = allEsts.find(e => cleanName(e.name) === targetClean);
+        if (matched) est = matched;
+      }
+    }
+
+    // 404: Estabelecimento inexistente
+    if (!est) {
+      console.error("[Claim Error] Establishment not found for claim request:", establishment_id, "Name:", establishment_name);
+      return res.status(404).json({ error: "Estabelecimento não encontrado para reivindicação. Por favor, verifique se o estabelecimento existe." });
+    }
+
+    const realEstablishmentId = est.id;
+
+    // 403: Usuário sem permissão (se já for o dono atual)
+    if (est.user_id === requester_user_id) {
+      return res.status(403).json({ error: "Você já é o proprietário confirmado deste estabelecimento." });
+    }
+
+    // 409: Solicitação já existente (verificar se já existe uma reivindicação pendente)
+    const existingClaims = await ClaimsStore.checkExistingClaims(realEstablishmentId);
     if (existingClaims && existingClaims.length > 0) {
-      return res.status(400).json({ error: "Não permitir duas reivindicações pendentes para a mesma empresa." });
+      const alreadyClaimedBySame = existingClaims.some(c => c.requester_user_id === requester_user_id);
+      if (alreadyClaimedBySame) {
+        return res.status(409).json({ error: "Você já possui uma solicitação de reivindicação pendente para esta empresa." });
+      } else {
+        return res.status(409).json({ error: "Já existe uma solicitação de reivindicação em análise para esta empresa." });
+      }
     }
 
-    // C. Inserir a reivindicação
-    const { data: inserted, error: insertError } = await supabase
-      .from('business_claims')
-      .insert({
-        establishment_id,
-        requester_user_id: requester_user_id || null,
-        requester_name,
-        requester_email,
-        requester_phone,
-        requester_message,
-        requester_role: requester_role || '',
-        proof_document_url: proof_document_url || '',
-        status: 'pending'
-      })
-      .select()
-      .single();
+    // Inserir a reivindicação
+    const inserted = await ClaimsStore.insertClaim({
+      establishment_id: realEstablishmentId,
+      requester_user_id: requester_user_id || null,
+      requester_name,
+      requester_email,
+      requester_phone,
+      requester_message,
+      requester_role: requester_role || '',
+      proof_document_url: proof_document_url || ''
+    });
 
-    if (insertError) {
-      throw insertError;
-    }
-
-    // Auditoria de logs
-    console.log(`[Claim Auditing] Solicitação criada:`);
-    console.log(`- ID: ${inserted.id}`);
-    console.log(`- Solicitante: ${requester_name} (${requester_email})`);
-    console.log(`- Empresa: ${est.name} (ID: ${establishment_id})`);
-    console.log(`- Data: ${new Date().toISOString()}`);
-
+    console.log(`[Claim Auditing] Solicitação de reivindicação criada com sucesso para ${est.name} (ID: ${realEstablishmentId})`);
     clearCache();
 
     return res.json({ 
@@ -4157,27 +4203,7 @@ app.get("/api/admin/business-claims", async (req, res) => {
       return res.status(403).json({ error: "Acesso negado: Apenas administradores podem visualizar reivindicações." });
     }
 
-    const { data: claims, error: claimsError } = await supabase
-      .from('business_claims')
-      .select(`
-        *,
-        establishments (
-          id,
-          name,
-          short_id,
-          address,
-          status,
-          user_id,
-          owner_user_id,
-          is_claimed
-        )
-      `)
-      .order('created_at', { ascending: false });
-
-    if (claimsError) {
-      throw claimsError;
-    }
-
+    const claims = await ClaimsStore.getClaims();
     return res.json(claims || []);
 
   } catch (error: any) {
@@ -4209,13 +4235,8 @@ app.post("/api/admin/business-claims/:id/resolve", mutationRateLimiter, async (r
     }
 
     // Buscar a reivindicação
-    const { data: claim, error: fetchError } = await supabase
-      .from('business_claims')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (fetchError || !claim) {
+    const claim = await ClaimsStore.getClaimById(id);
+    if (!claim) {
       return res.status(404).json({ error: "Solicitação de reivindicação não encontrada." });
     }
 
@@ -4232,81 +4253,52 @@ app.post("/api/admin/business-claims/:id/resolve", mutationRateLimiter, async (r
     const reviewedAt = new Date().toISOString();
 
     if (status === 'approved') {
-      // Registrar no banco: associar o estabelecimento ao usuário solicitante
-      // atualizar owner_user_id e marcar empresa como reivindicada
+      // Registrar no banco: associar o estabelecimento ao usuário solicitante usando a coluna user_id
       const { error: updateEstError } = await supabase
         .from('establishments')
         .update({
-          owner_user_id: claim.requester_user_id || reviewerId, // fallback ao revisor caso requester não tenha ID
-          user_id: claim.requester_user_id || reviewerId,       // sincronizar user_id pra compatibilidade de gerenciamento
-          is_claimed: true
+          user_id: claim.requester_user_id || reviewerId
         })
         .eq('id', claim.establishment_id);
 
       if (updateEstError) {
-        throw updateEstError;
+        console.error("[Claim Update Error] Failed to transfer ownership:", updateEstError.message);
+        return res.status(500).json({ error: "Erro ao transferir a propriedade do estabelecimento.", details: updateEstError.message });
       }
 
       // Adicionar acesso na tabela de permissões (user_permissions) como 'owner'
       if (claim.requester_user_id && est.short_id) {
-        await supabase
+        const { error: permError } = await supabase
           .from('user_permissions')
           .insert({
             user_id: claim.requester_user_id,
             establishment_short_id: est.short_id,
             role: 'owner'
           });
+        if (permError) {
+          console.error("[Claim Perm Error] Non-blocking permission grant failure:", permError.message);
+        }
       }
 
       // Atualizar status da reivindicação
-      const { error: updateClaimError } = await supabase
-        .from('business_claims')
-        .update({
-          status: 'approved',
-          admin_notes: admin_notes || 'Reivindicação de empresa aprovada pelo administrador.',
-          reviewed_by: reviewerId || null,
-          reviewed_at: reviewedAt,
-          updated_at: reviewedAt
-        })
-        .eq('id', id);
+      const updated = await ClaimsStore.updateClaim(id, {
+        status: 'approved',
+        admin_notes: admin_notes || 'Reivindicação de empresa aprovada pelo administrador.',
+        reviewed_by: reviewerId || null,
+        reviewed_at: reviewedAt
+      });
 
-      if (updateClaimError) {
-        throw updateClaimError;
-      }
-
-      // Auditoria em logs
-      console.log(`[Claim Auditing] Reivindicação APROVADA:`);
-      console.log(`- ID Reivindicação: ${id}`);
-      console.log(`- Solicitante: ${claim.requester_name} (${claim.requester_email})`);
-      console.log(`- Empresa: ${est.name}`);
-      console.log(`- Aprovado por: ${reviewerEmail || reviewerId}`);
-      console.log(`- Quando: ${reviewedAt}`);
-
+      console.log(`[Claim Auditing] Reivindicação APROVADA para ${est.name}`);
     } else {
       // Caso de recusa
-      const { error: updateClaimError } = await supabase
-        .from('business_claims')
-        .update({
-          status: 'rejected',
-          admin_notes: admin_notes || 'Reivindicação de empresa recusada pelo administrador.',
-          reviewed_by: reviewerId || null,
-          reviewed_at: reviewedAt,
-          updated_at: reviewedAt
-        })
-        .eq('id', id);
+      const updated = await ClaimsStore.updateClaim(id, {
+        status: 'rejected',
+        admin_notes: admin_notes || 'Reivindicação de empresa recusada pelo administrador.',
+        reviewed_by: reviewerId || null,
+        reviewed_at: reviewedAt
+      });
 
-      if (updateClaimError) {
-        throw updateClaimError;
-      }
-
-      // Auditoria em logs
-      console.log(`[Claim Auditing] Reivindicação RECUSADA:`);
-      console.log(`- ID Reivindicação: ${id}`);
-      console.log(`- Solicitante: ${claim.requester_name} (${claim.requester_email})`);
-      console.log(`- Empresa: ${est.name}`);
-      console.log(`- Recusado por: ${reviewerEmail || reviewerId}`);
-      console.log(`- Motivo: ${admin_notes || 'Sem observações'}`);
-      console.log(`- Quando: ${reviewedAt}`);
+      console.log(`[Claim Auditing] Reivindicação RECUSADA para ${est.name}`);
     }
 
     clearCache();
@@ -4360,6 +4352,36 @@ if (!process.env.VERCEL) {
   const PORT = 3000;
   app.listen(PORT, "0.0.0.0", async () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    
+    // Boot-up maintenance: Automatically backfill missing short_id values for any legacy establishments in the database
+    try {
+      const supabase = getSupabaseAdmin();
+      if (supabase) {
+        const { data: legacyEsts } = await supabase
+          .from('establishments')
+          .select('id, name, short_id')
+          .is('short_id', null);
+        
+        if (legacyEsts && legacyEsts.length > 0) {
+          console.log(`[Startup Maintenance] Found ${legacyEsts.length} legacy establishments with missing short_id. Auto-backfilling...`);
+          for (const est of legacyEsts) {
+            const sId = generateShortId();
+            const { error: updateErr } = await supabase
+              .from('establishments')
+              .update({ short_id: sId })
+              .eq('id', est.id);
+            if (!updateErr) {
+              console.log(`[Startup Maintenance] Backfilled short_id ${sId} for "${est.name}"`);
+            } else {
+              console.error(`[Startup Maintenance] Failed to backfill short_id for "${est.name}":`, updateErr.message);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[Startup Maintenance] Legacy short_id backfill failed:", err);
+    }
+
     // Boot-up maintenance: Automatically search and resolve any overlapping coordinate stacking in the active database
     try {
       await jitterDuplicateCoordinates();

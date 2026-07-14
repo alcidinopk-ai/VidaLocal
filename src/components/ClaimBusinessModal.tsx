@@ -123,6 +123,7 @@ export const ClaimBusinessModal: React.FC<ClaimBusinessModalProps> = ({
         },
         body: JSON.stringify({
           establishment_id: establishment.id,
+          establishment_name: establishment.name,
           requester_name: name,
           requester_email: email,
           requester_phone: phone,
