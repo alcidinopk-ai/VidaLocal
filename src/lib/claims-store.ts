@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getSupabaseAdmin } from "./supabase-server";
+import { getSupabaseAdmin } from "./supabase-server.js";
 
 export interface Claim {
   id: string;
