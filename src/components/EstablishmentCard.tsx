@@ -78,7 +78,8 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
     (chunk.maps as any)?.userId === user.id || 
     (chunk.maps as any)?.owner_user_id === user.id
   );
-  const [canEdit, setCanEdit] = useState(!!(isAdmin || isOwner));
+  const isCurrentUserOwner = !!(user?.id && chunk.maps?.user_id && user.id === chunk.maps.user_id);
+  const [canEdit, setCanEdit] = useState(!!(isAdmin || isOwner || isCurrentUserOwner));
   const [activeModal, setActiveModal] = useState<ModalType>(null);
 
   const handleAction = (action: () => void) => {
@@ -1139,7 +1140,7 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
                     )}
 
                     {/* Reivindicar Empresa Box */}
-                    {!isClaimedState && !isOwner && (
+                    {!isClaimedState && !isOwner && !isCurrentUserOwner && (
                       <div className="p-5 bg-zinc-50 rounded-[28px] sm:rounded-[32px] border border-zinc-100 flex flex-col gap-2">
                         <h4 className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest">Propriedade</h4>
                         {claimPending ? (
