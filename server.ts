@@ -4253,13 +4253,28 @@ app.post("/api/admin/business-claims/:id/resolve", mutationRateLimiter, async (r
     const reviewedAt = new Date().toISOString();
 
     if (status === 'approved') {
-      // Registrar no banco: associar o estabelecimento ao usuário solicitante usando a coluna user_id
-      const { error: updateEstError } = await supabase
+      // Registrar no banco: associar o estabelecimento ao usuário solicitante
+      // Tentamos atualizar todas as colunas de posse (user_id, owner_user_id, is_claimed)
+      let { error: updateEstError } = await supabase
         .from('establishments')
         .update({
-          user_id: claim.requester_user_id || reviewerId
+          user_id: claim.requester_user_id || reviewerId,
+          owner_user_id: claim.requester_user_id || reviewerId,
+          is_claimed: true
         })
         .eq('id', claim.establishment_id);
+
+      // Fallback caso as novas colunas ainda não tenham sido criadas no banco de dados Supabase
+      if (updateEstError && (updateEstError.message.includes("column") || updateEstError.message.includes("does not exist"))) {
+        console.log("[Claim Update] Novas colunas ausentes no banco. Atualizando apenas a coluna padrão user_id...");
+        const { error: fallbackError } = await supabase
+          .from('establishments')
+          .update({
+            user_id: claim.requester_user_id || reviewerId
+          })
+          .eq('id', claim.establishment_id);
+        updateEstError = fallbackError;
+      }
 
       if (updateEstError) {
         console.error("[Claim Update Error] Failed to transfer ownership:", updateEstError.message);

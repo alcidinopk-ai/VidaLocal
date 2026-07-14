@@ -102,11 +102,11 @@ export const EstablishmentCard: React.FC<EstablishmentCardProps> = ({
 
   // States for Sprint 2.1 - Claim Business
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
-  const [isClaimedState, setIsClaimedState] = useState((chunk.maps as any)?.is_claimed || !!(chunk.maps as any)?.owner_user_id);
+  const [isClaimedState, setIsClaimedState] = useState((chunk.maps as any)?.is_claimed || !!(chunk.maps as any)?.owner_user_id || !!chunk.maps?.user_id);
   const [claimPending, setClaimPending] = useState(false);
 
   React.useEffect(() => {
-    setIsClaimedState((chunk.maps as any)?.is_claimed || !!(chunk.maps as any)?.owner_user_id);
+    setIsClaimedState((chunk.maps as any)?.is_claimed || !!(chunk.maps as any)?.owner_user_id || !!chunk.maps?.user_id);
   }, [chunk]);
 
   React.useEffect(() => {
